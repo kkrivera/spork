@@ -26,4 +26,12 @@ export {
 
 export type { WorktreeStatus } from './git/status.js'
 
+export type { RegistryEntry } from './registry/registry.js'
+export {
+  registerWorkspace,
+  unregisterWorkspace,
+  listWorkspaces,
+  resolveWorkspaceDir,
+} from './registry/registry.js'
+
 export { REPOS_ROOT, REGISTRY_PATH, SPORK_HOME } from './config/paths.js'

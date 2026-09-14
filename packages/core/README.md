@@ -43,12 +43,17 @@ for the design this package implements.
     where the unique-local-branch-per-worktree and per-repo-locking pieces
     from `git`/`repo` actually get used together.
 
-`src/index.ts` is the only import path the rest of the repo (`packages/cli`)
-may use — it re-exports the workspace lifecycle API, `SporkError`, and the
-`~/.spork` path constants. Everything else here is an implementation detail.
+- `src/registry/registry.ts` — `~/.spork/workspaces.json`: registers/lists/
+  unregisters workspaces by name, and `resolveWorkspaceDir`, which is how CLI
+  commands accept either a registered workspace name or a raw directory path.
+  The registry is treated as an index, not a source of truth — `listWorkspaces`
+  drops (and persists the removal of) any entry whose manifest no longer
+  exists on disk rather than trusting stale state.
 
-The registry (`~/.spork/workspaces.json`, mapping a workspace name to its
-manifest path) lands here next — see the design doc's implementation order.
+`src/index.ts` is the only import path the rest of the repo (`packages/cli`)
+may use — it re-exports the workspace lifecycle API, the registry API,
+`SporkError`, and the `~/.spork` path constants. Everything else here is an
+implementation detail.
 
 ## Testing
 
