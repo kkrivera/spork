@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+.yarn/install-state.gz
+.DS_Store
+*.log
+.claude/settings.local.json
