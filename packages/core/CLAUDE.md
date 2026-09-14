@@ -25,6 +25,15 @@ same cache path must be called from inside `withRepoLock` by the caller
 the filesystem/git work. Don't call `cloneBare`/`fetchAll` directly outside the
 lock from orchestration code.
 
+## `src/workspace`
+
+`workspace.ts` is the only place the `git`/`repo` layers get combined — keep it
+that way rather than having e.g. a CLI command call `addWorktree` directly.
+Every function that reads a manifest for anything other than a pure display
+purpose should go through `reconcileWorkspace` first (see `addRepo`/`removeRepo`
+for the pattern), not call `readManifest` directly — that's what keeps stale
+worktrees/folders from causing confusing failures later.
+
 ## Tests
 
 Unit tests only for now — mock `execGit` (or `node:child_process` for

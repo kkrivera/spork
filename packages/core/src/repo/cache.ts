@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { cloneBare, fetchAll } from '../git/clone.js'
 import { slugify } from '../util/slug.js'
+import { repoShortName } from '../util/repoName.js'
 
 export interface RepoCache {
   /** Stable, filesystem-safe identifier derived from `source`. */
@@ -21,13 +22,8 @@ export interface RepoCache {
  * as two distinct sources — see docs/plans/0001-worktree-workspace-architecture.md.
  */
 export function repoCacheId(source: string): string {
-  const name = source
-    .replace(/\.git$/, '')
-    .split(/[/:]/)
-    .filter(Boolean)
-    .pop()
   const hash = createHash('sha1').update(source).digest('hex').slice(0, 8)
-  return `${slugify(name ?? 'repo')}-${hash}`
+  return `${slugify(repoShortName(source))}-${hash}`
 }
 
 export function resolveRepoCache(reposRoot: string, source: string): RepoCache {

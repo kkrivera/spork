@@ -26,14 +26,29 @@ for the design this package implements.
   - `lock.ts` — `withRepoLock`, an exclusive lock (via `proper-lockfile`) around
     mutating a repo cache, since the cache is shared across workspaces and
     concurrent `spork` invocations are expected, not exceptional.
-- `src/util/slug.ts` — `slugify`, used anywhere a repo/ref/workspace name needs
-  turning into a filesystem- and branch-name-safe string.
+- `src/util/` — `slugify` (filesystem/branch-name-safe strings) and
+  `repoShortName` (the repo's short name out of a source URL/path).
 - `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,
   `~/.spork/workspaces.json`).
+- `src/errors.ts` — `SporkError`, the one error type used for user-facing
+  domain failures (a naming collision, a missing entry) as opposed to bugs.
+- `src/workspace/` — the workspace lifecycle built on top of `git`/`repo`.
+  - `manifest.ts` — the `spork.workspace.json` schema and its read/write.
+  - `codeWorkspace.ts` — generates the workspace's `.code-workspace` file from
+    its manifest.
+  - `workspace.ts` — orchestration: `createWorkspace`, `addRepo`, `removeRepo`,
+    `removeWorkspace`, `getWorkspaceStatus`, and `reconcileWorkspace` (pruning
+    stale git worktree metadata and dropping manifest entries for folders
+    deleted by hand — called before every other operation here). This is
+    where the unique-local-branch-per-worktree and per-repo-locking pieces
+    from `git`/`repo` actually get used together.
 
-More modules (workspace manifest/orchestration, `.code-workspace` generation,
-registry) land here as the rest of the v1 slice is implemented — see the design
-doc's implementation order.
+`src/index.ts` is the only import path the rest of the repo (`packages/cli`)
+may use — it re-exports the workspace lifecycle API, `SporkError`, and the
+`~/.spork` path constants. Everything else here is an implementation detail.
+
+The registry (`~/.spork/workspaces.json`, mapping a workspace name to its
+manifest path) lands here next — see the design doc's implementation order.
 
 ## Testing
 
