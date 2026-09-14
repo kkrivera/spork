@@ -17,6 +17,14 @@ surface; nothing in this repo should import from `src/*` paths directly.
   a second workspace. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md).
 
+## `src/repo`
+
+`ensureRepoCache` (clone-or-fetch) and any future worktree mutation against the
+same cache path must be called from inside `withRepoLock` by the caller
+(`workspace.ts`, once it exists) — `cache.ts` itself doesn't lock, it just does
+the filesystem/git work. Don't call `cloneBare`/`fetchAll` directly outside the
+lock from orchestration code.
+
 ## Tests
 
 Unit tests only for now — mock `execGit` (or `node:child_process` for

@@ -19,10 +19,21 @@ for the design this package implements.
     recognize git's "ref already checked out elsewhere" failure.
   - `status.ts` — local-only worktree status (branch + dirty file count, no
     fetch).
+- `src/repo/` — the shared repo cache each workspace's worktrees are created from.
+  - `cache.ts` — derives a stable cache id/path from a repo source and ensures
+    a bare clone of it exists (`ensureRepoCache`), fetching to refresh refs if
+    it's already cached rather than re-cloning.
+  - `lock.ts` — `withRepoLock`, an exclusive lock (via `proper-lockfile`) around
+    mutating a repo cache, since the cache is shared across workspaces and
+    concurrent `spork` invocations are expected, not exceptional.
+- `src/util/slug.ts` — `slugify`, used anywhere a repo/ref/workspace name needs
+  turning into a filesystem- and branch-name-safe string.
+- `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,
+  `~/.spork/workspaces.json`).
 
-More modules (repo cache/locking, workspace manifest/orchestration, registry)
-land here as the rest of the v1 slice is implemented — see the design doc's
-implementation order.
+More modules (workspace manifest/orchestration, `.code-workspace` generation,
+registry) land here as the rest of the v1 slice is implemented — see the design
+doc's implementation order.
 
 ## Testing
 
