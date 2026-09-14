@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
+import { registerWorkspaceCommands } from './commands/workspace/index.js'
+import { createAppContext, type AppContext } from './context.js'
 import { createUi } from './output/color.js'
 
-export function createProgram(): Command {
+export function createProgram(ctx: AppContext = createAppContext()): Command {
   const program = new Command()
 
   program
@@ -11,6 +13,8 @@ export function createProgram(): Command {
     .version('0.1.0')
     .option('--color', 'force-enable colored output')
     .option('--no-color', 'disable colored output')
+
+  registerWorkspaceCommands(program, ctx)
 
   return program
 }

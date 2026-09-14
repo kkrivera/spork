@@ -107,7 +107,7 @@ export async function addRepo(
   const localBranch = `spork/${slugify(manifest.name)}/${slugify(folder)}`
   const cache = resolveRepoCache(ctx.reposRoot, options.source)
 
-  await withRepoLock(cache.path, async () => {
+  await withRepoLock(cache.lockPath, async () => {
     await ensureRepoCache(ctx.reposRoot, options.source)
     await addWorktree(cache.path, worktreePath, localBranch, requestedRef)
   })
@@ -138,7 +138,7 @@ export async function removeRepo(ctx: WorkspaceContext, workspaceDir: string, fo
   const cache = resolveRepoCache(ctx.reposRoot, entry.source)
   const worktreePath = path.join(workspaceDir, folder)
 
-  await withRepoLock(cache.path, async () => {
+  await withRepoLock(cache.lockPath, async () => {
     await removeWorktree(cache.path, worktreePath, { force: true })
   })
 

@@ -10,7 +10,12 @@ new business logic belongs in `@spork/core`, imported only from its
 - Commands should stay non-interactive in v1 (explicit flags/args only, no
   prompts) so they work unattended in CI — see the root design doc's
   deferred-items list for when interactive prompts are reconsidered.
-- Errors from `@spork/core` (`SporkError`) are user-facing; catch them at the
-  command level and print the message via `ui.color.red`, not a raw stack
-  trace. Unexpected errors can fall through to `src/index.ts`'s top-level
-  handler.
+- Errors from `@spork/core` (`SporkError`) are user-facing but are **not**
+  caught per-command — they're left to propagate out of the async `.action()`
+  handler, through `main()`, to `src/index.ts`'s top-level `handleFatalError`
+  (prints in red, sets a failing exit code). Don't add try/catch in a command
+  unless you need to do something command-specific before re-throwing.
+- Each command file splits into a plain `run<Verb>(ctx, ...)` function (the
+  testable logic — no commander, no `console.log`) and a
+  `register<Verb>Command(program, ctx)` that wires it up and prints. Follow
+  this split for any new command rather than putting logic inside `.action()`.

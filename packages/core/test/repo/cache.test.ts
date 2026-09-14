@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const existsSyncMock = vi.fn()
@@ -48,26 +49,29 @@ describe('repoCacheId', () => {
 })
 
 describe('resolveRepoCache', () => {
-  it('joins the repos root with the derived id', () => {
+  it('joins the repos root with the derived id, and gives a lockPath distinct from path', () => {
     const cache = resolveRepoCache('/home/user/.spork/repos', 'git@github.com:acme/widgets.git')
 
     expect(cache.source).toBe('git@github.com:acme/widgets.git')
     expect(cache.path).toBe(`/home/user/.spork/repos/${cache.id}`)
+    expect(cache.lockPath).toBe(`/home/user/.spork/repos/.locks/${cache.id}`)
+    expect(cache.lockPath).not.toBe(cache.path)
   })
 })
 
 describe('ensureRepoCache', () => {
-  it('clones when the cache does not exist yet', async () => {
+  it('clones when the cache has no HEAD file yet', async () => {
     existsSyncMock.mockReturnValue(false)
 
     const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git')
 
     expect(mkdirMock).toHaveBeenCalledWith('/repos', { recursive: true })
+    expect(existsSyncMock).toHaveBeenCalledWith(path.join(cache.path, 'HEAD'))
     expect(cloneBareMock).toHaveBeenCalledWith('git@github.com:acme/widgets.git', cache.path)
     expect(fetchAllMock).not.toHaveBeenCalled()
   })
 
-  it('fetches instead of re-cloning when the cache already exists', async () => {
+  it('fetches instead of re-cloning once a HEAD file is present', async () => {
     existsSyncMock.mockReturnValue(true)
 
     const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git')
@@ -75,4 +79,5 @@ describe('ensureRepoCache', () => {
     expect(fetchAllMock).toHaveBeenCalledWith(cache.path)
     expect(cloneBareMock).not.toHaveBeenCalled()
   })
+
 })

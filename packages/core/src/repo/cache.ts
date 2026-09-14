@@ -12,6 +12,14 @@ export interface RepoCache {
   source: string
   /** Path to the shared bare clone backing every worktree for this repo source. */
   path: string
+  /**
+   * Path `withRepoLock` should lock for this repo — deliberately NOT `path`
+   * itself. `withRepoLock` creates whatever directory it's given before
+   * locking it, and if that were `path`, the first `ensureRepoCache` call
+   * inside the lock would find an (empty, lock-created) directory already
+   * there and wrongly skip cloning.
+   */
+  lockPath: string
 }
 
 /**
@@ -28,20 +36,26 @@ export function repoCacheId(source: string): string {
 
 export function resolveRepoCache(reposRoot: string, source: string): RepoCache {
   const id = repoCacheId(source)
-  return { id, source, path: path.join(reposRoot, id) }
+  return { id, source, path: path.join(reposRoot, id), lockPath: path.join(reposRoot, '.locks', id) }
+}
+
+/** A bare clone always has a HEAD file at its root — a directory existing isn't enough proof it's actually cloned. */
+function isCloned(cachePath: string): boolean {
+  return existsSync(path.join(cachePath, 'HEAD'))
 }
 
 /**
  * Ensures a bare clone of `source` exists under `reposRoot`, cloning it on
  * first use and fetching to refresh refs on subsequent calls. Callers that
  * mutate the cache (this included) should hold the lock from `repo/lock.ts`
- * around the whole operation, since the cache is shared across workspaces.
+ * (on the cache's `lockPath`, not `path`) around the whole operation, since
+ * the cache is shared across workspaces.
  */
 export async function ensureRepoCache(reposRoot: string, source: string): Promise<RepoCache> {
   const cache = resolveRepoCache(reposRoot, source)
   await mkdir(reposRoot, { recursive: true })
 
-  if (existsSync(cache.path)) {
+  if (isCloned(cache.path)) {
     await fetchAll(cache.path)
   } else {
     await cloneBare(source, cache.path)

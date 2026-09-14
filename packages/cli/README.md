@@ -18,9 +18,20 @@ logic lives here.
   output directly.
 - `src/output/format.ts` — `formatTable`, a plain space-padded table
   renderer (no box drawing) so output stays clean piped or in CI.
-- `src/commands/` — one file per CLI command, added as the v1 command
-  surface is implemented (see
-  [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)).
+- `src/context.ts` — `createAppContext`, building the `{ reposRoot,
+  registryPath, ui }` every command needs from `@spork/core`'s path constants
+  and the output layer.
+- `src/opener.ts` — `createCodeOpener`, an injectable abstraction around
+  shelling out to the `code` CLI (used by `workspace open`), so it's mockable
+  in tests and doesn't fail silently if `code` isn't installed.
+- `src/commands/workspace/` — one file per `spork workspace <verb>`
+  subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
+  `status`, `open`), each exporting a plain `run<Verb>` function (the
+  testable logic) and a `register<Verb>Command` that wires it to commander
+  and prints the result. `index.ts` in this folder registers them all under
+  the `workspace` parent command. See
+  [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
+  for the command surface and its rationale.
 
 ## Testing
 

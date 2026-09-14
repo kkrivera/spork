@@ -17,11 +17,21 @@ describe('createProgram', () => {
     expect(flags).toContain('--color')
     expect(flags).toContain('--no-color')
   })
+
+  it('registers the workspace command tree by default', () => {
+    const program = createProgram()
+
+    expect(program.commands.map((cmd) => cmd.name())).toContain('workspace')
+  })
 })
 
 describe('main', () => {
-  it('parses an empty command line without throwing', async () => {
-    await expect(main(['node', 'spork'])).resolves.toBeUndefined()
+  it('parses and runs a real subcommand without throwing', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await expect(main(['node', 'spork', 'workspace', 'list'])).resolves.toBeUndefined()
+
+    logSpy.mockRestore()
   })
 })
 

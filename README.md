@@ -14,10 +14,20 @@ A workspace is:
 - and a `spork.workspace.json` manifest describing exactly what's in it, so the
   workspace's layout is reproducible.
 
-> **Status**: early — the v1 command surface (`create` / `add-repo` / `remove-repo` /
-> `remove` / `list` / `status` / `open`) is under active development. See
+> **Status**: v1 command surface implemented. See
 > [docs/plans/0001-worktree-workspace-architecture.md](docs/plans/0001-worktree-workspace-architecture.md)
 > for the design.
+
+```sh
+spork workspace create demo
+spork workspace add-repo demo git@github.com:acme/widgets.git --branch main
+spork workspace add-repo demo git@github.com:acme/gadgets.git
+spork workspace status demo
+spork workspace open demo
+spork workspace list
+spork workspace remove-repo demo gadgets
+spork workspace remove demo
+```
 
 ## Repository layout
 

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(./node_modules/.bin/eslint .)",
+      "Bash(./node_modules/.bin/vitest run *)"
+    ]
+  }
+}
