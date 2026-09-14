@@ -15,8 +15,13 @@ vi.mock('../../src/git/worktree.js', () => ({
   removeWorktree: vi.fn(),
   pruneWorktrees: vi.fn(),
 }))
+vi.mock('../../src/git/submodule.js', () => ({
+  hasSubmodules: vi.fn(),
+  initSubmodules: vi.fn(),
+}))
 
 const { addWorktree } = await import('../../src/git/worktree.js')
+const { hasSubmodules, initSubmodules } = await import('../../src/git/submodule.js')
 const { ensureRepoCache, resolveRepoCache } = await import('../../src/repo/cache.js')
 const { createWorkspace, addRepo } = await import('../../src/workspace/workspace.js')
 const { readManifest } = await import('../../src/workspace/manifest.js')
@@ -25,6 +30,8 @@ const { fakeAddWorktree } = await import('./fakeAddWorktree.js')
 
 const addWorktreeMock = vi.mocked(addWorktree)
 const ensureRepoCacheMock = vi.mocked(ensureRepoCache)
+const hasSubmodulesMock = vi.mocked(hasSubmodules)
+const initSubmodulesMock = vi.mocked(initSubmodules)
 const WIDGETS_SOURCE = 'git@github.com:acme/widgets.git'
 
 let root: string
@@ -42,6 +49,8 @@ beforeEach(async () => {
   await createWorkspace(ctx, { name: 'demo', dir })
   addWorktreeMock.mockReset().mockImplementation(fakeAddWorktree)
   ensureRepoCacheMock.mockReset().mockResolvedValue({ id: 'widgets-abc', source: '', path: '/unused' })
+  hasSubmodulesMock.mockReset().mockReturnValue(false)
+  initSubmodulesMock.mockReset().mockResolvedValue(undefined)
 })
 
 afterEach(async () => {
@@ -50,7 +59,7 @@ afterEach(async () => {
 
 describe('addRepo', () => {
   it('adds a worktree on a spork-owned branch and records it in the manifest', async () => {
-    const entry = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
+    const { entry, submodulesInitialized } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
 
     expect(entry).toMatchObject({
       folder: 'widgets',
@@ -58,6 +67,7 @@ describe('addRepo', () => {
       requestedRef: 'HEAD',
       localBranch: 'spork/demo/widgets',
     })
+    expect(submodulesInitialized).toBe(false)
     expect(addWorktreeMock).toHaveBeenCalledWith(widgetsCachePath(), path.join(dir, 'widgets'), 'spork/demo/widgets', 'HEAD')
     expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE)
     expect((await readManifest(dir)).worktrees).toEqual([entry])
@@ -70,7 +80,7 @@ describe('addRepo', () => {
   })
 
   it('honors an explicit --as folder name', async () => {
-    const entry = await addRepo(ctx, dir, { source: WIDGETS_SOURCE, folder: 'widgets-v2' })
+    const { entry } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE, folder: 'widgets-v2' })
 
     expect(entry.folder).toBe('widgets-v2')
     expect(entry.localBranch).toBe('spork/demo/widgets-v2')
@@ -93,5 +103,31 @@ describe('addRepo', () => {
       'spork/demo/widgets-a',
       'spork/demo/widgets-b',
     ])
+  })
+})
+
+describe('addRepo — submodules', () => {
+  it('initializes submodules when the worktree has a .gitmodules file', async () => {
+    hasSubmodulesMock.mockReturnValue(true)
+
+    const { entry, submodulesInitialized, submoduleWarning } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
+
+    expect(submodulesInitialized).toBe(true)
+    expect(submoduleWarning).toBeUndefined()
+    expect(hasSubmodulesMock).toHaveBeenCalledWith(path.join(dir, 'widgets'))
+    expect(initSubmodulesMock).toHaveBeenCalledWith(path.join(dir, 'widgets'))
+    // The worktree is still registered even though this test doesn't exercise a failure.
+    expect((await readManifest(dir)).worktrees).toEqual([entry])
+  })
+
+  it('still registers the worktree, with a warning, when submodule init fails', async () => {
+    hasSubmodulesMock.mockReturnValue(true)
+    initSubmodulesMock.mockRejectedValue(new Error('fatal: could not read Username for private-submodule-host'))
+
+    const { entry, submodulesInitialized, submoduleWarning } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
+
+    expect(submodulesInitialized).toBe(false)
+    expect(submoduleWarning).toContain('private-submodule-host')
+    expect((await readManifest(dir)).worktrees).toEqual([entry])
   })
 })

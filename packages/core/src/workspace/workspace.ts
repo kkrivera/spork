@@ -3,6 +3,7 @@ import { mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { addWorktree, pruneWorktrees, removeWorktree } from '../git/worktree.js'
 import { getStatus, type WorktreeStatus } from '../git/status.js'
+import { hasSubmodules, initSubmodules } from '../git/submodule.js'
 import { ensureRepoCache, resolveRepoCache } from '../repo/cache.js'
 import { withRepoLock } from '../repo/lock.js'
 import { slugify } from '../util/slug.js'
@@ -88,11 +89,19 @@ export interface AddRepoOptions {
   folder?: string
 }
 
+export interface AddRepoResult {
+  entry: WorktreeEntry
+  /** True if the worktree had a .gitmodules file and its submodules were initialized. */
+  submodulesInitialized: boolean
+  /** Set if the worktree has submodules but initializing them failed — the worktree itself is still valid and registered. */
+  submoduleWarning?: string
+}
+
 export async function addRepo(
   ctx: WorkspaceContext,
   workspaceDir: string,
   options: AddRepoOptions,
-): Promise<WorktreeEntry> {
+): Promise<AddRepoResult> {
   const { manifest } = await reconcileWorkspace(ctx, workspaceDir)
 
   const folder = options.folder ?? slugify(repoShortName(options.source))
@@ -124,7 +133,22 @@ export async function addRepo(
   await writeManifest(workspaceDir, manifest)
   await writeCodeWorkspace(workspaceDir, manifest)
 
-  return entry
+  // Submodule init is per-worktree, not shared-cache state, so it runs after
+  // the lock is released — no reason to hold up other spork operations on
+  // this repo's cache while (potentially slow) submodule clones happen. A
+  // failure here doesn't undo the worktree/manifest entry above: the repo
+  // itself checked out fine, so the add is still considered successful.
+  if (!hasSubmodules(worktreePath)) {
+    return { entry, submodulesInitialized: false }
+  }
+
+  try {
+    await initSubmodules(worktreePath)
+    return { entry, submodulesInitialized: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { entry, submodulesInitialized: false, submoduleWarning: message }
+  }
 }
 
 export async function removeRepo(ctx: WorkspaceContext, workspaceDir: string, folder: string): Promise<void> {

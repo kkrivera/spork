@@ -28,8 +28,10 @@ logic lives here.
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
   `status`, `open`), each exporting a plain `run<Verb>` function (the
   testable logic) and a `register<Verb>Command` that wires it to commander
-  and prints the result. `index.ts` in this folder registers them all under
-  the `workspace` parent command. See
+  and prints the result. `add-repo` also prints whether submodules were
+  initialized, or a warning if that failed (the add itself still succeeds —
+  see `AddRepoResult` in `@spork/core`). `index.ts` in this folder registers
+  them all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
   for the command surface and its rationale.
 

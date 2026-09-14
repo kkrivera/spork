@@ -11,6 +11,7 @@ export type {
   WorkspaceHandle,
   CreateWorkspaceOptions,
   AddRepoOptions,
+  AddRepoResult,
   RemoveWorkspaceOptions,
   ReconcileResult,
   WorktreeStatusEntry,

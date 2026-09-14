@@ -19,6 +19,9 @@ for the design this package implements.
     recognize git's "ref already checked out elsewhere" failure.
   - `status.ts` — local-only worktree status (branch + dirty file count, no
     fetch).
+  - `submodule.ts` — `hasSubmodules` (checks for a `.gitmodules` file) and
+    `initSubmodules` (`git submodule update --init --recursive`), since
+    `worktree add` never initializes submodules on its own.
 - `src/repo/` — the shared repo cache each workspace's worktrees are created from.
   - `cache.ts` — derives a stable cache id/path from a repo source and ensures
     a bare clone of it exists (`ensureRepoCache`), fetching to refresh refs if
@@ -41,7 +44,10 @@ for the design this package implements.
     stale git worktree metadata and dropping manifest entries for folders
     deleted by hand — called before every other operation here). This is
     where the unique-local-branch-per-worktree and per-repo-locking pieces
-    from `git`/`repo` actually get used together.
+    from `git`/`repo` actually get used together. `addRepo` also initializes
+    submodules if the worktree has any, after the repo-cache lock is
+    released; a submodule-init failure produces a warning in the returned
+    `AddRepoResult`, not a thrown error — the worktree is still registered.
 
 - `src/registry/registry.ts` — `~/.spork/workspaces.json`: registers/lists/
   unregisters workspaces by name, and `resolveWorkspaceDir`, which is how CLI

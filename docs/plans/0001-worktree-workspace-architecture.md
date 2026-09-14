@@ -113,6 +113,25 @@ dependency so it's mockable in tests and swappable later (e.g. for a different
 editor) without touching command logic. If `code` isn't found, the command
 prints the workspace's `.code-workspace` path instead of failing silently.
 
+### Submodules
+
+`git worktree add` doesn't initialize or update submodules on its own — that's
+a general git limitation, not specific to spork's worktree strategy. After a
+worktree is created, `addRepo` checks the new worktree for a `.gitmodules` file
+(`git/submodule.ts`'s `hasSubmodules`) and, if present, runs `git submodule
+update --init --recursive` in it. This happens **after** `withRepoLock` is
+released, since submodule init is per-worktree state, not shared-cache state —
+no reason to hold up other spork operations on the same repo cache while
+(potentially slow) submodule clones happen.
+
+A submodule-init failure (e.g. no access to a private submodule remote) does
+not fail the add: the top-level repo checked out fine and is still registered,
+so `addRepo` returns `{ entry, submodulesInitialized: false, submoduleWarning
+}` rather than throwing — the CLI surfaces the warning but treats the add as
+successful. Nested submodules-of-submodules are handled by `--recursive`;
+a submodule that itself needs authentication delegates to the same system
+git credential setup as everything else here.
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of
@@ -126,5 +145,4 @@ these, but they're out of scope for the v1 slice this doc accompanies:
   generates for users don't yet.
 - Real-subprocess integration tests.
 - Repo-source identity/dedup (the same repo added via HTTPS and SSH is treated
-  as two different sources today) and submodule support beyond a warning when
-  `.gitmodules` is detected.
+  as two different sources today).
