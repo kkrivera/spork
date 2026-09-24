@@ -29,6 +29,8 @@ for the design this package implements.
   - `lock.ts` — `withRepoLock`, an exclusive lock (via `proper-lockfile`) around
     mutating a repo cache, since the cache is shared across workspaces and
     concurrent `spork` invocations are expected, not exceptional.
+  - `cache.ts` also exports `repoCacheExists`, used by the repo registry
+    below to tell whether a registered alias's cache is still actually there.
 - `src/util/` — `slugify` (filesystem/branch-name-safe strings) and
   `repoShortName` (the repo's short name out of a source URL/path).
 - `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,
@@ -55,11 +57,19 @@ for the design this package implements.
   The registry is treated as an index, not a source of truth — `listWorkspaces`
   drops (and persists the removal of) any entry whose manifest no longer
   exists on disk rather than trusting stale state.
+- `src/registry/repoRegistry.ts` — `~/.spork/repos.json`: the same
+  index-not-source-of-truth pattern as above, but for repo *sources* rather
+  than workspaces — `alias → source`, so a repo you've already cloned once
+  can be referred to by a short name instead of its full clone URL next
+  time. `resolveRepoAlias` is the alias-or-raw-source lookup `addRepoSource`
+  (below) and the CLI use; `listRepoAliases` self-heals against
+  `repoCacheExists` the same way `listWorkspaces` self-heals against
+  `manifestPath` existing.
 
 `src/index.ts` is the only import path the rest of the repo (`packages/cli`)
-may use — it re-exports the workspace lifecycle API, the registry API,
-`SporkError`, and the `~/.spork` path constants. Everything else here is an
-implementation detail.
+may use — it re-exports the workspace lifecycle API, both registries'
+APIs, `SporkError`, and the `~/.spork` path constants. Everything else here
+is an implementation detail.
 
 ## Testing
 

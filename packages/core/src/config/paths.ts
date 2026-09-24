@@ -7,3 +7,6 @@ export const SPORK_HOME = path.join(os.homedir(), '.spork')
 export const REPOS_ROOT = path.join(SPORK_HOME, 'repos')
 
 export const REGISTRY_PATH = path.join(SPORK_HOME, 'workspaces.json')
+
+/** The repo alias registry — see registry/repoRegistry.ts. */
+export const REPO_REGISTRY_PATH = path.join(SPORK_HOME, 'repos.json')

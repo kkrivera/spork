@@ -44,6 +44,11 @@ function isCloned(cachePath: string): boolean {
   return existsSync(path.join(cachePath, 'HEAD'))
 }
 
+/** Whether `source`'s shared cache has actually been cloned (not just has a path reserved). */
+export function repoCacheExists(reposRoot: string, source: string): boolean {
+  return isCloned(resolveRepoCache(reposRoot, source).path)
+}
+
 /**
  * Ensures a bare clone of `source` exists under `reposRoot`, cloning it on
  * first use and fetching to refresh refs on subsequent calls. Callers that

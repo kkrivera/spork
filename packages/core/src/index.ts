@@ -35,4 +35,12 @@ export {
   resolveWorkspaceDir,
 } from './registry/registry.js'
 
-export { REPOS_ROOT, REGISTRY_PATH, SPORK_HOME } from './config/paths.js'
+export type { RepoRegistryEntry } from './registry/repoRegistry.js'
+export {
+  registerRepoAlias,
+  unregisterRepoAlias,
+  listRepoAliases,
+  resolveRepoAlias,
+} from './registry/repoRegistry.js'
+
+export { REPOS_ROOT, REGISTRY_PATH, REPO_REGISTRY_PATH, SPORK_HOME } from './config/paths.js'

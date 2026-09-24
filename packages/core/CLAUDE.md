@@ -19,11 +19,19 @@ surface; nothing in this repo should import from `src/*` paths directly.
 
 ## `src/repo`
 
-`ensureRepoCache` (clone-or-fetch) and any future worktree mutation against the
-same cache path must be called from inside `withRepoLock` by the caller
-(`workspace.ts`, once it exists) — `cache.ts` itself doesn't lock, it just does
-the filesystem/git work. Don't call `cloneBare`/`fetchAll` directly outside the
-lock from orchestration code.
+`ensureRepoCache` (clone-or-fetch) and any worktree mutation against the same
+cache path must be called from inside `withRepoLock` by the caller — `cache.ts`
+itself doesn't lock, it just does the filesystem/git work. Don't call
+`cloneBare`/`fetchAll` directly outside the lock from orchestration code.
+
+## `src/registry`
+
+Two registries, same index-not-source-of-truth pattern: `registry.ts` for
+workspaces (name → dir) and `repoRegistry.ts` for repo sources (alias →
+source). Neither is allowed to be trusted blindly — every `list*` function
+self-heals by checking the thing it points at still exists and persisting the
+drop if not. Don't add a third ad-hoc "list of things" file anywhere else;
+route it through this pattern instead.
 
 ## `src/workspace`
 

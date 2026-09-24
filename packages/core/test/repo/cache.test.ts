@@ -16,7 +16,7 @@ vi.mock('../../src/git/clone.js', () => ({
 }))
 
 const { cloneBare, fetchAll } = await import('../../src/git/clone.js')
-const { repoCacheId, resolveRepoCache, ensureRepoCache } = await import('../../src/repo/cache.js')
+const { repoCacheId, resolveRepoCache, ensureRepoCache, repoCacheExists } = await import('../../src/repo/cache.js')
 
 const cloneBareMock = vi.mocked(cloneBare)
 const fetchAllMock = vi.mocked(fetchAll)
@@ -79,5 +79,18 @@ describe('ensureRepoCache', () => {
     expect(fetchAllMock).toHaveBeenCalledWith(cache.path)
     expect(cloneBareMock).not.toHaveBeenCalled()
   })
+})
 
+describe('repoCacheExists', () => {
+  it('is true once the cache has a HEAD file', () => {
+    existsSyncMock.mockReturnValue(true)
+
+    expect(repoCacheExists('/repos', 'git@github.com:acme/widgets.git')).toBe(true)
+  })
+
+  it('is false when nothing has been cloned yet', () => {
+    existsSyncMock.mockReturnValue(false)
+
+    expect(repoCacheExists('/repos', 'git@github.com:acme/widgets.git')).toBe(false)
+  })
 })
