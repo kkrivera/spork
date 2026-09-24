@@ -1,0 +1,27 @@
+flowchart TD
+    Start(["spork workspace add-repo &lt;workspace&gt; &lt;source&gt;<br/>[--branch ref] [--as folder]"]) --> Resolve["cli: resolveWorkspaceDir<br/>name → workspace dir"]
+    Resolve --> Reconcile["core: reconcileWorkspace<br/>prune stale git worktree metadata,<br/>drop manifest entries for deleted folders"]
+    Reconcile --> FolderCheck{"Folder name already<br/>used in this workspace?"}
+    FolderCheck -- yes --> Fail(["throw SporkError<br/>(use --as to pick another name)"])
+    FolderCheck -- no --> Lock[["withRepoLock(cache.lockPath)"]]
+
+    subgraph LockedSection["Locked: shared repo cache"]
+        direction TB
+        Ensure["ensureRepoCache<br/>clone --bare if new, else fetch --all --tags"]
+        Ensure --> AddWt["addWorktree<br/>git worktree add -b spork/&lt;ws&gt;/&lt;folder&gt; &lt;path&gt; &lt;ref&gt;"]
+    end
+
+    Lock --> LockedSection
+    LockedSection --> Unlock[["release lock"]]
+
+    Unlock --> WriteManifest["write spork.workspace.json entry<br/>+ regenerate .code-workspace"]
+    WriteManifest --> HasSub{".gitmodules present<br/>in new worktree?"}
+    HasSub -- no --> Done1(["return AddRepoResult<br/>submodulesInitialized: false"])
+    HasSub -- yes --> InitSub["initSubmodules<br/>git submodule update --init --recursive"]
+    InitSub --> SubOk{"Succeeded?"}
+    SubOk -- yes --> Done2(["return AddRepoResult<br/>submodulesInitialized: true"])
+    SubOk -- no --> Done3(["return AddRepoResult<br/>submodulesInitialized: false<br/>submoduleWarning: &lt;message&gt;"])
+
+    Done1 --> Print["cli: print confirmation"]
+    Done2 --> Print2["cli: print confirmation +<br/>'Initialized submodules in …'"]
+    Done3 --> Print3["cli: print confirmation +<br/>yellow warning with failure reason"]
