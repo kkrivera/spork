@@ -43,4 +43,12 @@ export {
   resolveRepoAlias,
 } from './registry/repoRegistry.js'
 
+export type {
+  RepoContext,
+  AddRepoSourceOptions,
+  RemoveRepoSourceContext,
+  RepoUsage,
+} from './repo/repos.js'
+export { defaultAlias, addRepoSource, findRepoUsages, removeRepoSource } from './repo/repos.js'
+
 export { REPOS_ROOT, REGISTRY_PATH, REPO_REGISTRY_PATH, SPORK_HOME } from './config/paths.js'

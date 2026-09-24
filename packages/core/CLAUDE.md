@@ -33,6 +33,14 @@ self-heals by checking the thing it points at still exists and persisting the
 drop if not. Don't add a third ad-hoc "list of things" file anywhere else;
 route it through this pattern instead.
 
+`repo/repos.ts`'s `addRepoSource` is the *only* place that both ensures a
+repo is cloned and registers/reuses its alias — don't call `ensureRepoCache`
+directly from anywhere that also needs alias behavior (that now includes
+`workspace.ts`'s `addRepo`). `removeRepoSource`'s in-use check
+(`findRepoUsages`) reads the *workspace* registry and every workspace's
+manifest — don't add a force-override to skip it; a worktree still
+referencing a deleted cache is a real corruption, not a nuisance to bypass.
+
 ## `src/workspace`
 
 `workspace.ts` is the only place the `git`/`repo` layers get combined — keep it
