@@ -17,6 +17,22 @@ export async function runAddRepo(
   return addRepo(workspaceContext(ctx), dir, { source, ref: options.branch, folder: options.as })
 }
 
+/** Prints an AddRepoResult the same way regardless of whether it came from `add-repo` or `create --repo`. */
+export function printAddRepoResult(ctx: AppContext, workspace: string, result: AddRepoResult): void {
+  const { entry } = result
+  console.log(ctx.ui.color.green(`Added "${entry.folder}" (${entry.localBranch}) to workspace "${workspace}"`))
+
+  if (result.submodulesInitialized) {
+    console.log(`Initialized submodules in "${entry.folder}"`)
+  } else if (result.submoduleWarning) {
+    console.log(
+      ctx.ui.color.yellow(
+        `Warning: "${entry.folder}" has submodules but initializing them failed: ${result.submoduleWarning}`,
+      ),
+    )
+  }
+}
+
 export function registerAddRepoCommand(program: Command, ctx: AppContext): void {
   program
     .command('add-repo <workspace> <source>')
@@ -25,18 +41,6 @@ export function registerAddRepoCommand(program: Command, ctx: AppContext): void 
     .option('--as <folder>', 'folder name to use (default: derived from the repo name)')
     .action(async (workspace: string, source: string, options: AddRepoOptions) => {
       const result = await runAddRepo(ctx, workspace, source, options)
-      const { entry } = result
-
-      console.log(ctx.ui.color.green(`Added "${entry.folder}" (${entry.localBranch}) to workspace "${workspace}"`))
-
-      if (result.submodulesInitialized) {
-        console.log(`Initialized submodules in "${entry.folder}"`)
-      } else if (result.submoduleWarning) {
-        console.log(
-          ctx.ui.color.yellow(
-            `Warning: "${entry.folder}" has submodules but initializing them failed: ${result.submoduleWarning}`,
-          ),
-        )
-      }
+      printAddRepoResult(ctx, workspace, result)
     })
 }

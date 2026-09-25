@@ -9,7 +9,7 @@ const { listWorkspaces } = await import('@spork/core')
 const { runList, registerListCommand } = await import('../../src/commands/workspace/list.js')
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/registry.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
 
 beforeEach(() => {
   vi.mocked(listWorkspaces).mockReset()

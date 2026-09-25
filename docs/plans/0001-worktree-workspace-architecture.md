@@ -128,8 +128,31 @@ them is harmless — nothing outside a lock mutates a cache — and it means
 clone-and-register logic.
 
 A parallel `spork repo` CLI command group (`add`/`list`/`remove`) exposes
-this registry directly, decoupled from any workspace — see the CLI package's
-README once that lands.
+this registry directly, decoupled from any workspace — see
+[packages/cli/README.md](../../packages/cli/README.md). `repo add` uses
+`addRepoSourceOrAlias` (resolve-then-add in one call — it has no
+folder-collision check to order around, unlike `workspace.ts`'s `addRepo`,
+so it doesn't need the two-step split). `repo remove` hard-refuses if
+`findRepoUsages` finds any workspace still referencing the source, via a
+scan of the workspace registry and every workspace's manifest — no
+force-override, since a worktree is a live pointer into the cache's object
+store and deleting it out from under one would corrupt it.
+
+`workspace create` grew a repeatable `--repo <source-or-alias>` flag as
+sugar over calling `add-repo` once per repo — implemented purely in the CLI
+layer (`runCreateWithRepos` loops the same `runAddRepo` the standalone
+`add-repo` command uses), not as new core surface. It's fail-fast, not
+atomic: if one `--repo` fails, the already-created (and already-registered)
+workspace is left as-is with whatever repos succeeded first — recoverable
+via `add-repo` for the rest.
+
+This also settled a CLI taxonomy question: `workspace add-repo`/
+`remove-repo` keep their `-repo` suffix rather than shortening to bare
+`add`/`remove` now that `repo add`/`remove` exist at the top level — the
+suffix is what keeps `workspace remove` (destroy the whole workspace)
+unambiguous from `workspace remove-repo` (drop one repo from it). A verb's
+meaning being scoped by its noun group is normal CLI practice (git's
+`remote add` vs `submodule add` don't collide either).
 
 ### `open` uses the `code` CLI, via an injectable opener
 

@@ -7,10 +7,10 @@ vi.mock('@spork/core', () => ({
 }))
 
 const { addRepo, resolveWorkspaceDir } = await import('@spork/core')
-const { runAddRepo, registerAddRepoCommand } = await import('../../src/commands/workspace/addRepo.js')
+const { runAddRepo, printAddRepoResult, registerAddRepoCommand } = await import('../../src/commands/workspace/addRepo.js')
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/registry.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
 
 beforeEach(() => {
   vi.mocked(resolveWorkspaceDir).mockReset().mockResolvedValue('/ws/demo')
@@ -34,10 +34,30 @@ describe('runAddRepo', () => {
 
     expect(resolveWorkspaceDir).toHaveBeenCalledWith('/registry.json', 'demo')
     expect(addRepo).toHaveBeenCalledWith(
-      { reposRoot: '/repos' },
+      { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
       '/ws/demo',
       { source: 'git@github.com:acme/widgets.git', ref: 'main', folder: 'w' },
     )
+  })
+})
+
+describe('printAddRepoResult', () => {
+  it('is reused directly by callers other than the add-repo command (e.g. create --repo)', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    printAddRepoResult(ctx, 'demo', {
+      entry: {
+        folder: 'widgets',
+        source: 'git@github.com:acme/widgets.git',
+        requestedRef: 'HEAD',
+        localBranch: 'spork/demo/widgets',
+        addedAt: '',
+      },
+      submodulesInitialized: false,
+    })
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('Added "widgets"')
+    logSpy.mockRestore()
   })
 })
 

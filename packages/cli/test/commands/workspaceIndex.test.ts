@@ -6,7 +6,7 @@ import { createUi } from '../../src/output/color.js'
 describe('registerWorkspaceCommands', () => {
   it('registers a "workspace" command with every v1 subcommand', () => {
     const program = new Command()
-    const ctx = { reposRoot: '/repos', registryPath: '/registry.json', ui: createUi({ argv: ['--no-color'] }) }
+    const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
 
     registerWorkspaceCommands(program, ctx)
 

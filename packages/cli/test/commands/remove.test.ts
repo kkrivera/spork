@@ -12,7 +12,7 @@ const { listWorkspaces, removeWorkspace, resolveWorkspaceDir, unregisterWorkspac
 const { runRemove, registerRemoveCommand } = await import('../../src/commands/workspace/remove.js')
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/registry.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
 
 beforeEach(() => {
   vi.mocked(resolveWorkspaceDir).mockReset().mockResolvedValue('/ws/demo')
@@ -25,14 +25,14 @@ describe('runRemove', () => {
   it('removes the workspace and unregisters its matching registry entry', async () => {
     await runRemove(ctx, 'demo', {})
 
-    expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos' }, '/ws/demo', { keepFiles: undefined })
+    expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/ws/demo', { keepFiles: undefined })
     expect(unregisterWorkspace).toHaveBeenCalledWith('/registry.json', 'demo')
   })
 
   it('forwards keepFiles', async () => {
     await runRemove(ctx, 'demo', { keepFiles: true })
 
-    expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos' }, '/ws/demo', { keepFiles: true })
+    expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/ws/demo', { keepFiles: true })
   })
 
   it('does not try to unregister when nothing in the registry matches the resolved dir', async () => {
@@ -52,7 +52,7 @@ describe('registerRemoveCommand', () => {
 
     await program.parseAsync(['node', 'test', 'remove', 'demo', '--keep-files'])
 
-    expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos' }, '/ws/demo', { keepFiles: true })
+    expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/ws/demo', { keepFiles: true })
     expect(logSpy.mock.calls.flat().join('\n')).toContain('Removed workspace "demo"')
     logSpy.mockRestore()
   })

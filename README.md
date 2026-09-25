@@ -29,6 +29,17 @@ spork workspace remove-repo demo gadgets
 spork workspace remove demo
 ```
 
+Every repo you add is cached once (`~/.spork/repos/`) and given a short
+alias, so the next workspace that needs the same repo doesn't need the full
+clone URL again:
+
+```sh
+spork repo add git@github.com:acme/widgets.git   # -> "widgets" (default alias)
+spork repo list
+spork workspace create demo2 --repo widgets       # by alias, repeatable
+spork repo remove widgets                         # refuses while any workspace still uses it
+```
+
 ## Repository layout
 
 - [packages/core](packages/core) — domain logic: git worktree management, workspace
