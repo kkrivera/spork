@@ -11,11 +11,12 @@ vi.mock('../../src/registry/repoRegistry.js', () => ({
   listRepoAliases: vi.fn(),
   registerRepoAlias: vi.fn(),
   unregisterRepoAlias: vi.fn(),
+  resolveRepoAlias: vi.fn(),
 }))
 
 const { ensureRepoCache } = await import('../../src/repo/cache.js')
-const { listRepoAliases, registerRepoAlias } = await import('../../src/registry/repoRegistry.js')
-const { addRepoSource } = await import('../../src/repo/repos.js')
+const { listRepoAliases, registerRepoAlias, resolveRepoAlias } = await import('../../src/registry/repoRegistry.js')
+const { addRepoSource, addRepoSourceOrAlias } = await import('../../src/repo/repos.js')
 const { SporkError } = await import('../../src/errors.js')
 
 const WIDGETS_SOURCE = 'git@github.com:acme/widgets.git'
@@ -25,6 +26,7 @@ beforeEach(() => {
   vi.mocked(ensureRepoCache).mockReset().mockResolvedValue({ id: '', source: '', path: '', lockPath: '' })
   vi.mocked(listRepoAliases).mockReset().mockResolvedValue([])
   vi.mocked(registerRepoAlias).mockReset().mockResolvedValue(undefined)
+  vi.mocked(resolveRepoAlias).mockReset().mockImplementation(async (_p, _r, input: string) => input)
 })
 
 describe('addRepoSource', () => {
@@ -86,5 +88,23 @@ describe('addRepoSource', () => {
 
     expect(entry.alias).toMatch(/^widgets-[a-f0-9]{8}$/)
     expect(entry.alias).not.toBe('widgets')
+  })
+})
+
+describe('addRepoSourceOrAlias', () => {
+  it('resolves an alias to its source before ensuring the cache', async () => {
+    vi.mocked(resolveRepoAlias).mockResolvedValue(WIDGETS_SOURCE)
+
+    const entry = await addRepoSourceOrAlias(ctx, 'widgets')
+
+    expect(resolveRepoAlias).toHaveBeenCalledWith('/registry.json', '/repos', 'widgets')
+    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE)
+    expect(entry.source).toBe(WIDGETS_SOURCE)
+  })
+
+  it('passes a raw source straight through unchanged', async () => {
+    await addRepoSourceOrAlias(ctx, WIDGETS_SOURCE)
+
+    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE)
   })
 })

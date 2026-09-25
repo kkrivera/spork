@@ -1,7 +1,13 @@
 import { rm } from 'node:fs/promises'
 import { ensureRepoCache, repoCacheId, resolveRepoCache } from './cache.js'
 import { withRepoLock } from './lock.js'
-import { listRepoAliases, registerRepoAlias, unregisterRepoAlias, type RepoRegistryEntry } from '../registry/repoRegistry.js'
+import {
+  listRepoAliases,
+  registerRepoAlias,
+  resolveRepoAlias,
+  unregisterRepoAlias,
+  type RepoRegistryEntry,
+} from '../registry/repoRegistry.js'
 import { listWorkspaces } from '../registry/registry.js'
 import { readManifest } from '../workspace/manifest.js'
 import { slugify } from '../util/slug.js'
@@ -22,10 +28,9 @@ export interface AddRepoSourceOptions {
 }
 
 /**
- * Ensures `source` is cloned/cached, then registers (or reuses) an alias for
- * it. Called by both the top-level `repo add` command and, indirectly, by
- * `workspace.ts`'s `addRepo` — the single place clone-and-remember logic
- * lives, so both paths behave identically.
+ * Ensures `source` (a real repo source — see `addRepoSourceOrAlias` if the
+ * input might be an alias instead) is cloned/cached, then registers or
+ * reuses an alias for it.
  */
 export async function addRepoSource(
   ctx: RepoContext,
@@ -45,6 +50,23 @@ export async function addRepoSource(
   const entry: RepoRegistryEntry = { alias, source, addedAt: new Date().toISOString() }
   await registerRepoAlias(ctx.repoRegistryPath, entry)
   return entry
+}
+
+/**
+ * `addRepoSource`, but accepting either a real source or an already-known
+ * alias for one (mirroring `resolveWorkspaceDir`'s name-or-raw-fallback
+ * pattern) — the one place "what does this input string refer to" gets
+ * resolved, used by both the top-level `repo add` command and
+ * `workspace.ts`'s `addRepo`, so `spork repo add widgets` (an existing
+ * alias) and `spork workspace add-repo demo widgets` behave identically.
+ */
+export async function addRepoSourceOrAlias(
+  ctx: RepoContext,
+  aliasOrSource: string,
+  options: AddRepoSourceOptions = {},
+): Promise<RepoRegistryEntry> {
+  const source = await resolveRepoAlias(ctx.repoRegistryPath, ctx.reposRoot, aliasOrSource)
+  return addRepoSource(ctx, source, options)
 }
 
 /**

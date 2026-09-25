@@ -31,13 +31,19 @@ for the design this package implements.
     concurrent `spork` invocations are expected, not exceptional.
   - `cache.ts` also exports `repoCacheExists`, used by the repo registry
     below to tell whether a registered alias's cache is still actually there.
-  - `repos.ts` — the service layer over the repo registry: `addRepoSource`
-    (ensure cloned, then register/reuse an alias — the one place clone-and-
-    remember logic lives, used by both the top-level `repo add` command and
-    `workspace.ts`'s `addRepo`) and `removeRepoSource` (deletes a cache and
-    forgets its alias, but hard-refuses via `findRepoUsages` if any workspace
-    still has a worktree checked out from it — no force-override, since that
-    worktree is a live pointer into the cache's object store).
+  - `repos.ts` — the service layer over the repo registry:
+    - `addRepoSource(ctx, source, { alias? })` — ensure cloned, then
+      register/reuse an alias for it. Expects a real source, not an alias.
+    - `addRepoSourceOrAlias(ctx, aliasOrSource, { alias? })` — the same, but
+      resolves an alias-or-raw-source input first (mirroring
+      `resolveWorkspaceDir`'s pattern). This is what the top-level `repo add`
+      command uses; `workspace.ts`'s `addRepo` resolves separately instead
+      (it needs to fail fast on a folder-name collision *before* touching
+      the network, so it can't resolve-and-clone in one step).
+    - `removeRepoSource` — deletes a cache and forgets its alias, but
+      hard-refuses via `findRepoUsages` if any workspace still has a
+      worktree checked out from it — no force-override, since that worktree
+      is a live pointer into the cache's object store.
 - `src/util/` — `slugify` (filesystem/branch-name-safe strings) and
   `repoShortName` (the repo's short name out of a source URL/path).
 - `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,
