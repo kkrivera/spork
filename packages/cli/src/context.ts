@@ -1,4 +1,11 @@
-import { REGISTRY_PATH, REPO_REGISTRY_PATH, REPOS_ROOT, type WorkspaceContext } from '@spork/core'
+import {
+  REGISTRY_PATH,
+  REPO_REGISTRY_PATH,
+  REPOS_ROOT,
+  type RemoveRepoSourceContext,
+  type RepoContext,
+  type WorkspaceContext,
+} from '@spork/core'
 import { createUi, type Ui, type UiOptions } from './output/color.js'
 
 export interface CoreContext {
@@ -25,4 +32,14 @@ export function createAppContext(uiOptions?: UiOptions): AppContext {
 /** The subset of a CoreContext that @spork/core's workspace functions need. */
 export function workspaceContext(ctx: CoreContext): WorkspaceContext {
   return { reposRoot: ctx.reposRoot, repoRegistryPath: ctx.repoRegistryPath }
+}
+
+/** The subset of a CoreContext that @spork/core's repo functions (addRepoSource*) need. */
+export function repoContext(ctx: CoreContext): RepoContext {
+  return { reposRoot: ctx.reposRoot, repoRegistryPath: ctx.repoRegistryPath }
+}
+
+/** Same as repoContext, plus the workspace registry path removeRepoSource needs for its in-use check. */
+export function removeRepoSourceContext(ctx: CoreContext): RemoveRepoSourceContext {
+  return { ...repoContext(ctx), workspaceRegistryPath: ctx.registryPath }
 }

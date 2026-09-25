@@ -19,8 +19,11 @@ logic lives here.
 - `src/output/format.ts` — `formatTable`, a plain space-padded table
   renderer (no box drawing) so output stays clean piped or in CI.
 - `src/context.ts` — `createAppContext`, building the `{ reposRoot,
-  registryPath, ui }` every command needs from `@spork/core`'s path constants
-  and the output layer.
+  registryPath, repoRegistryPath, ui }` every command needs from
+  `@spork/core`'s path constants and the output layer, plus narrowing
+  helpers (`workspaceContext`, `repoContext`, `removeRepoSourceContext`)
+  that pick out exactly the fields a given `@spork/core` function's context
+  parameter needs.
 - `src/opener.ts` — `createCodeOpener`, an injectable abstraction around
   shelling out to the `code` CLI (used by `workspace open`), so it's mockable
   in tests and doesn't fail silently if `code` isn't installed.
@@ -34,6 +37,10 @@ logic lives here.
   them all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
   for the command surface and its rationale.
+- `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`),
+  same `run<Verb>`/`register<Verb>Command` split. Decoupled from any
+  workspace: `repo add <source>` clones/registers an alias directly;
+  `repo remove <alias>` refuses if any workspace still references it.
 
 ## Testing
 

@@ -19,3 +19,14 @@ new business logic belongs in `@spork/core`, imported only from its
   testable logic — no commander, no `console.log`) and a
   `register<Verb>Command(program, ctx)` that wires it up and prints. Follow
   this split for any new command rather than putting logic inside `.action()`.
+- Two command noun groups: `workspace` and `repo`. A verb's meaning is
+  scoped by its noun group (like git's `remote add` vs `submodule add`) —
+  don't rename `workspace add-repo`/`remove-repo` to bare `add`/`remove` even
+  though `repo add`/`remove` now exist; the `-repo` suffix is what keeps
+  `workspace remove` (destroy the whole workspace) unambiguous from
+  `workspace remove-repo` (drop one repo from it).
+- Building a context for a `@spork/core` call: use `context.ts`'s narrowing
+  helpers (`workspaceContext`, `repoContext`, `removeRepoSourceContext`)
+  rather than hand-writing `{ reposRoot: ctx.reposRoot, ... }` at the call
+  site — if a core context type gains a field, only the helper needs to
+  change.

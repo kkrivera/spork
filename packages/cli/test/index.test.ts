@@ -18,10 +18,12 @@ describe('createProgram', () => {
     expect(flags).toContain('--no-color')
   })
 
-  it('registers the workspace command tree by default', () => {
+  it('registers the workspace and repo command trees by default', () => {
     const program = createProgram()
 
-    expect(program.commands.map((cmd) => cmd.name())).toContain('workspace')
+    const names = program.commands.map((cmd) => cmd.name())
+    expect(names).toContain('workspace')
+    expect(names).toContain('repo')
   })
 })
 
