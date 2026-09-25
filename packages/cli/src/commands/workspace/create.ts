@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { createWorkspace, listWorkspaces, registerWorkspace, SporkError, type WorkspaceHandle } from '@spork/core'
 import type { Command } from 'commander'
-import type { AppContext } from '../../context.js'
+import { workspaceContext, type AppContext } from '../../context.js'
 
 export interface CreateOptions {
   dir?: string
@@ -14,7 +14,7 @@ export async function runCreate(ctx: AppContext, name: string, options: CreateOp
   }
 
   const dir = options.dir ? path.resolve(options.dir) : path.resolve(process.cwd(), name)
-  const handle = await createWorkspace({ reposRoot: ctx.reposRoot }, { name, dir })
+  const handle = await createWorkspace(workspaceContext(ctx), { name, dir })
   await registerWorkspace(ctx.registryPath, { name, dir })
 
   return handle

@@ -29,12 +29,13 @@ const WIDGETS_SOURCE = 'git@github.com:acme/widgets.git'
 
 let root: string
 let dir: string
-const ctx = { reposRoot: '' }
+const ctx = { reposRoot: '', repoRegistryPath: '' }
 
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'spork-removerepo-'))
   dir = path.join(root, 'demo')
   ctx.reposRoot = path.join(root, 'repos')
+  ctx.repoRegistryPath = path.join(root, 'repos.json')
   await createWorkspace(ctx, { name: 'demo', dir })
   addWorktreeMock.mockReset().mockImplementation(fakeAddWorktree)
   removeWorktreeMock.mockReset().mockResolvedValue(undefined)

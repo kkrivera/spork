@@ -27,12 +27,13 @@ const { fakeAddWorktree } = await import('./fakeAddWorktree.js')
 
 let root: string
 let dir: string
-const ctx = { reposRoot: '' }
+const ctx = { reposRoot: '', repoRegistryPath: '' }
 
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'spork-status-'))
   dir = path.join(root, 'demo')
   ctx.reposRoot = path.join(root, 'repos')
+  ctx.repoRegistryPath = path.join(root, 'repos.json')
   await createWorkspace(ctx, { name: 'demo', dir })
   vi.mocked(addWorktree).mockReset().mockImplementation(fakeAddWorktree)
   vi.mocked(ensureRepoCache).mockReset().mockResolvedValue({ id: 'widgets-abc', source: '', path: '/unused' })

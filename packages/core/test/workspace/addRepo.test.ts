@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,6 +25,7 @@ const { hasSubmodules, initSubmodules } = await import('../../src/git/submodule.
 const { ensureRepoCache, resolveRepoCache } = await import('../../src/repo/cache.js')
 const { createWorkspace, addRepo } = await import('../../src/workspace/workspace.js')
 const { readManifest } = await import('../../src/workspace/manifest.js')
+const { registerRepoAlias } = await import('../../src/registry/repoRegistry.js')
 const { SporkError } = await import('../../src/errors.js')
 const { fakeAddWorktree } = await import('./fakeAddWorktree.js')
 
@@ -36,7 +37,7 @@ const WIDGETS_SOURCE = 'git@github.com:acme/widgets.git'
 
 let root: string
 let dir: string
-const ctx = { reposRoot: '' }
+const ctx = { reposRoot: '', repoRegistryPath: '' }
 
 function widgetsCachePath(): string {
   return resolveRepoCache(ctx.reposRoot, WIDGETS_SOURCE).path
@@ -46,6 +47,7 @@ beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'spork-addrepo-'))
   dir = path.join(root, 'demo')
   ctx.reposRoot = path.join(root, 'repos')
+  ctx.repoRegistryPath = path.join(root, 'repos.json')
   await createWorkspace(ctx, { name: 'demo', dir })
   addWorktreeMock.mockReset().mockImplementation(fakeAddWorktree)
   ensureRepoCacheMock.mockReset().mockResolvedValue({ id: 'widgets-abc', source: '', path: '/unused' })
@@ -129,5 +131,25 @@ describe('addRepo — submodules', () => {
     expect(submodulesInitialized).toBe(false)
     expect(submoduleWarning).toContain('private-submodule-host')
     expect((await readManifest(dir)).worktrees).toEqual([entry])
+  })
+})
+
+describe('addRepo — aliases', () => {
+  it('resolves a registered alias to its real source and stores the resolved source, not the alias', async () => {
+    const cachePath = resolveRepoCache(ctx.reposRoot, WIDGETS_SOURCE).path
+    await mkdir(cachePath, { recursive: true })
+    await writeFile(path.join(cachePath, 'HEAD'), 'ref: refs/heads/main\n', 'utf8')
+    await registerRepoAlias(ctx.repoRegistryPath, { alias: 'widgets-alias', source: WIDGETS_SOURCE, addedAt: '' })
+
+    const { entry } = await addRepo(ctx, dir, { source: 'widgets-alias' })
+
+    expect(entry.source).toBe(WIDGETS_SOURCE)
+    expect(entry.folder).toBe('widgets')
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      widgetsCachePath(),
+      path.join(dir, 'widgets'),
+      'spork/demo/widgets',
+      'HEAD',
+    )
   })
 })

@@ -1,6 +1,6 @@
 import { listWorkspaces, removeWorkspace, resolveWorkspaceDir, unregisterWorkspace } from '@spork/core'
 import type { Command } from 'commander'
-import type { AppContext } from '../../context.js'
+import { workspaceContext, type AppContext } from '../../context.js'
 
 export interface RemoveOptions {
   keepFiles?: boolean
@@ -8,7 +8,7 @@ export interface RemoveOptions {
 
 export async function runRemove(ctx: AppContext, workspace: string, options: RemoveOptions): Promise<void> {
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspace)
-  await removeWorkspace({ reposRoot: ctx.reposRoot }, dir, { keepFiles: options.keepFiles })
+  await removeWorkspace(workspaceContext(ctx), dir, { keepFiles: options.keepFiles })
 
   const registered = await listWorkspaces(ctx.registryPath)
   const match = registered.find((entry) => entry.dir === dir)

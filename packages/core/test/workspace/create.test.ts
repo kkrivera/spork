@@ -21,7 +21,10 @@ describe('createWorkspace', () => {
   it('creates the workspace dir, an empty manifest, and a .code-workspace file', async () => {
     const dir = path.join(root, 'demo')
 
-    const handle = await createWorkspace({ reposRoot: path.join(root, 'repos') }, { name: 'demo', dir })
+    const handle = await createWorkspace(
+      { reposRoot: path.join(root, 'repos'), repoRegistryPath: path.join(root, 'repos.json') },
+      { name: 'demo', dir },
+    )
 
     expect(handle).toEqual({ name: 'demo', dir, manifest: expect.objectContaining({ name: 'demo', worktrees: [] }) })
     expect(await readManifest(dir)).toEqual(handle.manifest)

@@ -1,10 +1,10 @@
 import { removeRepo, resolveWorkspaceDir } from '@spork/core'
 import type { Command } from 'commander'
-import type { AppContext } from '../../context.js'
+import { workspaceContext, type AppContext } from '../../context.js'
 
 export async function runRemoveRepo(ctx: AppContext, workspace: string, folder: string): Promise<void> {
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspace)
-  await removeRepo({ reposRoot: ctx.reposRoot }, dir, folder)
+  await removeRepo(workspaceContext(ctx), dir, folder)
 }
 
 export function registerRemoveRepoCommand(program: Command, ctx: AppContext): void {

@@ -1,6 +1,6 @@
 import { codeWorkspaceFilePath, reconcileWorkspace, resolveWorkspaceDir } from '@spork/core'
 import type { Command } from 'commander'
-import type { AppContext } from '../../context.js'
+import { workspaceContext, type AppContext } from '../../context.js'
 import { createCodeOpener, type Opener } from '../../opener.js'
 
 export interface OpenResult {
@@ -11,7 +11,7 @@ export interface OpenResult {
 
 export async function runOpen(ctx: AppContext, workspace: string, opener: Opener): Promise<OpenResult> {
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspace)
-  const { manifest } = await reconcileWorkspace({ reposRoot: ctx.reposRoot }, dir)
+  const { manifest } = await reconcileWorkspace(workspaceContext(ctx), dir)
   const filePath = codeWorkspaceFilePath(dir, manifest.name)
   const outcome = await opener.open(filePath)
 

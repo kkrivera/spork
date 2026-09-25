@@ -4,8 +4,10 @@ import path from 'node:path'
 import { addWorktree, pruneWorktrees, removeWorktree } from '../git/worktree.js'
 import { getStatus, type WorktreeStatus } from '../git/status.js'
 import { hasSubmodules, initSubmodules } from '../git/submodule.js'
-import { ensureRepoCache, resolveRepoCache } from '../repo/cache.js'
+import { resolveRepoCache } from '../repo/cache.js'
 import { withRepoLock } from '../repo/lock.js'
+import { addRepoSource } from '../repo/repos.js'
+import { resolveRepoAlias } from '../registry/repoRegistry.js'
 import { slugify } from '../util/slug.js'
 import { repoShortName } from '../util/repoName.js'
 import { SporkError } from '../errors.js'
@@ -21,6 +23,8 @@ import {
 export interface WorkspaceContext {
   /** Root directory holding every repo's shared bare-clone cache (typically `~/.spork/repos`). */
   reposRoot: string
+  /** Path to the repo alias registry (`~/.spork/repos.json`) — see registry/repoRegistry.ts. */
+  repoRegistryPath: string
 }
 
 export interface CreateWorkspaceOptions {
@@ -104,7 +108,10 @@ export async function addRepo(
 ): Promise<AddRepoResult> {
   const { manifest } = await reconcileWorkspace(ctx, workspaceDir)
 
-  const folder = options.folder ?? slugify(repoShortName(options.source))
+  // options.source may be a registered alias (see registry/repoRegistry.ts) — resolve it to
+  // the real source up front so the folder default, cache, and manifest entry all agree.
+  const source = await resolveRepoAlias(ctx.repoRegistryPath, ctx.reposRoot, options.source)
+  const folder = options.folder ?? slugify(repoShortName(source))
   if (manifest.worktrees.some((wt) => wt.folder === folder)) {
     throw new SporkError(
       `"${folder}" is already used in workspace "${manifest.name}". Pass --as to choose a different folder name.`,
@@ -114,16 +121,16 @@ export async function addRepo(
   const requestedRef = options.ref ?? 'HEAD'
   const worktreePath = path.join(workspaceDir, folder)
   const localBranch = `spork/${slugify(manifest.name)}/${slugify(folder)}`
-  const cache = resolveRepoCache(ctx.reposRoot, options.source)
 
-  await withRepoLock(cache.lockPath, async () => {
-    await ensureRepoCache(ctx.reposRoot, options.source)
-    await addWorktree(cache.path, worktreePath, localBranch, requestedRef)
-  })
+  // addRepoSource ensures the cache is cloned/fetched and registers (or reuses) an alias for
+  // it — its own short lock. addWorktree gets a separate, second lock: see repo/repos.ts.
+  await addRepoSource(ctx, source)
+  const cache = resolveRepoCache(ctx.reposRoot, source)
+  await withRepoLock(cache.lockPath, () => addWorktree(cache.path, worktreePath, localBranch, requestedRef))
 
   const entry: WorktreeEntry = {
     folder,
-    source: options.source,
+    source,
     requestedRef,
     localBranch,
     addedAt: new Date().toISOString(),

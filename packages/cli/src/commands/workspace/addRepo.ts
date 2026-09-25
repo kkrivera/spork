@@ -1,6 +1,6 @@
 import { addRepo, resolveWorkspaceDir, type AddRepoResult } from '@spork/core'
 import type { Command } from 'commander'
-import type { AppContext } from '../../context.js'
+import { workspaceContext, type AppContext } from '../../context.js'
 
 export interface AddRepoOptions {
   branch?: string
@@ -14,7 +14,7 @@ export async function runAddRepo(
   options: AddRepoOptions,
 ): Promise<AddRepoResult> {
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspace)
-  return addRepo({ reposRoot: ctx.reposRoot }, dir, { source, ref: options.branch, folder: options.as })
+  return addRepo(workspaceContext(ctx), dir, { source, ref: options.branch, folder: options.as })
 }
 
 export function registerAddRepoCommand(program: Command, ctx: AppContext): void {

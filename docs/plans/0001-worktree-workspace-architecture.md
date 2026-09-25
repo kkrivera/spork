@@ -104,6 +104,33 @@ remote — that would require a network round-trip per worktree on every call,
 which doesn't match the expectations set by plain `git status`. An ahead/behind
 view (behind a `--fetch` flag or similar) is a later-phase concern.
 
+### Repo sources have a persistent alias, separate from workspaces
+
+A repo source (a clone URL or local path) is cloned once into a shared cache,
+but until now that cache had no name a user could refer back to — every
+`add-repo` needed the full source again, even for a repo spork already had.
+`registry/repoRegistry.ts` (`~/.spork/repos.json`, alias → source) and
+`repo/repos.ts`'s `addRepoSource` fix that: every successful clone/fetch
+registers (or reuses) an alias, opportunistically — no separate step
+required. `workspace.ts`'s `addRepo` resolves its `source` argument through
+the alias registry first (`resolveRepoAlias`, mirroring `resolveWorkspaceDir`'s
+name-or-raw-fallback pattern) before doing anything else, so it accepts
+either a known alias or a raw source, and always stores the resolved real
+source in the manifest — never the alias. `WorkspaceContext` grew a
+`repoRegistryPath` field for this.
+
+This also splits what was one `withRepoLock` block into two short ones:
+`addRepoSource` locks around ensuring the cache exists (shared with the
+top-level `repo add` command — see below), and `addRepo` then takes a
+second, separate lock just around `addWorktree`. The tiny window between
+them is harmless — nothing outside a lock mutates a cache — and it means
+`repo add` reuses `addRepoSource` verbatim instead of duplicating
+clone-and-register logic.
+
+A parallel `spork repo` CLI command group (`add`/`list`/`remove`) exposes
+this registry directly, decoupled from any workspace — see the CLI package's
+README once that lands.
+
 ### `open` uses the `code` CLI, via an injectable opener
 
 `spork workspace open` shells out to the `code` CLI rather than OS-level `open`,

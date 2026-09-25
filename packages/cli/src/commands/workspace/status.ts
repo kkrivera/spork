@@ -1,11 +1,11 @@
 import { getWorkspaceStatus, resolveWorkspaceDir, type WorktreeStatusEntry } from '@spork/core'
 import type { Command } from 'commander'
-import type { AppContext } from '../../context.js'
+import { workspaceContext, type AppContext } from '../../context.js'
 import { formatTable } from '../../output/format.js'
 
 export async function runStatus(ctx: AppContext, workspace: string): Promise<WorktreeStatusEntry[]> {
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspace)
-  return getWorkspaceStatus({ reposRoot: ctx.reposRoot }, dir)
+  return getWorkspaceStatus(workspaceContext(ctx), dir)
 }
 
 function statusCell(entry: WorktreeStatusEntry): string {
