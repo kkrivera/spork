@@ -30,3 +30,8 @@ new business logic belongs in `@spork/core`, imported only from its
   rather than hand-writing `{ reposRoot: ctx.reposRoot, ... }` at the call
   site — if a core context type gains a field, only the helper needs to
   change.
+- Local-vs-global scoping only applies to the standalone `repo` commands —
+  route it through `repoScope.ts`'s `resolveRepoScope`/`describeRepoScope`
+  rather than reimplementing the `--global`/`--local`/cwd-detection decision
+  per command. `workspace` commands don't need this at all (they already
+  know their target workspace by name) — don't add scope flags there.

@@ -27,6 +27,13 @@ logic lives here.
 - `src/opener.ts` — `createCodeOpener`, an injectable abstraction around
   shelling out to the `code` CLI (used by `workspace open`), so it's mockable
   in tests and doesn't fail silently if `code` isn't installed.
+- `src/repoScope.ts` — `resolveRepoScope`/`describeRepoScope`: decides which
+  repo-alias registry a standalone `repo` command should use. `--global`/
+  `--local` are explicit overrides (passing both is an error); with neither,
+  the default is context-sensitive — local if the cwd is inside a workspace
+  (`@spork/core`'s `findEnclosingWorkspaceDir`, walking up like git's `.git`
+  walk), global otherwise. `workspace` commands never use this — they
+  already know their target by name, so there's no ambiguity to resolve.
 - `src/commands/workspace/` — one file per `spork workspace <verb>`
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
   `status`, `open`), each exporting a plain `run<Verb>` function (the
@@ -40,7 +47,9 @@ logic lives here.
 - `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`),
   same `run<Verb>`/`register<Verb>Command` split. Decoupled from any
   workspace: `repo add <source>` clones/registers an alias directly;
-  `repo remove <alias>` refuses if any workspace still references it.
+  `repo remove <alias>` refuses if any workspace still references it. Both
+  take `--global`/`--local` (see `repoScope.ts`) and print which scope the
+  alias landed in or was removed from.
 
 ## Testing
 
