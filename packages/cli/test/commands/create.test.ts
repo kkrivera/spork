@@ -85,6 +85,14 @@ describe('runCreateWithRepos', () => {
     expect(addRepo).toHaveBeenCalledTimes(1)
     expect(createWorkspace).toHaveBeenCalled()
   })
+
+  it('forwards --global to every repo added', async () => {
+    vi.mocked(addRepo).mockResolvedValue({ entry: fakeEntry('widgets'), aliasScope: 'global', submodulesInitialized: false })
+
+    await runCreateWithRepos(ctx, 'demo', { repo: ['widgets-source'], global: true })
+
+    expect(addRepo).toHaveBeenCalledWith(expect.anything(), '/ws/demo', expect.objectContaining({ global: true }))
+  })
 })
 
 describe('registerCreateCommand', () => {

@@ -14,6 +14,8 @@ import { printAddRepoResult, runAddRepo } from './addRepo.js'
 export interface CreateOptions {
   dir?: string
   repo?: string[]
+  /** Register each --repo's alias globally instead of locally to the new workspace (the default). */
+  global?: boolean
 }
 
 function collectRepo(value: string, previous: string[]): string[] {
@@ -54,7 +56,7 @@ export async function runCreateWithRepos(
   const addRepoResults: AddRepoResult[] = []
 
   for (const source of options.repo ?? []) {
-    addRepoResults.push(await runAddRepo(ctx, handle.name, source, {}))
+    addRepoResults.push(await runAddRepo(ctx, handle.name, source, { global: options.global }))
   }
 
   return { handle, addRepoResults }
@@ -66,6 +68,7 @@ export function registerCreateCommand(program: Command, ctx: AppContext): void {
     .description('Create a new workspace')
     .option('--dir <path>', 'directory to create the workspace in (default: ./<name>)')
     .option('--repo <source>', 'repo to add (repeatable)', collectRepo, [] as string[])
+    .option('--global', "register each --repo's alias globally instead of locally to this workspace")
     .action(async (name: string, options: CreateOptions) => {
       const { handle, addRepoResults } = await runCreateWithRepos(ctx, name, options)
       console.log(ctx.ui.color.green(`Created workspace "${handle.name}" at ${handle.dir}`))

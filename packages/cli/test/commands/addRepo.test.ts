@@ -36,7 +36,17 @@ describe('runAddRepo', () => {
     expect(addRepo).toHaveBeenCalledWith(
       { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
       '/ws/demo',
-      { source: 'git@github.com:acme/widgets.git', ref: 'main', folder: 'w' },
+      { source: 'git@github.com:acme/widgets.git', ref: 'main', folder: 'w', global: undefined },
+    )
+  })
+
+  it('forwards --global', async () => {
+    await runAddRepo(ctx, 'demo', 'git@github.com:acme/widgets.git', { global: true })
+
+    expect(addRepo).toHaveBeenCalledWith(
+      expect.anything(),
+      '/ws/demo',
+      expect.objectContaining({ global: true }),
     )
   })
 })
@@ -59,20 +69,43 @@ describe('printAddRepoResult', () => {
     expect(logSpy.mock.calls.flat().join('\n')).toContain('Added "widgets"')
     logSpy.mockRestore()
   })
+
+  it('shows which registry the alias landed in', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    printAddRepoResult(ctx, 'demo', {
+      entry: {
+        folder: 'widgets',
+        source: 'git@github.com:acme/widgets.git',
+        requestedRef: 'HEAD',
+        localBranch: 'spork/demo/widgets',
+        addedAt: '',
+      },
+      aliasScope: 'global',
+      submodulesInitialized: false,
+    })
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('(alias: global)')
+    logSpy.mockRestore()
+  })
 })
 
 describe('registerAddRepoCommand', () => {
-  it('wires the add-repo command and prints a confirmation', async () => {
+  it('wires the add-repo command and prints a confirmation with alias scope', async () => {
     const program = new Command()
     registerAddRepoCommand(program, ctx)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await program.parseAsync(['node', 'test', 'add-repo', 'demo', 'git@github.com:acme/widgets.git'])
 
-    expect(logSpy.mock.calls.flat().join('\n')).toContain('Added "widgets"')
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Added "widgets"')
+    expect(output).toContain('(alias: local)')
     logSpy.mockRestore()
   })
+})
 
+describe('registerAddRepoCommand — submodules', () => {
   it('prints a submodule-initialized note when submodules were set up', async () => {
     vi.mocked(addRepo).mockResolvedValue({
       entry: {

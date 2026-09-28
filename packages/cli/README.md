@@ -38,10 +38,13 @@ logic lives here.
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
   `status`, `open`), each exporting a plain `run<Verb>` function (the
   testable logic) and a `register<Verb>Command` that wires it to commander
-  and prints the result. `add-repo` also prints whether submodules were
-  initialized, or a warning if that failed (the add itself still succeeds —
-  see `AddRepoResult` in `@spork/core`). `index.ts` in this folder registers
-  them all under the `workspace` parent command. See
+  and prints the result. `add-repo` (and `create --repo`) register the
+  repo's alias locally to the workspace by default, `--global` opts into
+  the shared registry instead — `printAddRepoResult` always shows which one
+  happened (`(alias: local)`/`(alias: global)`), plus whether submodules
+  were initialized or a warning if that failed (the add itself still
+  succeeds — see `AddRepoResult` in `@spork/core`). `index.ts` in this
+  folder registers them all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
   for the command surface and its rationale.
 - `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`),
