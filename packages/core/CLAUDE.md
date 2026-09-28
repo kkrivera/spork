@@ -62,6 +62,13 @@ purpose should go through `reconcileWorkspace` first (see `addRepo`/`removeRepo`
 for the pattern), not call `readManifest` directly — that's what keeps stale
 worktrees/folders from causing confusing failures later.
 
+`addRepo` registers its alias **locally to the workspace by default**
+(`AddRepoOptions.global` opts into the shared registry instead) — this is
+deliberately the opposite of "resolve," which always checks local-then-
+global-then-raw regardless of where a new alias would be written. Don't
+conflate the two: reading an alias and deciding where a *new* one gets
+written are different decisions with different defaults.
+
 ## Tests
 
 Unit tests only for now — mock `execGit` (or `node:child_process` for

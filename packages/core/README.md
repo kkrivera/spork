@@ -69,6 +69,10 @@ for the design this package implements.
     submodules if the worktree has any, after the repo-cache lock is
     released; a submodule-init failure produces a warning in the returned
     `AddRepoResult`, not a thrown error — the worktree is still registered.
+    `addRepo`'s `source` is resolved local-then-global-then-raw
+    (`resolveScopedRepoAlias`), and its alias registers to the workspace's
+    *local* registry by default (`AddRepoOptions.global` opts into the
+    shared one instead) — the result's `aliasScope` says which happened.
 
 - `src/registry/registry.ts` — `~/.spork/workspaces.json`: registers/lists/
   unregisters workspaces by name, and `resolveWorkspaceDir`, which is how CLI

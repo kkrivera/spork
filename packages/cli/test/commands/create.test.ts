@@ -68,8 +68,8 @@ describe('runCreateWithRepos', () => {
 
   it('adds each --repo in order via the same addRepo the standalone command uses', async () => {
     vi.mocked(addRepo)
-      .mockResolvedValueOnce({ entry: fakeEntry('widgets'), submodulesInitialized: false })
-      .mockResolvedValueOnce({ entry: fakeEntry('gadgets'), submodulesInitialized: false })
+      .mockResolvedValueOnce({ entry: fakeEntry('widgets'), aliasScope: 'local', submodulesInitialized: false })
+      .mockResolvedValueOnce({ entry: fakeEntry('gadgets'), aliasScope: 'local', submodulesInitialized: false })
 
     const result = await runCreateWithRepos(ctx, 'demo', { repo: ['widgets-source', 'gadgets-source'] })
 
@@ -102,8 +102,8 @@ describe('registerCreateCommand', () => {
 
   it('accepts repeated --repo flags and prints each result', async () => {
     vi.mocked(addRepo)
-      .mockResolvedValueOnce({ entry: fakeEntry('widgets'), submodulesInitialized: false })
-      .mockResolvedValueOnce({ entry: fakeEntry('gadgets'), submodulesInitialized: true })
+      .mockResolvedValueOnce({ entry: fakeEntry('widgets'), aliasScope: 'local', submodulesInitialized: false })
+      .mockResolvedValueOnce({ entry: fakeEntry('gadgets'), aliasScope: 'local', submodulesInitialized: true })
     const program = new Command()
     registerCreateCommand(program, ctx)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

@@ -24,7 +24,7 @@ beforeEach(() => {
         localBranch: 'spork/demo/widgets',
         addedAt: '',
       },
-      submodulesInitialized: false,
+      aliasScope: 'local', submodulesInitialized: false,
     })
 })
 
@@ -53,7 +53,7 @@ describe('printAddRepoResult', () => {
         localBranch: 'spork/demo/widgets',
         addedAt: '',
       },
-      submodulesInitialized: false,
+      aliasScope: 'local', submodulesInitialized: false,
     })
 
     expect(logSpy.mock.calls.flat().join('\n')).toContain('Added "widgets"')
@@ -82,7 +82,7 @@ describe('registerAddRepoCommand', () => {
         localBranch: 'spork/demo/widgets',
         addedAt: '',
       },
-      submodulesInitialized: true,
+      aliasScope: 'local', submodulesInitialized: true,
     })
     const program = new Command()
     registerAddRepoCommand(program, ctx)
@@ -103,7 +103,7 @@ describe('registerAddRepoCommand', () => {
         localBranch: 'spork/demo/widgets',
         addedAt: '',
       },
-      submodulesInitialized: false,
+      aliasScope: 'local', submodulesInitialized: false,
       submoduleWarning: 'could not read Username',
     })
     const program = new Command()

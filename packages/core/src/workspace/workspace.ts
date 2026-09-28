@@ -7,7 +7,7 @@ import { hasSubmodules, initSubmodules } from '../git/submodule.js'
 import { resolveRepoCache } from '../repo/cache.js'
 import { withRepoLock } from '../repo/lock.js'
 import { addRepoSource } from '../repo/repos.js'
-import { resolveRepoAlias } from '../registry/repoRegistry.js'
+import { localRepoRegistryPath, resolveScopedRepoAlias } from '../registry/repoRegistry.js'
 import { slugify } from '../util/slug.js'
 import { repoShortName } from '../util/repoName.js'
 import { SporkError } from '../errors.js'
@@ -91,10 +91,14 @@ export interface AddRepoOptions {
   source: string
   ref?: string
   folder?: string
+  /** Register the alias globally instead of locally to this workspace (the default). */
+  global?: boolean
 }
 
 export interface AddRepoResult {
   entry: WorktreeEntry
+  /** Which registry the repo's alias was (re-)registered in. */
+  aliasScope: 'local' | 'global'
   /** True if the worktree had a .gitmodules file and its submodules were initialized. */
   submodulesInitialized: boolean
   /** Set if the worktree has submodules but initializing them failed — the worktree itself is still valid and registered. */
@@ -108,9 +112,15 @@ export async function addRepo(
 ): Promise<AddRepoResult> {
   const { manifest } = await reconcileWorkspace(ctx, workspaceDir)
 
-  // options.source may be a registered alias (see registry/repoRegistry.ts) — resolve it to
-  // the real source up front so the folder default, cache, and manifest entry all agree.
-  const source = await resolveRepoAlias(ctx.repoRegistryPath, ctx.reposRoot, options.source)
+  // options.source may be a registered alias (local to this workspace, or global — see
+  // registry/repoRegistry.ts) — resolve it to the real source up front so the folder
+  // default, cache, and manifest entry all agree.
+  const source = await resolveScopedRepoAlias(
+    ctx.reposRoot,
+    localRepoRegistryPath(workspaceDir),
+    ctx.repoRegistryPath,
+    options.source,
+  )
   const folder = options.folder ?? slugify(repoShortName(source))
   if (manifest.worktrees.some((wt) => wt.folder === folder)) {
     throw new SporkError(
@@ -124,7 +134,13 @@ export async function addRepo(
 
   // addRepoSource ensures the cache is cloned/fetched and registers (or reuses) an alias for
   // it — its own short lock. addWorktree gets a separate, second lock: see repo/repos.ts.
-  await addRepoSource(ctx, source)
+  // The alias registers locally to this workspace by default — the target workspace is
+  // always known here, unlike the standalone `repo add` command — with --global opting into
+  // the shared registry instead.
+  const aliasScope: 'local' | 'global' = options.global ? 'global' : 'local'
+  const aliasRegistryPath = options.global ? ctx.repoRegistryPath : localRepoRegistryPath(workspaceDir)
+  await addRepoSource({ reposRoot: ctx.reposRoot, repoRegistryPath: aliasRegistryPath }, source)
+
   const cache = resolveRepoCache(ctx.reposRoot, source)
   await withRepoLock(cache.lockPath, () => addWorktree(cache.path, worktreePath, localBranch, requestedRef))
 
@@ -146,15 +162,15 @@ export async function addRepo(
   // failure here doesn't undo the worktree/manifest entry above: the repo
   // itself checked out fine, so the add is still considered successful.
   if (!hasSubmodules(worktreePath)) {
-    return { entry, submodulesInitialized: false }
+    return { entry, aliasScope, submodulesInitialized: false }
   }
 
   try {
     await initSubmodules(worktreePath)
-    return { entry, submodulesInitialized: true }
+    return { entry, aliasScope, submodulesInitialized: true }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { entry, submodulesInitialized: false, submoduleWarning: message }
+    return { entry, aliasScope, submodulesInitialized: false, submoduleWarning: message }
   }
 }
 

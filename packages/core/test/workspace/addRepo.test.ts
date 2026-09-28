@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,7 +26,7 @@ const { hasSubmodules, initSubmodules } = await import('../../src/git/submodule.
 const { ensureRepoCache, resolveRepoCache } = await import('../../src/repo/cache.js')
 const { createWorkspace, addRepo } = await import('../../src/workspace/workspace.js')
 const { readManifest } = await import('../../src/workspace/manifest.js')
-const { registerRepoAlias } = await import('../../src/registry/repoRegistry.js')
+const { registerRepoAlias, localRepoRegistryPath } = await import('../../src/registry/repoRegistry.js')
 const { SporkError } = await import('../../src/errors.js')
 const { fakeAddWorktree } = await import('./fakeAddWorktree.js')
 
@@ -151,5 +152,46 @@ describe('addRepo — aliases', () => {
       'spork/demo/widgets',
       'HEAD',
     )
+  })
+})
+
+describe('addRepo — local vs. global alias registration', () => {
+  it('registers the alias locally to the workspace by default, never touching the global file', async () => {
+    const { aliasScope } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
+
+    expect(aliasScope).toBe('local')
+    const localFile = JSON.parse(await readFile(localRepoRegistryPath(dir), 'utf8'))
+    expect(localFile.repos).toEqual([expect.objectContaining({ alias: 'widgets', source: WIDGETS_SOURCE })])
+    expect(existsSync(ctx.repoRegistryPath)).toBe(false)
+  })
+
+  it('registers globally instead when --global is passed, never touching the local file', async () => {
+    const { aliasScope } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE, global: true })
+
+    expect(aliasScope).toBe('global')
+    const globalFile = JSON.parse(await readFile(ctx.repoRegistryPath, 'utf8'))
+    expect(globalFile.repos).toEqual([expect.objectContaining({ alias: 'widgets', source: WIDGETS_SOURCE })])
+    expect(existsSync(localRepoRegistryPath(dir))).toBe(false)
+  })
+
+  it('lets two different workspaces give the same alias name different meanings', async () => {
+    const otherDir = path.join(root, 'other-workspace')
+    await createWorkspace(ctx, { name: 'other', dir: otherDir })
+    const otherSource = 'git@github.com:acme/gadgets.git'
+
+    for (const source of [WIDGETS_SOURCE, otherSource]) {
+      const cachePath = resolveRepoCache(ctx.reposRoot, source).path
+      await mkdir(cachePath, { recursive: true })
+      await writeFile(path.join(cachePath, 'HEAD'), 'ref: refs/heads/main\n', 'utf8')
+    }
+
+    await registerRepoAlias(localRepoRegistryPath(dir), { alias: 'shared-name', source: WIDGETS_SOURCE, addedAt: '' })
+    await registerRepoAlias(localRepoRegistryPath(otherDir), { alias: 'shared-name', source: otherSource, addedAt: '' })
+
+    const fromDemo = await addRepo(ctx, dir, { source: 'shared-name', folder: 'from-demo' })
+    const fromOther = await addRepo(ctx, otherDir, { source: 'shared-name', folder: 'from-other' })
+
+    expect(fromDemo.entry.source).toBe(WIDGETS_SOURCE)
+    expect(fromOther.entry.source).toBe(otherSource)
   })
 })
