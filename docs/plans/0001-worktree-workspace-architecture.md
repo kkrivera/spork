@@ -112,12 +112,7 @@ but until now that cache had no name a user could refer back to — every
 `registry/repoRegistry.ts` (`~/.spork/repos.json`, alias → source) and
 `repo/repos.ts`'s `addRepoSource` fix that: every successful clone/fetch
 registers (or reuses) an alias, opportunistically — no separate step
-required. `workspace.ts`'s `addRepo` resolves its `source` argument through
-the alias registry first (`resolveRepoAlias`, mirroring `resolveWorkspaceDir`'s
-name-or-raw-fallback pattern) before doing anything else, so it accepts
-either a known alias or a raw source, and always stores the resolved real
-source in the manifest — never the alias. `WorkspaceContext` grew a
-`repoRegistryPath` field for this.
+required.
 
 This also splits what was one `withRepoLock` block into two short ones:
 `addRepoSource` locks around ensuring the cache exists (shared with the
@@ -153,6 +148,61 @@ suffix is what keeps `workspace remove` (destroy the whole workspace)
 unambiguous from `workspace remove-repo` (drop one repo from it). A verb's
 meaning being scoped by its noun group is normal CLI practice (git's
 `remote add` vs `submodule add` don't collide either).
+
+#### The registry is two-tier: local and global, npm-flavored but not npm's defaults
+
+A single global namespace meant an alias had to mean the same thing forever,
+everywhere — two workspaces couldn't both sensibly have an "api" alias for
+different repos. The fix, discussed against the npm local/global-install
+analogy: the **cache always stays global** (`repoCacheId` is a pure function
+of the source string, with no notion of scope — duplicating a full clone per
+workspace the way `node_modules` duplicates a package would undermine the
+entire shared-cache design), but the **alias namespace is two-tier**:
+
+- `registry/repoRegistry.ts`'s `localRepoRegistryPath(workspaceDir)` →
+  `spork.repos.json`, sitting next to that workspace's manifest. It's the
+  *same* `registerRepoAlias`/`listRepoAliases`/etc. functions pointed at a
+  different path — they were already parameterized by an arbitrary
+  `registryPath`, never assumed global, so this needed no rework of them.
+- `resolveScopedRepoAlias(reposRoot, localRegistryPath, globalRegistryPath,
+  aliasOrSource)` composes the two: local match wins, then global, then the
+  raw input — same precedent as node_modules resolution. `workspace.ts`'s
+  `addRepo` uses this (instead of the single-registry `resolveRepoAlias`) so
+  it accepts a local alias, a global one, or a raw source, and always stores
+  the *resolved* source in the manifest, never the alias.
+- `addRepo` registers new aliases **locally to the workspace by default**
+  (`AddRepoOptions.global` opts into the shared registry instead) — the
+  target workspace is always known there, so there's no ambiguity to
+  resolve. This is deliberately the **opposite of npm's convention**, where
+  local is the unmarked default and global requires `-g`: npm defaults local
+  because JS dependencies are normally fine to duplicate per-project, but a
+  repo alias's whole motivating use case was cross-workspace reuse ("don't
+  make me retype this URL for a second workspace"), so global-by-default
+  would have quietly brought that annoyance back. `AddRepoResult` gained
+  `aliasScope` so callers can report which happened.
+- `removeRepoSource`'s in-use check (`findRepoUsages`) is **not** scope-
+  dependent, even though a naive reading of "local removal only affects one
+  workspace" suggests it could be simpler. It can't be: the cache being
+  deleted is shared regardless of which alias file named it, so
+  `removeLocalRepoAlias` (the new local-scoped sibling of `removeRepoSource`,
+  sharing a private helper with it) still runs the exact same global,
+  every-workspace scan before touching the cache. A test proves this
+  explicitly — removing a local alias is still blocked by a *different*
+  workspace's worktree on the same source.
+
+The standalone `repo` commands are where scope actually needs deciding, since
+they take no workspace argument: `packages/cli/src/repoScope.ts`'s
+`resolveRepoScope` makes it context-sensitive — `--global`/`--local` are
+explicit overrides, and with neither, local wins if `findEnclosingWorkspaceDir`
+(walking up from cwd for a `spork.workspace.json`, like git's `.git` walk)
+finds an enclosing workspace, global otherwise (there's nothing to be local
+*to* outside one). Every confirmation prints the resolved scope
+(`describeRepoScope` → `"local to \"demo\""` / `"global"`), so this is never a
+silent cwd-dependent surprise. `repo list` is the exception to "pick one
+scope": its default is a **merged** view (local plus global, each row
+tagged), since the point of listing is visibility, not picking a winner.
+`workspace` commands never call any of this — they already know their target
+workspace by name, so there's no ambiguity `resolveRepoScope` could resolve.
 
 ### `open` uses the `code` CLI, via an injectable opener
 

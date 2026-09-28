@@ -1,18 +1,21 @@
 flowchart TD
-    Start(["spork workspace add-repo &lt;workspace&gt; &lt;source-or-alias&gt;<br/>[--branch ref] [--as folder]"]) --> Resolve["cli: resolveWorkspaceDir<br/>name → workspace dir"]
+    Start(["spork workspace add-repo &lt;workspace&gt; &lt;source-or-alias&gt;<br/>[--branch ref] [--as folder] [--global]"]) --> Resolve["cli: resolveWorkspaceDir<br/>name → workspace dir"]
     Resolve --> Reconcile["core: reconcileWorkspace<br/>prune stale git worktree metadata,<br/>drop manifest entries for deleted folders"]
-    Reconcile --> ResolveAlias["core: resolveRepoAlias<br/>alias-or-raw-source → real source<br/>(~/.spork/repos.json)"]
+    Reconcile --> ResolveAlias["core: resolveScopedRepoAlias<br/>local (spork.repos.json) → global (~/.spork/repos.json) → raw"]
     ResolveAlias --> FolderCheck{"Folder name already<br/>used in this workspace?"}
     FolderCheck -- yes --> Fail(["throw SporkError<br/>(use --as to pick another name)"])
-    FolderCheck -- no --> Lock1[["withRepoLock #1 (cache.lockPath)"]]
+    FolderCheck -- no --> PickScope{"--global passed?"}
+    PickScope -- no --> Lock1local[["withRepoLock #1 (cache.lockPath)"]]
+    PickScope -- yes --> Lock1global[["withRepoLock #1 (cache.lockPath)"]]
 
     subgraph AddRepoSourceSection["addRepoSource — locked #1: shared repo cache"]
         direction TB
         Ensure["ensureRepoCache<br/>clone --bare if new, else fetch --all --tags"]
-        Ensure --> RegisterAlias["register or reuse alias<br/>in ~/.spork/repos.json"]
+        Ensure --> RegisterAlias["register or reuse alias<br/>in workspace's local registry (default)<br/>or ~/.spork/repos.json (--global)"]
     end
 
-    Lock1 --> AddRepoSourceSection
+    Lock1local --> AddRepoSourceSection
+    Lock1global --> AddRepoSourceSection
     AddRepoSourceSection --> Unlock1[["release lock #1"]]
 
     Unlock1 --> Lock2[["withRepoLock #2 (cache.lockPath, separate acquisition)"]]
@@ -21,12 +24,12 @@ flowchart TD
 
     Unlock2 --> WriteManifest["write spork.workspace.json entry (real source, not alias)<br/>+ regenerate .code-workspace"]
     WriteManifest --> HasSub{".gitmodules present<br/>in new worktree?"}
-    HasSub -- no --> Done1(["return AddRepoResult<br/>submodulesInitialized: false"])
+    HasSub -- no --> Done1(["return AddRepoResult<br/>aliasScope: local|global<br/>submodulesInitialized: false"])
     HasSub -- yes --> InitSub["initSubmodules<br/>git submodule update --init --recursive"]
     InitSub --> SubOk{"Succeeded?"}
-    SubOk -- yes --> Done2(["return AddRepoResult<br/>submodulesInitialized: true"])
-    SubOk -- no --> Done3(["return AddRepoResult<br/>submodulesInitialized: false<br/>submoduleWarning: &lt;message&gt;"])
+    SubOk -- yes --> Done2(["return AddRepoResult<br/>aliasScope: local|global<br/>submodulesInitialized: true"])
+    SubOk -- no --> Done3(["return AddRepoResult<br/>aliasScope: local|global<br/>submodulesInitialized: false<br/>submoduleWarning: &lt;message&gt;"])
 
-    Done1 --> Print["cli: printAddRepoResult"]
+    Done1 --> Print["cli: printAddRepoResult<br/>always shows (alias: local|global)"]
     Done2 --> Print
     Done3 --> Print

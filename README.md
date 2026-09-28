@@ -40,6 +40,19 @@ spork workspace create demo2 --repo widgets       # by alias, repeatable
 spork repo remove widgets                         # refuses while any workspace still uses it
 ```
 
+Aliases are two-tier — **local to a workspace by default, global as an
+opt-in** — so two different workspaces can give the same short name to two
+different repos without colliding:
+
+```sh
+spork workspace add-repo demo git@github.com:acme/widgets.git         # alias "widgets", local to demo
+spork workspace add-repo demo git@github.com:acme/widgets.git --global # same, but shared across every workspace
+
+spork repo add git@github.com:acme/gadgets.git            # standalone: local if run inside a workspace, else global
+spork repo add git@github.com:acme/gadgets.git --local     # force local (must be inside a workspace)
+spork repo list                                            # merged view, local + global, tagged
+```
+
 ## Repository layout
 
 - [packages/core](packages/core) — domain logic: git worktree management, workspace
