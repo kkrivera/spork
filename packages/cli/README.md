@@ -49,7 +49,11 @@ logic lives here.
   workspace: `repo add <source>` clones/registers an alias directly;
   `repo remove <alias>` refuses if any workspace still references it. Both
   take `--global`/`--local` (see `repoScope.ts`) and print which scope the
-  alias landed in or was removed from.
+  alias landed in or was removed from. `repo list` is the one place that
+  doesn't pick a single scope by default — it merges local (if inside a
+  workspace) and global entries into one table with a SCOPE column, so a
+  shadowed alias is visible rather than a silent surprise; `--global`/
+  `--local` narrow it to just one.
 
 ## Testing
 
