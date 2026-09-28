@@ -3,6 +3,7 @@ import { ensureRepoCache, repoCacheId, resolveRepoCache } from './cache.js'
 import { withRepoLock } from './lock.js'
 import {
   listRepoAliases,
+  localRepoRegistryPath,
   registerRepoAlias,
   resolveRepoAlias,
   unregisterRepoAlias,
@@ -122,7 +123,29 @@ export async function findRepoUsages(ctx: RemoveRepoSourceContext, source: strin
  * one would corrupt it; there's deliberately no force-override for that.
  */
 export async function removeRepoSource(ctx: RemoveRepoSourceContext, alias: string): Promise<void> {
-  const existing = await listRepoAliases(ctx.repoRegistryPath, ctx.reposRoot)
+  await removeRepoAliasAndCache(ctx, ctx.repoRegistryPath, alias)
+}
+
+/**
+ * Same as `removeRepoSource`, but forgets the alias from `workspaceDir`'s
+ * *local* registry instead of the global one. The in-use safety check is
+ * identical either way (see the shared helper below) — a local alias only
+ * ever gets looked up from within its own workspace, but the cache it
+ * points at is still the single shared one, so deleting it is only safe
+ * after the same global, every-workspace scan `removeRepoSource` runs.
+ * Narrowing that check to "just this workspace" would let removing a local
+ * alias corrupt some other workspace's worktree on the same source.
+ */
+export async function removeLocalRepoAlias(
+  ctx: RemoveRepoSourceContext,
+  workspaceDir: string,
+  alias: string,
+): Promise<void> {
+  await removeRepoAliasAndCache(ctx, localRepoRegistryPath(workspaceDir), alias)
+}
+
+async function removeRepoAliasAndCache(ctx: RemoveRepoSourceContext, registryPath: string, alias: string): Promise<void> {
+  const existing = await listRepoAliases(registryPath, ctx.reposRoot)
   const entry = existing.find((repo) => repo.alias === alias)
   if (!entry) {
     throw new SporkError(`No repo alias named "${alias}" is registered.`)
@@ -136,5 +159,5 @@ export async function removeRepoSource(ctx: RemoveRepoSourceContext, alias: stri
 
   const cache = resolveRepoCache(ctx.reposRoot, entry.source)
   await withRepoLock(cache.lockPath, () => rm(cache.path, { recursive: true, force: true }))
-  await unregisterRepoAlias(ctx.repoRegistryPath, alias)
+  await unregisterRepoAlias(registryPath, alias)
 }

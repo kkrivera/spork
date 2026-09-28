@@ -40,10 +40,16 @@ for the design this package implements.
       command uses; `workspace.ts`'s `addRepo` resolves separately instead
       (it needs to fail fast on a folder-name collision *before* touching
       the network, so it can't resolve-and-clone in one step).
-    - `removeRepoSource` — deletes a cache and forgets its alias, but
-      hard-refuses via `findRepoUsages` if any workspace still has a
+    - `removeRepoSource` — deletes a cache and forgets its (global) alias,
+      but hard-refuses via `findRepoUsages` if any workspace still has a
       worktree checked out from it — no force-override, since that worktree
       is a live pointer into the cache's object store.
+    - `removeLocalRepoAlias(ctx, workspaceDir, alias)` — same operation,
+      against a workspace's *local* registry instead. The in-use check is
+      identical either way (a shared private helper) — it always scans
+      every workspace's manifest, regardless of which alias file triggered
+      the removal, since the cache being deleted is shared no matter how
+      it was named.
 - `src/util/` — `slugify` (filesystem/branch-name-safe strings) and
   `repoShortName` (the repo's short name out of a source URL/path).
 - `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,

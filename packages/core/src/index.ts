@@ -58,6 +58,7 @@ export {
   addRepoSourceOrAlias,
   findRepoUsages,
   removeRepoSource,
+  removeLocalRepoAlias,
 } from './repo/repos.js'
 
 export { REPOS_ROOT, REGISTRY_PATH, REPO_REGISTRY_PATH, SPORK_HOME } from './config/paths.js'

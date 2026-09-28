@@ -7,6 +7,7 @@ vi.mock('../../src/repo/lock.js', () => ({
 vi.mock('../../src/registry/repoRegistry.js', () => ({
   listRepoAliases: vi.fn(),
   unregisterRepoAlias: vi.fn(),
+  localRepoRegistryPath: (workspaceDir: string) => `${workspaceDir}/spork.repos.json`,
 }))
 vi.mock('../../src/registry/registry.js', () => ({
   listWorkspaces: vi.fn(),
@@ -20,7 +21,7 @@ const { listRepoAliases, unregisterRepoAlias } = await import('../../src/registr
 const { listWorkspaces } = await import('../../src/registry/registry.js')
 const { readManifest } = await import('../../src/workspace/manifest.js')
 const { resolveRepoCache } = await import('../../src/repo/cache.js')
-const { findRepoUsages, removeRepoSource } = await import('../../src/repo/repos.js')
+const { findRepoUsages, removeRepoSource, removeLocalRepoAlias } = await import('../../src/repo/repos.js')
 const { SporkError } = await import('../../src/errors.js')
 
 const WIDGETS_SOURCE = 'git@github.com:acme/widgets.git'
@@ -88,5 +89,28 @@ describe('removeRepoSource', () => {
 
     await expect(removeRepoSource(ctx, 'ghost')).rejects.toThrow(SporkError)
     expect(rm).not.toHaveBeenCalled()
+  })
+})
+
+describe('removeLocalRepoAlias', () => {
+  it('reads and unregisters from the workspace-local registry, not the global one', async () => {
+    await removeLocalRepoAlias(ctx, '/ws/demo', 'widgets')
+
+    expect(listRepoAliases).toHaveBeenCalledWith('/ws/demo/spork.repos.json', '/repos')
+    expect(unregisterRepoAlias).toHaveBeenCalledWith('/ws/demo/spork.repos.json', 'widgets')
+    expect(rm).toHaveBeenCalledWith(resolveRepoCache('/repos', WIDGETS_SOURCE).path, { recursive: true, force: true })
+  })
+
+  it('still refuses when a DIFFERENT workspace references the same source — the cache is shared regardless of alias scope', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'other-workspace', dir: '/ws/other' }])
+    vi.mocked(readManifest).mockResolvedValue({
+      name: 'other-workspace',
+      createdAt: '',
+      worktrees: [{ folder: 'widgets', source: WIDGETS_SOURCE, requestedRef: '', localBranch: '', addedAt: '' }],
+    })
+
+    await expect(removeLocalRepoAlias(ctx, '/ws/demo', 'widgets')).rejects.toThrow(SporkError)
+    expect(rm).not.toHaveBeenCalled()
+    expect(unregisterRepoAlias).not.toHaveBeenCalled()
   })
 })
