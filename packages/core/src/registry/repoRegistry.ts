@@ -10,6 +10,13 @@ export interface RepoRegistryEntry {
   addedAt: string
 }
 
+/** Filename of a workspace's *local* repo alias registry — sits next to its spork.workspace.json. */
+export const LOCAL_REPO_REGISTRY_FILENAME = 'spork.repos.json'
+
+export function localRepoRegistryPath(workspaceDir: string): string {
+  return path.join(workspaceDir, LOCAL_REPO_REGISTRY_FILENAME)
+}
+
 interface RepoRegistryFile {
   repos: RepoRegistryEntry[]
 }
@@ -61,4 +68,28 @@ export async function resolveRepoAlias(registryPath: string, reposRoot: string, 
   const repos = await listRepoAliases(registryPath, reposRoot)
   const match = repos.find((repo) => repo.alias === aliasOrSource)
   return match ? match.source : aliasOrSource
+}
+
+/**
+ * Resolves an alias against a workspace-local registry first, then the
+ * global one, then falls back to the raw input — same precedent as
+ * node_modules resolution (nearest wins, global is the fallback). Pass
+ * `null` for `localRegistryPath` when there's no applicable local scope
+ * (e.g. no enclosing workspace was found).
+ */
+export async function resolveScopedRepoAlias(
+  reposRoot: string,
+  localRegistryPath: string | null,
+  globalRegistryPath: string,
+  aliasOrSource: string,
+): Promise<string> {
+  if (localRegistryPath) {
+    const local = await listRepoAliases(localRegistryPath, reposRoot)
+    const localMatch = local.find((repo) => repo.alias === aliasOrSource)
+    if (localMatch) return localMatch.source
+  }
+
+  const global = await listRepoAliases(globalRegistryPath, reposRoot)
+  const globalMatch = global.find((repo) => repo.alias === aliasOrSource)
+  return globalMatch ? globalMatch.source : aliasOrSource
 }

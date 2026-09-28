@@ -78,6 +78,18 @@ for the design this package implements.
   (below) and the CLI use; `listRepoAliases` self-heals against
   `repoCacheExists` the same way `listWorkspaces` self-heals against
   `manifestPath` existing.
+  - The registry is two-tier: this same file's functions work identically
+    against a workspace-local registry (`localRepoRegistryPath(workspaceDir)`
+    → `spork.repos.json`, sitting next to that workspace's manifest) — they're
+    already parameterized by an arbitrary `registryPath`, nothing about them
+    assumes global. `resolveScopedRepoAlias` composes the two: local match
+    wins, then global, then the raw input — same precedent as node_modules
+    resolution.
+  - `workspace/manifest.ts`'s `findEnclosingWorkspaceDir` (walks up from a
+    directory for a `spork.workspace.json`, like git's `.git` walk) is what
+    lets the standalone `spork repo` CLI commands default to local scope when
+    run from inside a workspace. Nothing else needs it — every `workspace`
+    command already knows its target by name.
 
 `src/index.ts` is the only import path the rest of the repo (`packages/cli`)
 may use — it re-exports the workspace lifecycle API, both registries'

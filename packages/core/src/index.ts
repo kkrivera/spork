@@ -1,7 +1,7 @@
 export { SporkError } from './errors.js'
 
 export type { WorkspaceManifest, WorktreeEntry } from './workspace/manifest.js'
-export { MANIFEST_FILENAME, manifestPath } from './workspace/manifest.js'
+export { MANIFEST_FILENAME, manifestPath, findEnclosingWorkspaceDir } from './workspace/manifest.js'
 
 export type { CodeWorkspaceFile, CodeWorkspaceFolder } from './workspace/codeWorkspace.js'
 export { codeWorkspaceFilePath } from './workspace/codeWorkspace.js'
@@ -41,6 +41,9 @@ export {
   unregisterRepoAlias,
   listRepoAliases,
   resolveRepoAlias,
+  resolveScopedRepoAlias,
+  localRepoRegistryPath,
+  LOCAL_REPO_REGISTRY_FILENAME,
 } from './registry/repoRegistry.js'
 
 export type {

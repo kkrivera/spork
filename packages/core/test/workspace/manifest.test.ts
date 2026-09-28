@@ -1,8 +1,14 @@
-import { mkdtemp, rm, readFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createManifest, manifestPath, readManifest, writeManifest } from '../../src/workspace/manifest.js'
+import {
+  createManifest,
+  findEnclosingWorkspaceDir,
+  manifestPath,
+  readManifest,
+  writeManifest,
+} from '../../src/workspace/manifest.js'
 
 let dir: string
 
@@ -54,5 +60,28 @@ describe('writeManifest / readManifest', () => {
 
     expect(raw.endsWith('\n')).toBe(true)
     expect(raw).toContain('\n  "name": "demo"')
+  })
+})
+
+describe('findEnclosingWorkspaceDir', () => {
+  it('returns the starting dir itself when it is a workspace', async () => {
+    await writeManifest(dir, createManifest('demo'))
+
+    expect(findEnclosingWorkspaceDir(dir)).toBe(dir)
+  })
+
+  it('walks up to find the nearest ancestor that is a workspace', async () => {
+    await writeManifest(dir, createManifest('demo'))
+    const nested = path.join(dir, 'a', 'b', 'c')
+    await mkdir(nested, { recursive: true })
+
+    expect(findEnclosingWorkspaceDir(nested)).toBe(dir)
+  })
+
+  it('returns null when nothing up to the filesystem root is a workspace', async () => {
+    const nested = path.join(dir, 'a', 'b')
+    await mkdir(nested, { recursive: true })
+
+    expect(findEnclosingWorkspaceDir(nested)).toBeNull()
   })
 })

@@ -41,6 +41,18 @@ directly from anywhere that also needs alias behavior (that now includes
 manifest — don't add a force-override to skip it; a worktree still
 referencing a deleted cache is a real corruption, not a nuisance to bypass.
 
+**The repo registry is two-tier (local + global), the cache is not.** A
+workspace-local alias file (`localRepoRegistryPath`) is just the *same*
+`repoRegistry.ts` functions pointed at a different path — never invent a
+separate mechanism for "local" data. The one thing that must **not** vary by
+scope is the cache-deletion safety check: `findRepoUsages` scans *every*
+workspace's manifest regardless of which alias file (local or global)
+triggered a removal, because the cache it's guarding is shared no matter
+how it's named. If you add a local-scoped removal helper, it must still run
+the same global scan before touching the cache — narrowing that check to
+"just this workspace" would let deleting a local alias corrupt some other
+workspace's worktree.
+
 ## `src/workspace`
 
 `workspace.ts` is the only place the `git`/`repo` layers get combined — keep it
