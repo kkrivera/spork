@@ -1,6 +1,7 @@
 import { rm } from 'node:fs/promises'
-import { ensureRepoCache, repoCacheId, resolveRepoCache } from './cache.js'
+import { ensureRepoCache, repoCacheExists, repoCacheId, resolveRepoCache } from './cache.js'
 import { withRepoLock } from './lock.js'
+import { setRemoteUrl } from '../git/remote.js'
 import {
   listRepoAliases,
   localRepoRegistryPath,
@@ -26,6 +27,21 @@ export function defaultAlias(source: string): string {
 
 export interface AddRepoSourceOptions {
   alias?: string
+  /**
+   * Clone from this local path instead of `source` on a fresh clone (a fast,
+   * hardlinked local clone) — `source` still stays the cache's identity and
+   * the string the alias is registered against. Ignored once the cache
+   * already exists (that path fetches, not clones).
+   */
+  cloneFrom?: string
+  /**
+   * Once a fresh clone finishes, rewrite its `origin` remote to this URL.
+   * Needed when `cloneFrom` is a local path: a local `git clone`'s origin
+   * defaults to the path it was cloned from, which would otherwise leave
+   * spork's independent copy silently pointing back at the user's folder.
+   * Ignored when the cache already existed.
+   */
+  correctOriginTo?: string
 }
 
 /**
@@ -39,7 +55,14 @@ export async function addRepoSource(
   options: AddRepoSourceOptions = {},
 ): Promise<RepoRegistryEntry> {
   const cache = resolveRepoCache(ctx.reposRoot, source)
-  await withRepoLock(cache.lockPath, () => ensureRepoCache(ctx.reposRoot, source))
+  const isFreshClone = !repoCacheExists(ctx.reposRoot, source)
+  await withRepoLock(cache.lockPath, () =>
+    options.cloneFrom ? ensureRepoCache(ctx.reposRoot, source, { cloneFrom: options.cloneFrom }) : ensureRepoCache(ctx.reposRoot, source),
+  )
+
+  if (isFreshClone && options.correctOriginTo) {
+    await setRemoteUrl(cache.path, 'origin', options.correctOriginTo)
+  }
 
   const existing = await listRepoAliases(ctx.repoRegistryPath, ctx.reposRoot)
   const existingForSource = existing.find((repo) => repo.source === source)
