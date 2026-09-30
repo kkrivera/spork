@@ -61,4 +61,7 @@ export {
   removeLocalRepoAlias,
 } from './repo/repos.js'
 
+export type { ScanSkip, ScanResult } from './repo/scan.js'
+export { findGitRepoDirs, scanAndAddRepos } from './repo/scan.js'
+
 export { REPOS_ROOT, REGISTRY_PATH, REPO_REGISTRY_PATH, SPORK_HOME } from './config/paths.js'
