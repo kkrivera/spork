@@ -1,0 +1,58 @@
+flowchart TB
+    User(["spork &lt;command&gt;"])
+
+    subgraph CLI["packages/cli — argument parsing + output only"]
+        direction LR
+        WSCmds["commands/workspace/*<br/>create · add-repo · remove-repo<br/>remove · list · status · open"]
+        RepoCmds["commands/repo/*<br/>add · list · remove"]
+        Support["context.ts · repoScope.ts<br/>output/* · opener.ts"]
+    end
+
+    subgraph CORE["packages/core — domain logic (src/index.ts is the only import path)"]
+        direction TB
+
+        subgraph WS["workspace/"]
+            WorkspaceTs["workspace.ts<br/>createWorkspace · addRepo · removeRepo<br/>removeWorkspace · getWorkspaceStatus<br/>reconcileWorkspace"]
+            Manifest["manifest.ts<br/>spork.workspace.json<br/>findEnclosingWorkspaceDir"]
+            CodeWs["codeWorkspace.ts<br/>.code-workspace"]
+        end
+
+        subgraph REG["registry/ — two-tier, same shape"]
+            WsRegistry["registry.ts<br/>workspace name → dir"]
+            RepoRegistry["repoRegistry.ts<br/>alias → source<br/>local + global, scoped resolve"]
+        end
+
+        subgraph REPOSVC["repo/ — the shared clone cache"]
+            Repos["repos.ts<br/>addRepoSource(OrAlias)<br/>removeRepoSource / removeLocalRepoAlias"]
+            Cache["cache.ts + lock.ts<br/>ensureRepoCache, withRepoLock"]
+        end
+
+        subgraph GITMOD["git/ — the only place a subprocess is spawned"]
+            Exec["exec.ts (execGit)"]
+            GitOps["clone · worktree · status · submodule .ts"]
+        end
+    end
+
+    subgraph STATE["Persistent state"]
+        direction TB
+        GlobalState["~/.spork/<br/>repos/&lt;id&gt;/ (bare clones)<br/>repos.json (global aliases)<br/>workspaces.json (workspace registry)"]
+        WsState["&lt;workspaceDir&gt;/<br/>spork.workspace.json · spork.repos.json<br/>&lt;name&gt;.code-workspace · &lt;folder&gt;/ worktrees"]
+    end
+
+    GitBin(["git (real subprocess)"])
+
+    User --> CLI
+    CLI --> CORE
+    WorkspaceTs --> Manifest & CodeWs & Repos & RepoRegistry
+    Repos --> Cache & RepoRegistry & WsRegistry & Manifest
+    Cache --> GitOps
+    GitOps --> Exec
+    Exec ==spawns==> GitBin
+
+    WsRegistry -.-> GlobalState
+    RepoRegistry -.-> GlobalState
+    RepoRegistry -.-> WsState
+    Cache -.-> GlobalState
+    Manifest -.-> WsState
+    CodeWs -.-> WsState
+    GitOps -.creates/reads worktrees in.-> WsState
