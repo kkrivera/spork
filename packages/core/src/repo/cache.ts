@@ -49,6 +49,17 @@ export function repoCacheExists(reposRoot: string, source: string): boolean {
   return isCloned(resolveRepoCache(reposRoot, source).path)
 }
 
+export interface EnsureRepoCacheOptions {
+  /**
+   * Where to actually `git clone --bare` from, if different from `source`.
+   * Lets a caller use a fast local path (hardlinked clone) as the clone
+   * source while `source` stays the identity the cache is keyed and
+   * registered under (e.g. the repo's real upstream URL). Ignored once the
+   * cache already exists, since that branch fetches, not clones.
+   */
+  cloneFrom?: string
+}
+
 /**
  * Ensures a bare clone of `source` exists under `reposRoot`, cloning it on
  * first use and fetching to refresh refs on subsequent calls. Callers that
@@ -56,14 +67,18 @@ export function repoCacheExists(reposRoot: string, source: string): boolean {
  * (on the cache's `lockPath`, not `path`) around the whole operation, since
  * the cache is shared across workspaces.
  */
-export async function ensureRepoCache(reposRoot: string, source: string): Promise<RepoCache> {
+export async function ensureRepoCache(
+  reposRoot: string,
+  source: string,
+  options: EnsureRepoCacheOptions = {},
+): Promise<RepoCache> {
   const cache = resolveRepoCache(reposRoot, source)
   await mkdir(reposRoot, { recursive: true })
 
   if (isCloned(cache.path)) {
     await fetchAll(cache.path)
   } else {
-    await cloneBare(source, cache.path)
+    await cloneBare(options.cloneFrom ?? source, cache.path)
   }
 
   return cache

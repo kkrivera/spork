@@ -79,6 +79,27 @@ describe('ensureRepoCache', () => {
     expect(fetchAllMock).toHaveBeenCalledWith(cache.path)
     expect(cloneBareMock).not.toHaveBeenCalled()
   })
+
+  it('clones from cloneFrom instead of source when given, on a fresh clone', async () => {
+    existsSyncMock.mockReturnValue(false)
+
+    const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git', {
+      cloneFrom: '/home/user/code/widgets',
+    })
+
+    expect(cloneBareMock).toHaveBeenCalledWith('/home/user/code/widgets', cache.path)
+  })
+
+  it('ignores cloneFrom once the cache already exists (fetch, not clone)', async () => {
+    existsSyncMock.mockReturnValue(true)
+
+    const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git', {
+      cloneFrom: '/home/user/code/widgets',
+    })
+
+    expect(fetchAllMock).toHaveBeenCalledWith(cache.path)
+    expect(cloneBareMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('repoCacheExists', () => {
