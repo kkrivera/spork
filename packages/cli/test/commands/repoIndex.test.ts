@@ -4,7 +4,7 @@ import { registerRepoCommands } from '../../src/commands/repo/index.js'
 import { createUi } from '../../src/output/color.js'
 
 describe('registerRepoCommands', () => {
-  it('registers a "repo" command with add/list/remove subcommands', () => {
+  it('registers a "repo" command with add/list/remove/scan subcommands', () => {
     const program = new Command()
     const ctx = {
       reposRoot: '/repos',
@@ -17,6 +17,6 @@ describe('registerRepoCommands', () => {
 
     const repo = program.commands.find((cmd) => cmd.name() === 'repo')
     expect(repo).toBeDefined()
-    expect(repo?.commands.map((cmd) => cmd.name())).toEqual(expect.arrayContaining(['add', 'list', 'remove']))
+    expect(repo?.commands.map((cmd) => cmd.name())).toEqual(expect.arrayContaining(['add', 'list', 'remove', 'scan']))
   })
 })
