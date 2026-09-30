@@ -47,16 +47,20 @@ logic lives here.
   folder registers them all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
   for the command surface and its rationale.
-- `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`),
-  same `run<Verb>`/`register<Verb>Command` split. Decoupled from any
-  workspace: `repo add <source>` clones/registers an alias directly;
+- `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`,
+  `scan`), same `run<Verb>`/`register<Verb>Command` split. Decoupled from
+  any workspace: `repo add <source>` clones/registers an alias directly;
   `repo remove <alias>` refuses if any workspace still references it. Both
   take `--global`/`--local` (see `repoScope.ts`) and print which scope the
   alias landed in or was removed from. `repo list` is the one place that
   doesn't pick a single scope by default — it merges local (if inside a
   workspace) and global entries into one table with a SCOPE column, so a
   shadowed alias is visible rather than a silent surprise; `--global`/
-  `--local` narrow it to just one.
+  `--local` narrow it to just one. `repo scan <directory>` bulk-adopts every
+  git repo found directly under `directory` (e.g. an existing `~/code`) via
+  `@spork/core`'s `scanAndAddRepos` — same `--global`/`--local` scope
+  handling as `add`, and prints one line per added repo, one per skipped
+  repo with its reason, and a final added/skipped count.
 
 ## Testing
 

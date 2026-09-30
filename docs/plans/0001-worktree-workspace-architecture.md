@@ -204,6 +204,51 @@ tagged), since the point of listing is visibility, not picking a winner.
 `workspace` commands never call any of this — they already know their target
 workspace by name, so there's no ambiguity `resolveRepoScope` could resolve.
 
+### Bulk-adopting an existing folder of clones (`spork repo scan`)
+
+A lot of people already keep every repo they use cloned in one folder
+(`~/code`, `~/src`, ...). Two ways to make spork work with that were
+considered: point a workspace's worktrees directly at the user's existing
+clone ("adopt in place"), or use that folder purely as a fast on-ramp into
+spork's existing managed-clone model. The second won — it needs no new
+"external vs. managed" registry concept and no new "never delete this"
+invariant (the riskiest part of adopting in place: a worktree is a live
+pointer into its bare repo's object store, and an externally-owned one
+could be moved or deleted out from under spork at any time). Every repo
+`spork repo scan` adopts ends up a normal, fully independent, fully
+disposable managed clone, exactly like one added by typing a URL — the only
+difference is *how fast* getting there is, since `git clone --bare
+<local-path> <dest>` hardlinks the object database by default when source
+and destination share a filesystem, making a local-to-local clone close to
+free on disk and far faster than a network clone.
+
+This needed `addRepoSource`/`ensureRepoCache` to separate two things that
+used to be the same string: **where to clone from** and **what identifies
+the cache**. `ensureRepoCache` gained an optional `cloneFrom`, and
+`addRepoSource` gained `cloneFrom` plus `correctOriginTo` — on a fresh
+clone only, `correctOriginTo` rewrites the new clone's `origin` remote
+(via the new `git/remote.ts`), since a local clone's origin otherwise
+defaults to the path it was cloned from, which would leave spork's supposedly
+independent copy silently pointing back at the user's folder (and breaking
+outright if that folder is later moved). `repo/scan.ts`'s
+`scanAndAddRepos` reads each discovered repo's real `origin` (via
+`getRemoteUrl`, added alongside `setRemoteUrl`) and uses that as the
+cache's identity when present — so a repo found by scan and the same repo
+added later by typing its URL resolve to the same cache, not a duplicate —
+falling back to the repo's resolved local path as identity when it has no
+remote. All of this reuses `addRepoSource` verbatim; no new alias-collision
+or registration logic was needed.
+
+`scanAndAddRepos` skips and continues past a per-repo failure rather than
+failing the whole scan — a deliberate departure from `create --repo`'s
+fail-fast behavior. That precedent is a short, explicitly-typed list where
+failing fast surfaces a typo immediately; a scan operates over *discovered*
+repos, potentially dozens, where one broken or corrupt entry shouldn't
+block adopting the rest. `findGitRepoDirs` only looks one level deep
+(immediate subdirectories with a `.git` entry) rather than walking
+recursively, matching "a single flat folder of clones" rather than an
+arbitrary directory tree.
+
 ### `open` uses the `code` CLI, via an injectable opener
 
 `spork workspace open` shells out to the `code` CLI rather than OS-level `open`,

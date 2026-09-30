@@ -19,6 +19,10 @@ for the design this package implements.
     recognize git's "ref already checked out elsewhere" failure.
   - `status.ts` — local-only worktree status (branch + dirty file count, no
     fetch).
+  - `remote.ts` — `getRemoteUrl`/`setRemoteUrl`, used by `repo/scan.ts` to
+    read a discovered repo's real upstream (returning `null` rather than
+    throwing if it has none) and to correct a fresh local clone's `origin`
+    back to that upstream afterward.
   - `submodule.ts` — `hasSubmodules` (checks for a `.gitmodules` file) and
     `initSubmodules` (`git submodule update --init --recursive`), since
     `worktree add` never initializes submodules on its own.
@@ -32,8 +36,15 @@ for the design this package implements.
   - `cache.ts` also exports `repoCacheExists`, used by the repo registry
     below to tell whether a registered alias's cache is still actually there.
   - `repos.ts` — the service layer over the repo registry:
-    - `addRepoSource(ctx, source, { alias? })` — ensure cloned, then
-      register/reuse an alias for it. Expects a real source, not an alias.
+    - `addRepoSource(ctx, source, { alias?, cloneFrom?, correctOriginTo? })` —
+      ensure cloned, then register/reuse an alias for it. Expects a real
+      source, not an alias. `cloneFrom` clones from a different (typically
+      local) path than `source` on a fresh clone while keeping `source` as
+      the cache's identity; when that produces a fresh clone,
+      `correctOriginTo` rewrites its `origin` remote afterward, since a
+      local clone's origin otherwise defaults to the path it was cloned
+      from. Both are used by `repo/scan.ts` below and are no-ops for every
+      other caller.
     - `addRepoSourceOrAlias(ctx, aliasOrSource, { alias? })` — the same, but
       resolves an alias-or-raw-source input first (mirroring
       `resolveWorkspaceDir`'s pattern). This is what the top-level `repo add`
@@ -50,6 +61,18 @@ for the design this package implements.
       every workspace's manifest, regardless of which alias file triggered
       the removal, since the cache being deleted is shared no matter how
       it was named.
+  - `scan.ts` — bulk-adopts an existing folder of clones (e.g. `~/code`)
+    into the managed cache: `findGitRepoDirs(scanDir)` finds its immediate
+    subdirectories that look like git repos (one level deep, not
+    recursive), and `scanAndAddRepos(ctx, scanDir)` clones each one via
+    `addRepoSource`'s `cloneFrom` (from the local checkout, so the clone is
+    fast and hardlinked) and `correctOriginTo` (the repo's real `origin`
+    when it has one, else falling back to its resolved local path as
+    identity). Skips and continues past a per-repo failure — collected in
+    the returned `ScanResult`'s `skipped` list — rather than failing the
+    whole scan, unlike `workspace create --repo`'s fail-fast behavior; that
+    is a short, explicitly-typed list, while this operates over discovered
+    repos where one broken entry shouldn't block adopting the rest.
 - `src/util/` — `slugify` (filesystem/branch-name-safe strings) and
   `repoShortName` (the repo's short name out of a source URL/path).
 - `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,
