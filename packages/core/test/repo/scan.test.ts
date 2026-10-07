@@ -5,16 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../src/git/remote.js', () => ({
   getRemoteUrl: vi.fn(),
+  getRemoteDefaultBranch: vi.fn(),
 }))
 vi.mock('../../src/repo/repos.js', () => ({
   addRepoSource: vi.fn(),
 }))
 
-const { getRemoteUrl } = await import('../../src/git/remote.js')
+const { getRemoteUrl, getRemoteDefaultBranch } = await import('../../src/git/remote.js')
 const { addRepoSource } = await import('../../src/repo/repos.js')
 const { findGitRepoDirs, scanAndAddRepos } = await import('../../src/repo/scan.js')
 
 const getRemoteUrlMock = vi.mocked(getRemoteUrl)
+const getRemoteDefaultBranchMock = vi.mocked(getRemoteDefaultBranch)
 const addRepoSourceMock = vi.mocked(addRepoSource)
 
 let scanDir: string
@@ -22,6 +24,7 @@ let scanDir: string
 beforeEach(async () => {
   scanDir = await mkdtemp(path.join(os.tmpdir(), 'spork-scan-'))
   getRemoteUrlMock.mockReset().mockResolvedValue(null)
+  getRemoteDefaultBranchMock.mockReset().mockResolvedValue(null)
   addRepoSourceMock.mockReset()
 })
 
@@ -75,29 +78,37 @@ describe('findGitRepoDirs', () => {
 describe('scanAndAddRepos', () => {
   const ctx = { reposRoot: '/repos', repoRegistryPath: '/registry.json' }
 
-  it('adds a repo with a remote, using the remote url as identity and correcting origin', async () => {
+  it('adds a repo with a remote, using the remote url as identity and correcting origin + HEAD', async () => {
     const widgets = await makeRepoDir('widgets')
     getRemoteUrlMock.mockResolvedValue('git@github.com:acme/widgets.git')
+    getRemoteDefaultBranchMock.mockResolvedValue('trunk')
     addRepoSourceMock.mockResolvedValue({ alias: 'widgets', source: 'git@github.com:acme/widgets.git', addedAt: '' })
 
     const result = await scanAndAddRepos(ctx, scanDir)
 
+    expect(getRemoteDefaultBranchMock).toHaveBeenCalledWith('git@github.com:acme/widgets.git')
     expect(addRepoSourceMock).toHaveBeenCalledWith(ctx, 'git@github.com:acme/widgets.git', {
       cloneFrom: widgets,
       correctOriginTo: 'git@github.com:acme/widgets.git',
+      correctHeadTo: 'trunk',
     })
     expect(result.added).toEqual([{ alias: 'widgets', source: 'git@github.com:acme/widgets.git', addedAt: '' }])
     expect(result.skipped).toEqual([])
   })
 
-  it('falls back to the local path as identity when there is no remote', async () => {
+  it('falls back to the local path as identity when there is no remote, and never asks for a default branch', async () => {
     const gadgets = await makeRepoDir('gadgets')
     getRemoteUrlMock.mockResolvedValue(null)
     addRepoSourceMock.mockResolvedValue({ alias: 'gadgets', source: gadgets, addedAt: '' })
 
     await scanAndAddRepos(ctx, scanDir)
 
-    expect(addRepoSourceMock).toHaveBeenCalledWith(ctx, gadgets, { cloneFrom: gadgets, correctOriginTo: undefined })
+    expect(getRemoteDefaultBranchMock).not.toHaveBeenCalled()
+    expect(addRepoSourceMock).toHaveBeenCalledWith(ctx, gadgets, {
+      cloneFrom: gadgets,
+      correctOriginTo: undefined,
+      correctHeadTo: undefined,
+    })
   })
 
   it('skips a repo that fails to add and continues with the rest', async () => {
@@ -123,5 +134,24 @@ describe('scanAndAddRepos', () => {
     const result = await scanAndAddRepos(ctx, scanDir)
 
     expect(result.skipped).toEqual([{ path: broken, reason: 'not an Error instance' }])
+  })
+})
+
+describe('scanAndAddRepos — default branch correction', () => {
+  const ctx = { reposRoot: '/repos', repoRegistryPath: '/registry.json' }
+
+  it('omits correctHeadTo when the upstream default branch could not be resolved', async () => {
+    const widgets = await makeRepoDir('widgets')
+    getRemoteUrlMock.mockResolvedValue('git@github.com:acme/widgets.git')
+    getRemoteDefaultBranchMock.mockResolvedValue(null)
+    addRepoSourceMock.mockResolvedValue({ alias: 'widgets', source: 'git@github.com:acme/widgets.git', addedAt: '' })
+
+    await scanAndAddRepos(ctx, scanDir)
+
+    expect(addRepoSourceMock).toHaveBeenCalledWith(ctx, 'git@github.com:acme/widgets.git', {
+      cloneFrom: widgets,
+      correctOriginTo: 'git@github.com:acme/widgets.git',
+      correctHeadTo: undefined,
+    })
   })
 })

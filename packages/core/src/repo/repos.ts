@@ -2,6 +2,7 @@ import { rm } from 'node:fs/promises'
 import { ensureRepoCache, repoCacheExists, repoCacheId, resolveRepoCache } from './cache.js'
 import { withRepoLock } from './lock.js'
 import { setRemoteUrl } from '../git/remote.js'
+import { setHeadBranch } from '../git/clone.js'
 import {
   listRepoAliases,
   localRepoRegistryPath,
@@ -42,6 +43,14 @@ export interface AddRepoSourceOptions {
    * Ignored when the cache already existed.
    */
   correctOriginTo?: string
+  /**
+   * Once a fresh clone finishes, repoint the cache's own HEAD at this
+   * branch. Needed for the same reason as `correctOriginTo`: a local
+   * `git clone`'s HEAD defaults to whichever branch was checked out in the
+   * clone source, not necessarily the repo's real default branch. Ignored
+   * when the cache already existed.
+   */
+  correctHeadTo?: string
 }
 
 /**
@@ -62,6 +71,9 @@ export async function addRepoSource(
 
   if (isFreshClone && options.correctOriginTo) {
     await setRemoteUrl(cache.path, 'origin', options.correctOriginTo)
+  }
+  if (isFreshClone && options.correctHeadTo) {
+    await setHeadBranch(cache.path, options.correctHeadTo)
   }
 
   const existing = await listRepoAliases(ctx.repoRegistryPath, ctx.reposRoot)

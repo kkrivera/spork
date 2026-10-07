@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import path from 'node:path'
-import { getRemoteUrl } from '../git/remote.js'
+import { getRemoteDefaultBranch, getRemoteUrl } from '../git/remote.js'
 import { addRepoSource, type RepoContext } from './repos.js'
 import type { RepoRegistryEntry } from '../registry/repoRegistry.js'
 
@@ -44,10 +44,15 @@ export interface ScanResult {
  * registered exactly as `addRepoSource` would for a typed-in URL. A repo
  * with a real `origin` remote is identified/deduped by that URL (so a repo
  * found by scan and one added later by typing the same URL resolve to the
- * same cache) and has its clone's origin corrected back to it afterward,
- * since a local clone's origin otherwise defaults to the folder it was
- * cloned from. A repo with no remote falls back to its resolved local path
- * as identity.
+ * same cache) and has its clone's origin *and HEAD* corrected afterward:
+ * origin, since a local clone's origin otherwise defaults to the folder it
+ * was cloned from; HEAD, since it otherwise reflects whichever branch
+ * happened to be checked out locally rather than the upstream's actual
+ * default branch (read directly from the upstream via
+ * `getRemoteDefaultBranch`, not trusted from the local checkout). A repo
+ * with no remote falls back to its resolved local path as identity, and
+ * keeps its local checkout's branch as HEAD since there's no upstream
+ * default to correct it against.
  *
  * Skips and continues past a per-repo failure rather than failing the whole
  * scan — a deliberate departure from `create --repo`'s fail-fast precedent,
@@ -73,5 +78,10 @@ export async function scanAndAddRepos(ctx: RepoContext, scanDir: string): Promis
 async function addScannedRepo(ctx: RepoContext, dir: string): Promise<RepoRegistryEntry> {
   const origin = await getRemoteUrl(dir)
   const source = origin ?? path.resolve(dir)
-  return addRepoSource(ctx, source, { cloneFrom: dir, correctOriginTo: origin ?? undefined })
+  const defaultBranch = origin ? await getRemoteDefaultBranch(origin) : null
+  return addRepoSource(ctx, source, {
+    cloneFrom: dir,
+    correctOriginTo: origin ?? undefined,
+    correctHeadTo: defaultBranch ?? undefined,
+  })
 }

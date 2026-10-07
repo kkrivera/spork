@@ -44,15 +44,18 @@ for the design this package implements.
   - `cache.ts` also exports `repoCacheExists`, used by the repo registry
     below to tell whether a registered alias's cache is still actually there.
   - `repos.ts` — the service layer over the repo registry:
-    - `addRepoSource(ctx, source, { alias?, cloneFrom?, correctOriginTo? })` —
-      ensure cloned, then register/reuse an alias for it. Expects a real
-      source, not an alias. `cloneFrom` clones from a different (typically
-      local) path than `source` on a fresh clone while keeping `source` as
-      the cache's identity; when that produces a fresh clone,
-      `correctOriginTo` rewrites its `origin` remote afterward, since a
+    - `addRepoSource(ctx, source, { alias?, cloneFrom?, correctOriginTo?,
+      correctHeadTo? })` — ensure cloned, then register/reuse an alias for
+      it. Expects a real source, not an alias. `cloneFrom` clones from a
+      different (typically local) path than `source` on a fresh clone while
+      keeping `source` as the cache's identity; when that produces a fresh
+      clone, `correctOriginTo` rewrites its `origin` remote afterward (a
       local clone's origin otherwise defaults to the path it was cloned
-      from. Both are used by `repo/scan.ts` below and are no-ops for every
-      other caller.
+      from) and `correctHeadTo` repoints its HEAD at the given branch (a
+      local clone's HEAD otherwise reflects whichever branch was checked
+      out in the clone source, not necessarily the repo's real default
+      branch). All three are used by `repo/scan.ts` below and are no-ops
+      for every other caller.
     - `addRepoSourceOrAlias(ctx, aliasOrSource, { alias? })` — the same, but
       resolves an alias-or-raw-source input first (mirroring
       `resolveWorkspaceDir`'s pattern). This is what the top-level `repo add`
@@ -74,13 +77,18 @@ for the design this package implements.
     subdirectories that look like git repos (one level deep, not
     recursive), and `scanAndAddRepos(ctx, scanDir)` clones each one via
     `addRepoSource`'s `cloneFrom` (from the local checkout, so the clone is
-    fast and hardlinked) and `correctOriginTo` (the repo's real `origin`
-    when it has one, else falling back to its resolved local path as
-    identity). Skips and continues past a per-repo failure — collected in
-    the returned `ScanResult`'s `skipped` list — rather than failing the
-    whole scan, unlike `workspace create --repo`'s fail-fast behavior; that
-    is a short, explicitly-typed list, while this operates over discovered
-    repos where one broken entry shouldn't block adopting the rest.
+    fast and hardlinked), falling back to its resolved local path as
+    identity when it has no `origin`. When it does have one,
+    `correctOriginTo` restores that `origin` afterward and `correctHeadTo`
+    (resolved from the real upstream via `getRemoteDefaultBranch`, never
+    trusted from the local checkout) restores the cache's HEAD to the
+    repo's actual default branch — both would otherwise reflect the local
+    clone source instead. Skips and continues past a per-repo failure —
+    collected in the returned `ScanResult`'s `skipped` list — rather than
+    failing the whole scan, unlike `workspace create --repo`'s fail-fast
+    behavior; that is a short, explicitly-typed list, while this operates
+    over discovered repos where one broken entry shouldn't block adopting
+    the rest.
 - `src/util/` — `slugify` (filesystem/branch-name-safe strings) and
   `repoShortName` (the repo's short name out of a source URL/path).
 - `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,

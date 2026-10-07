@@ -239,6 +239,22 @@ falling back to the repo's resolved local path as identity when it has no
 remote. All of this reuses `addRepoSource` verbatim; no new alias-collision
 or registration logic was needed.
 
+The same local-clone-source problem affects more than `origin`: a bare
+clone's `HEAD` is set, at clone time, to whatever branch the clone source
+had checked out — for a typed-in URL that's always the repo's real default
+branch, but for `repo scan`'s local-path clone source it's just whichever
+branch happened to be checked out in the user's folder, which upcoming
+features that need to know "this repo's default branch" can't rely on.
+`addRepoSource` gained a matching `correctHeadTo`, repointing the fresh
+clone's `HEAD` (via the new `setHeadBranch`) at the branch name
+`scanAndAddRepos` resolves directly from the real `origin` via the new
+`getRemoteDefaultBranch` (`git ls-remote --symref <source> HEAD` — a
+one-shot read that works against a URL or local path without needing
+anything cloned first, same fail-open-to-`null` convention as
+`getRemoteUrl`). A repo with no `origin` keeps its local checkout's branch
+as `HEAD` uncorrected, same as before — there's no upstream default to
+correct it against.
+
 `scanAndAddRepos` skips and continues past a per-repo failure rather than
 failing the whole scan — a deliberate departure from `create --repo`'s
 fail-fast behavior. That precedent is a short, explicitly-typed list where

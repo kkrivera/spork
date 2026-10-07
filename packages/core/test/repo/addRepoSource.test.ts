@@ -16,10 +16,14 @@ vi.mock('../../src/registry/repoRegistry.js', () => ({
 vi.mock('../../src/git/remote.js', () => ({
   setRemoteUrl: vi.fn(),
 }))
+vi.mock('../../src/git/clone.js', () => ({
+  setHeadBranch: vi.fn(),
+}))
 
 const { ensureRepoCache, repoCacheExists } = await import('../../src/repo/cache.js')
 const { listRepoAliases, registerRepoAlias, resolveRepoAlias } = await import('../../src/registry/repoRegistry.js')
 const { setRemoteUrl } = await import('../../src/git/remote.js')
+const { setHeadBranch } = await import('../../src/git/clone.js')
 const { addRepoSource, addRepoSourceOrAlias } = await import('../../src/repo/repos.js')
 const { SporkError } = await import('../../src/errors.js')
 
@@ -33,6 +37,7 @@ beforeEach(() => {
   vi.mocked(registerRepoAlias).mockReset().mockResolvedValue(undefined)
   vi.mocked(resolveRepoAlias).mockReset().mockImplementation(async (_p, _r, input: string) => input)
   vi.mocked(setRemoteUrl).mockReset().mockResolvedValue(undefined)
+  vi.mocked(setHeadBranch).mockReset().mockResolvedValue(undefined)
 })
 
 describe('addRepoSource', () => {
@@ -133,6 +138,32 @@ describe('addRepoSource — cloneFrom / correctOriginTo', () => {
     await addRepoSource(ctx, WIDGETS_SOURCE, { cloneFrom: '/home/user/code/widgets' })
 
     expect(setRemoteUrl).not.toHaveBeenCalled()
+  })
+})
+
+describe('addRepoSource — correctHeadTo', () => {
+  it('repoints HEAD after a fresh clone when correctHeadTo is set', async () => {
+    vi.mocked(repoCacheExists).mockReturnValue(false)
+
+    await addRepoSource(ctx, WIDGETS_SOURCE, { cloneFrom: '/home/user/code/widgets', correctHeadTo: 'trunk' })
+
+    expect(setHeadBranch).toHaveBeenCalledWith(expect.stringContaining('/repos/'), 'trunk')
+  })
+
+  it('does not repoint HEAD when the cache already existed', async () => {
+    vi.mocked(repoCacheExists).mockReturnValue(true)
+
+    await addRepoSource(ctx, WIDGETS_SOURCE, { cloneFrom: '/home/user/code/widgets', correctHeadTo: 'trunk' })
+
+    expect(setHeadBranch).not.toHaveBeenCalled()
+  })
+
+  it('does not touch HEAD when correctHeadTo is not given', async () => {
+    vi.mocked(repoCacheExists).mockReturnValue(false)
+
+    await addRepoSource(ctx, WIDGETS_SOURCE, { cloneFrom: '/home/user/code/widgets' })
+
+    expect(setHeadBranch).not.toHaveBeenCalled()
   })
 })
 
