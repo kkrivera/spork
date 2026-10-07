@@ -12,7 +12,12 @@ for the design this package implements.
     through it, and it's the seam unit tests mock instead of spawning real `git`
     processes.
   - `clone.ts` — bare-clone creation, fetching, and ref resolution against a
-    shared repo cache.
+    shared repo cache. `setHeadBranch(bareRepoPath, branch)` repoints the
+    cache's own HEAD, for correcting it after a clone whose source wasn't
+    the repo's real upstream (see `repo/scan.ts` below) — safe even if
+    `branch` doesn't exist in the cache yet, since HEAD can symbolically
+    point at a not-yet-existent ref and resolves once a later fetch brings
+    it in.
   - `worktree.ts` — worktree add/remove/prune/list, always creating a new
     spork-owned local branch per worktree (never reusing the requested ref
     directly — see the design doc for why), plus `isWorktreeCollisionError` to
@@ -22,7 +27,10 @@ for the design this package implements.
   - `remote.ts` — `getRemoteUrl`/`setRemoteUrl`, used by `repo/scan.ts` to
     read a discovered repo's real upstream (returning `null` rather than
     throwing if it has none) and to correct a fresh local clone's `origin`
-    back to that upstream afterward.
+    back to that upstream afterward. `getRemoteDefaultBranch(source)` asks a
+    URL or local path directly what its default branch is (`git ls-remote
+    --symref <source> HEAD`), without needing it cloned first — same
+    fail-open-to-`null` convention as `getRemoteUrl`.
   - `submodule.ts` — `hasSubmodules` (checks for a `.gitmodules` file) and
     `initSubmodules` (`git submodule update --init --recursive`), since
     `worktree add` never initializes submodules on its own.

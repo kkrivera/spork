@@ -5,7 +5,7 @@ vi.mock('../../src/git/exec.js', () => ({
 }))
 
 const { execGit } = await import('../../src/git/exec.js')
-const { cloneBare, fetchAll, resolveRef } = await import('../../src/git/clone.js')
+const { cloneBare, fetchAll, resolveRef, setHeadBranch } = await import('../../src/git/clone.js')
 
 const execGitMock = vi.mocked(execGit)
 
@@ -41,5 +41,15 @@ describe('resolveRef', () => {
 
     expect(sha).toBe('abc123')
     expect(execGitMock).toHaveBeenCalledWith(['rev-parse', '--verify', 'main^{commit}'], { cwd: '/cache/foo-bar' })
+  })
+})
+
+describe('setHeadBranch', () => {
+  it('repoints the bare cache HEAD at the given branch', async () => {
+    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await setHeadBranch('/cache/foo-bar', 'trunk')
+
+    expect(execGitMock).toHaveBeenCalledWith(['symbolic-ref', 'HEAD', 'refs/heads/trunk'], { cwd: '/cache/foo-bar' })
   })
 })

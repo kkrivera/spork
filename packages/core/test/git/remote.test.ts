@@ -5,7 +5,7 @@ vi.mock('../../src/git/exec.js', () => ({
 }))
 
 const { execGit } = await import('../../src/git/exec.js')
-const { getRemoteUrl, setRemoteUrl } = await import('../../src/git/remote.js')
+const { getRemoteUrl, setRemoteUrl, getRemoteDefaultBranch } = await import('../../src/git/remote.js')
 
 const execGitMock = vi.mocked(execGit)
 
@@ -53,5 +53,43 @@ describe('setRemoteUrl', () => {
     expect(execGitMock).toHaveBeenCalledWith(['remote', 'set-url', 'origin', 'git@github.com:acme/widgets.git'], {
       cwd: '/repos/widgets',
     })
+  })
+})
+
+describe('getRemoteDefaultBranch', () => {
+  it('parses the default branch out of ls-remote --symref output', async () => {
+    execGitMock.mockReset().mockResolvedValue({
+      stdout: 'ref: refs/heads/trunk\tHEAD\n7b526f4\tHEAD\n',
+      stderr: '',
+    })
+
+    const branch = await getRemoteDefaultBranch('git@github.com:acme/widgets.git')
+
+    expect(branch).toBe('trunk')
+    expect(execGitMock).toHaveBeenCalledWith(['ls-remote', '--symref', 'git@github.com:acme/widgets.git', 'HEAD'])
+  })
+
+  it('also works against a local path source', async () => {
+    execGitMock.mockReset().mockResolvedValue({ stdout: 'ref: refs/heads/main\tHEAD\n', stderr: '' })
+
+    const branch = await getRemoteDefaultBranch('/home/user/code/widgets')
+
+    expect(branch).toBe('main')
+  })
+
+  it('returns null when the source is unreachable or not a git repo', async () => {
+    execGitMock.mockReset().mockRejectedValue(new Error('fatal: could not read from remote'))
+
+    const branch = await getRemoteDefaultBranch('git@github.com:acme/widgets.git')
+
+    expect(branch).toBeNull()
+  })
+
+  it('returns null when the output does not contain a symref line', async () => {
+    execGitMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+
+    const branch = await getRemoteDefaultBranch('git@github.com:acme/widgets.git')
+
+    expect(branch).toBeNull()
   })
 })
