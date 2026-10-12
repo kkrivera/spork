@@ -29,18 +29,24 @@ beforeEach(() => {
 })
 
 describe('repoCacheId', () => {
-  it('derives a readable, stable id from a remote URL', () => {
+  it('derives a readable, stable id prefixed with the owner, from a remote URL', () => {
     const id = repoCacheId('git@github.com:acme/widgets.git')
 
-    expect(id).toMatch(/^widgets-[a-f0-9]{8}$/)
+    expect(id).toMatch(/^acme-widgets-[a-f0-9]{8}$/)
     expect(repoCacheId('git@github.com:acme/widgets.git')).toBe(id)
   })
 
-  it('gives different ids to different sources with the same short name', () => {
+  it('gives different, distinguishable ids to different owners with the same repo name', () => {
     const a = repoCacheId('git@github.com:acme/widgets.git')
     const b = repoCacheId('git@example.com:other/widgets.git')
 
+    expect(a).toMatch(/^acme-widgets-/)
+    expect(b).toMatch(/^other-widgets-/)
     expect(a).not.toBe(b)
+  })
+
+  it('has no owner prefix for a local path, just the repo name and hash', () => {
+    expect(repoCacheId('/Users/me/code/widgets')).toMatch(/^widgets-[a-f0-9]{8}$/)
   })
 
   it('falls back to a safe slug for an unusual source string', () => {

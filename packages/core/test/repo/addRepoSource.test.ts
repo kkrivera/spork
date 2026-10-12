@@ -97,7 +97,7 @@ describe('addRepoSource', () => {
 
     const entry = await addRepoSource(ctx, WIDGETS_SOURCE)
 
-    expect(entry.alias).toMatch(/^widgets-[a-f0-9]{8}$/)
+    expect(entry.alias).toMatch(/^acme-widgets-[a-f0-9]{8}$/)
     expect(entry.alias).not.toBe('widgets')
   })
 })

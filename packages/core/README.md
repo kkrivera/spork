@@ -35,9 +35,14 @@ for the design this package implements.
     `initSubmodules` (`git submodule update --init --recursive`), since
     `worktree add` never initializes submodules on its own.
 - `src/repo/` — the shared repo cache each workspace's worktrees are created from.
-  - `cache.ts` — derives a stable cache id/path from a repo source and ensures
-    a bare clone of it exists (`ensureRepoCache`), fetching to refresh refs if
-    it's already cached rather than re-cloning.
+  - `cache.ts` — derives a stable cache id/path from a repo source
+    (`repoCacheId`: an owner-prefixed slug when the source is URL-shaped
+    enough to have one, e.g. `acme-widgets-<hash>`, so two orgs' same-named
+    repo read as distinct cache directories rather than only differing by
+    hash; a local path has no owner to extract, so it's just
+    `widgets-<hash>`) and ensures a bare clone of it exists
+    (`ensureRepoCache`), fetching to refresh refs if it's already cached
+    rather than re-cloning.
   - `lock.ts` — `withRepoLock`, an exclusive lock (via `proper-lockfile`) around
     mutating a repo cache, since the cache is shared across workspaces and
     concurrent `spork` invocations are expected, not exceptional.
@@ -89,8 +94,12 @@ for the design this package implements.
     behavior; that is a short, explicitly-typed list, while this operates
     over discovered repos where one broken entry shouldn't block adopting
     the rest.
-- `src/util/` — `slugify` (filesystem/branch-name-safe strings) and
-  `repoShortName` (the repo's short name out of a source URL/path).
+- `src/util/` — `slugify` (filesystem/branch-name-safe strings),
+  `repoShortName` (the repo's short name out of a source URL/path), and
+  `repoOwner` (the owner/org segment out of a URL-shaped source, e.g. "acme"
+  from `git@github.com:acme/widgets.git` — null for a bare local path, since
+  its parent directory isn't a real "owner" and would falsely make every
+  repo in a scanned folder look like it shares one).
 - `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,
   `~/.spork/workspaces.json`).
 - `src/errors.ts` — `SporkError`, the one error type used for user-facing

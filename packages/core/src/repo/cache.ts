@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { cloneBare, fetchAll } from '../git/clone.js'
 import { slugify } from '../util/slug.js'
-import { repoShortName } from '../util/repoName.js'
+import { repoOwner, repoShortName } from '../util/repoName.js'
 
 export interface RepoCache {
   /** Stable, filesystem-safe identifier derived from `source`. */
@@ -23,15 +23,23 @@ export interface RepoCache {
 }
 
 /**
- * Derives a stable cache id from a repo source (URL or local path): a readable
- * slug of the repo's name, plus a short hash of the full source so different
- * sources that happen to share a short name don't collide. Note the same
- * underlying repo added via two different URL forms (HTTPS vs SSH) is treated
- * as two distinct sources — see docs/plans/0001-worktree-workspace-architecture.md.
+ * Derives a stable cache id from a repo source (URL or local path): a
+ * readable slug of the repo's owner/org and name (when the source is
+ * URL-shaped enough to have an owner — see `repoOwner`), plus a short hash
+ * of the full source so different sources that happen to share an owner and
+ * name don't collide. The owner prefix is what lets two different orgs'
+ * same-named repo (e.g. "acme/widgets" and "other/widgets") read as
+ * distinct cache directories rather than only differing by hash. Note the
+ * same underlying repo added via two different URL forms (HTTPS vs SSH) is
+ * treated as two distinct sources — see
+ * docs/plans/0001-worktree-workspace-architecture.md.
  */
 export function repoCacheId(source: string): string {
+  const owner = repoOwner(source)
+  const name = repoShortName(source)
+  const readable = owner ? `${owner}-${name}` : name
   const hash = createHash('sha1').update(source).digest('hex').slice(0, 8)
-  return `${slugify(repoShortName(source))}-${hash}`
+  return `${slugify(readable)}-${hash}`
 }
 
 export function resolveRepoCache(reposRoot: string, source: string): RepoCache {
