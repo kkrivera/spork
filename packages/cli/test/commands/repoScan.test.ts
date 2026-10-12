@@ -51,6 +51,12 @@ describe('runScan', () => {
     expect(scanAndAddRepos).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/home/user/code')
     expect(result.scopeLabel).toBe('global')
   })
+
+  it('defaults directory to the current working directory when omitted', async () => {
+    await runScan(ctx)
+
+    expect(scanAndAddRepos).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, process.cwd())
+  })
 })
 
 describe('registerScanCommand', () => {
@@ -69,6 +75,17 @@ describe('registerScanCommand', () => {
     expect(output).toContain(`"widgets" -> ${WIDGETS_SOURCE} (global)`)
     expect(output).toContain('Skipped /home/user/code/broken: clone failed')
     expect(output).toContain('1 added, 1 skipped.')
+    logSpy.mockRestore()
+  })
+
+  it('scans the current working directory when no directory is given', async () => {
+    const program = new Command()
+    registerScanCommand(program, ctx)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await program.parseAsync(['node', 'test', 'scan'])
+
+    expect(scanAndAddRepos).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, process.cwd())
     logSpy.mockRestore()
   })
 })

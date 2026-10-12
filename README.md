@@ -56,10 +56,12 @@ spork repo list                                            # merged view, local 
 Already have a folder of clones lying around (`~/code`, `~/src`, ...)? `spork
 repo scan` adopts every repo in it in one pass — each one is cloned into
 spork's managed cache from its existing local checkout (fast, hardlinked)
-rather than the network, so you don't have to retype URLs by hand:
+rather than the network, so you don't have to retype URLs by hand. The
+directory argument is optional and defaults to the current directory:
 
 ```sh
 spork repo scan ~/code
+cd ~/code && spork repo scan   # same thing
 spork repo list
 ```
 

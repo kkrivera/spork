@@ -14,8 +14,14 @@ export interface ScanCommandResult {
  * Bulk-adopts every git repo found directly under `directory` (e.g. an
  * existing `~/code` folder) into spork's managed cache — see
  * `@spork/core`'s `scanAndAddRepos` for the clone/identity mechanics.
+ * Defaults `directory` to the current working directory, same as every
+ * other spork command that accepts a directory without requiring one.
  */
-export async function runScan(ctx: AppContext, directory: string, options: ScanOptions): Promise<ScanCommandResult> {
+export async function runScan(
+  ctx: AppContext,
+  directory: string = process.cwd(),
+  options: ScanOptions = {},
+): Promise<ScanCommandResult> {
   const scope = resolveRepoScope(ctx, options)
   const result = await scanAndAddRepos({ reposRoot: ctx.reposRoot, repoRegistryPath: scope.registryPath }, directory)
   return { result, scopeLabel: describeRepoScope(scope) }
@@ -23,11 +29,11 @@ export async function runScan(ctx: AppContext, directory: string, options: ScanO
 
 export function registerScanCommand(program: Command, ctx: AppContext): void {
   program
-    .command('scan <directory>')
-    .description('Bulk-adopt every git repo found directly under a folder (e.g. an existing ~/code)')
+    .command('scan [directory]')
+    .description('Bulk-adopt every git repo found directly under a folder (default: cwd; e.g. an existing ~/code)')
     .option('--global', 'register globally instead of the context-sensitive default')
     .option('--local', 'register locally (requires being inside a workspace)')
-    .action(async (directory: string, options: ScanOptions) => {
+    .action(async (directory: string | undefined, options: ScanOptions) => {
       const { result, scopeLabel } = await runScan(ctx, directory, options)
 
       for (const entry of result.added) {
