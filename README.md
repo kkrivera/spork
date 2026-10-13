@@ -70,6 +70,8 @@ spork repo list
 - [packages/core](packages/core) — domain logic: git worktree management, workspace
   manifests, the `.code-workspace` generator, the workspace registry.
 - [packages/cli](packages/cli) — the `spork` command-line interface, built on `core`.
+- [packages/task-runner](packages/task-runner) — runs concurrent tasks with a
+  live terminal dashboard; not yet wired into any `spork` command.
 - [tools/readme-sync](tools/readme-sync) — the CI check that keeps module READMEs honest.
 - [docs/plans](docs/plans) — durable design docs, reviewed like code.
 - [.claude/skills](.claude/skills) — Claude Code skills used to maintain this repo.
