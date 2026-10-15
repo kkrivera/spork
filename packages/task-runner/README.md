@@ -1,27 +1,41 @@
 # @spork/task-runner
 
-Runs one or more tasks (spawned processes) concurrently and renders a live
-terminal dashboard while they run, styled after
+Runs one or more tasks concurrently and renders a live terminal dashboard
+while they run, styled after
 [ultra-runner](https://www.npmjs.com/package/ultra-runner): a status
 icon + name + duration header per task, a tail of each still-running task's
 most recent output beneath it, and — once everything settles — a permanent
-full log in place of the live view. Not yet wired into any `spork` command;
-built ahead of that so future parallel operations (e.g. across several
-repos at once) have somewhere to render.
+full log in place of the live view. A task is either a `ProcessTask` (a
+real spawned command, tailed via its own stdout/stderr) or a `FunctionTask`
+(an arbitrary async function — for work that's just TypeScript calling
+other TypeScript, with no subprocess to tail). Not yet wired into any
+`spork` command; built ahead of that so future parallel operations (e.g.
+across several repos at once) have somewhere to render.
 
 ## Structure
 
-- `src/runTasks.ts` — the public entry point. Spawns every task
-  concurrently via `spawnTask`, drives a `LiveDashboard`, and resolves with
-  one `TaskResult` per task once all of them have settled or been
-  cancelled. Never calls `process.exit` — deciding the process's exit code
-  is left to the caller.
-- `src/spawnTask.ts` — wraps a single `node:child_process.spawn` call into
-  a small state machine (`pending → running → success/failed/cancelled`),
-  capturing stdout+stderr interleaved in arrival order (newline-split,
-  buffering a trailing partial line across chunks) and mutating the shared
-  `TaskState` object the caller handed it in place — the dashboard reads
-  straight off that same object, no separate state-merging step.
+- `src/runTasks.ts` — the public entry point. Runs every task
+  concurrently (dispatching each one to `spawnTask` or `runFunctionTask`
+  via `isProcessTask`, `'command' in task`), drives a `LiveDashboard`, and
+  resolves with one `TaskResult` per task once all of them have settled or
+  been cancelled. Never calls `process.exit` — deciding the process's exit
+  code is left to the caller.
+- `src/spawnTask.ts` — wraps a single `node:child_process.spawn` call (a
+  `ProcessTask`) into a small state machine
+  (`pending → running → success/failed/cancelled`), capturing stdout+stderr
+  interleaved in arrival order (newline-split, buffering a trailing partial
+  line across chunks) and mutating the shared `TaskState` object the caller
+  handed it in place — the dashboard reads straight off that same object,
+  no separate state-merging step.
+- `src/runFunctionTask.ts` — the same state-machine contract as
+  `spawnTask.ts`, but for a `FunctionTask`: runs its `run(report, signal)`,
+  letting the body push its own progress lines via `report.log(...)` (there's
+  no subprocess output to capture instead). A thrown error is captured into
+  `state.output` the same way `spawnTask` captures a spawn error. No
+  kill-escalation here — there's no child process to kill, so cancellation
+  for a function task is cooperative: the body must itself notice
+  `signal.aborted` to stop early, otherwise the task only settles once its
+  `run` call actually returns.
 - `src/layout.ts` — pure functions: `formatDuration` (`"919ms"` /
   `"3.727s"`), `tailLinesPerRunningTask` (splits the terminal's rows evenly
   across still-running tasks, after reserving one row per already-finished
@@ -41,9 +55,10 @@ repos at once) have somewhere to render.
   (~10fps) or stream `resize` event, and falls back to a plain, prefixed,
   incrementally-streamed `[taskName] line` mode with no cursor tricks when
   the stream isn't a TTY (CI, a pipe).
-- `src/types.ts` — `Task`, `TaskState`, `TaskResult`, `RunTasksOptions`,
-  and `RenderStream` (the narrow subset of `NodeJS.WriteStream` this
-  package needs — small enough to fake in tests).
+- `src/types.ts` — `Task` (`ProcessTask | FunctionTask`), `TaskReporter`,
+  `isProcessTask`, `TaskState`, `TaskResult`, `RunTasksOptions`, and
+  `RenderStream` (the narrow subset of `NodeJS.WriteStream` this package
+  needs — small enough to fake in tests).
 
 ## Cancellation
 
@@ -71,10 +86,19 @@ caller's job to decide what exit code a cancelled run should produce.
 A failing task does **not** cancel its siblings — they all run to
 completion, and the final `TaskResult[]` reports each one's own outcome.
 
+The above is all for a `ProcessTask`. A `FunctionTask` has no child process
+to send a signal to at all — its cancellation is **cooperative only**: the
+task is marked `cancelled` once its `run` call settles, but `signal`
+aborting doesn't stop an in-flight `await` inside `run` by itself. A
+function task that wants to actually stop early must check
+`signal.aborted` itself.
+
 ## Testing
 
 `yarn test` (vitest, ≥80% coverage enforced). `spawnTask` and `runTasks`
 mock `node:child_process`'s `spawn` rather than spawning real processes
-(same convention as `@spork/core`'s `src/git`); `terminal.ts`'s TTY and
-non-TTY paths are exercised against a fake `RenderStream` (an `EventEmitter`
-recording `write()` calls) rather than a real terminal.
+(same convention as `@spork/core`'s `src/git`); `runFunctionTask` needs no
+such mocking, since its "process" is just a plain async function the test
+provides directly. `terminal.ts`'s TTY and non-TTY paths are exercised
+against a fake `RenderStream` (an `EventEmitter` recording `write()` calls)
+rather than a real terminal.

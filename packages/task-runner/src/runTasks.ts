@@ -1,7 +1,8 @@
 import process from 'node:process'
+import { runFunctionTask } from './runFunctionTask.js'
 import { spawnTask } from './spawnTask.js'
 import { LiveDashboard } from './terminal.js'
-import type { RenderStream, RunTasksOptions, Task, TaskResult, TaskState } from './types.js'
+import { isProcessTask, type RenderStream, type RunTasksOptions, type Task, type TaskResult, type TaskState } from './types.js'
 
 function toResult(state: TaskState): TaskResult {
   return {
@@ -43,8 +44,15 @@ export async function runTasks(tasks: Task[], options: RunTasksOptions = {}): Pr
   const dashboard = new LiveDashboard(stream, states)
   dashboard.start()
 
+  const runOne = (state: TaskState): Promise<TaskState> => {
+    const notify = (): void => dashboard.notify()
+    return isProcessTask(state.task)
+      ? spawnTask(state, controller.signal, notify)
+      : runFunctionTask(state, controller.signal, notify)
+  }
+
   try {
-    await Promise.all(states.map((state) => spawnTask(state, controller.signal, () => dashboard.notify())))
+    await Promise.all(states.map(runOne))
   } finally {
     dashboard.stop()
     process.off('SIGINT', abort)

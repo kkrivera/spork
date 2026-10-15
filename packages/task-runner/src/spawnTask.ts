@@ -1,5 +1,10 @@
 import { spawn } from 'node:child_process'
-import type { TaskState } from './types.js'
+import type { ProcessTask, TaskState } from './types.js'
+
+/** Narrows `state.task` for the caller — `runTasks.ts`'s `isProcessTask` dispatch is what actually guarantees this holds. */
+function asProcessTask(state: TaskState): ProcessTask {
+  return state.task as ProcessTask
+}
 
 /** Splits arbitrary stdout/stderr chunks into complete lines, buffering a trailing partial line across calls. */
 class LineBuffer {
@@ -43,7 +48,7 @@ const KILL_GRACE_MS = 2000
  * or escalate.
  */
 export function spawnTask(state: TaskState, signal: AbortSignal, onChange: (state: TaskState) => void): Promise<TaskState> {
-  const { task } = state
+  const task = asProcessTask(state)
 
   return new Promise((resolve) => {
     const stdoutBuf = new LineBuffer()

@@ -6,11 +6,16 @@ import type { RenderStream, TaskState } from '../src/types.js'
 vi.mock('../src/spawnTask.js', () => ({
   spawnTask: vi.fn(),
 }))
+vi.mock('../src/runFunctionTask.js', () => ({
+  runFunctionTask: vi.fn(),
+}))
 
 const { spawnTask } = await import('../src/spawnTask.js')
+const { runFunctionTask } = await import('../src/runFunctionTask.js')
 const { runTasks } = await import('../src/runTasks.js')
 
 const spawnTaskMock = vi.mocked(spawnTask)
+const runFunctionTaskMock = vi.mocked(runFunctionTask)
 
 class FakeStream extends EventEmitter implements RenderStream {
   isTTY = false
@@ -26,6 +31,7 @@ let stream: FakeStream
 beforeEach(() => {
   stream = new FakeStream()
   spawnTaskMock.mockReset()
+  runFunctionTaskMock.mockReset()
 })
 
 afterEach(() => {
@@ -79,6 +85,27 @@ describe('runTasks', () => {
     const ok = results.find((r) => r.name === 'ok')
     expect(broken?.exitCode).toBe(1)
     expect(ok?.exitCode).toBe(0)
+  })
+})
+
+describe('runTasks — task dispatch', () => {
+  it('routes a ProcessTask (has command) to spawnTask', async () => {
+    spawnTaskMock.mockImplementation((state) => fastSuccess(state))
+
+    await runTasks([{ name: 'a', command: 'echo' }], { stream })
+
+    expect(spawnTaskMock).toHaveBeenCalled()
+    expect(runFunctionTaskMock).not.toHaveBeenCalled()
+  })
+
+  it('routes a FunctionTask (has run) to runFunctionTask', async () => {
+    runFunctionTaskMock.mockImplementation((state) => fastSuccess(state))
+
+    const results = await runTasks([{ name: 'b', run: async () => {} }], { stream })
+
+    expect(runFunctionTaskMock).toHaveBeenCalled()
+    expect(spawnTaskMock).not.toHaveBeenCalled()
+    expect(results[0]?.name).toBe('b')
   })
 })
 

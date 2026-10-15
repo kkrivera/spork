@@ -1,9 +1,37 @@
-export interface Task {
+/** A task whose body is a real spawned process — tailed via its own stdout/stderr. */
+export interface ProcessTask {
   name: string
   command: string
   args?: string[]
   cwd?: string
   env?: NodeJS.ProcessEnv
+}
+
+export interface TaskReporter {
+  log(line: string): void
+}
+
+/**
+ * A task whose body is an arbitrary async function rather than a spawned
+ * process — for work that's just TypeScript calling into other TypeScript
+ * (e.g. `@spork/core`), which has no subprocess to tail. `report.log(...)`
+ * lets the body push its own progress lines into the dashboard.
+ *
+ * Cancellation here is cooperative only: aborting `signal` does not forcibly
+ * stop an in-flight `await` inside `run` the way a process task's child gets
+ * killed — the task is simply marked `cancelled` once `run` settles (success,
+ * throw, or the body itself checking `signal.aborted` and returning early).
+ */
+export interface FunctionTask {
+  name: string
+  run: (report: TaskReporter, signal: AbortSignal) => Promise<void>
+}
+
+export type Task = ProcessTask | FunctionTask
+
+/** True for a `ProcessTask` — the two shapes are distinguished by `command`'s presence. */
+export function isProcessTask(task: Task): task is ProcessTask {
+  return 'command' in task
 }
 
 export type TaskStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled'
