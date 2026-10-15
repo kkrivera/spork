@@ -1,3 +1,4 @@
+export { select } from './select.js'
 export { NotInteractiveError } from './types.js'
 export type {
   Colors,
