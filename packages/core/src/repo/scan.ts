@@ -66,7 +66,7 @@ export async function scanAndAddRepos(ctx: RepoContext, scanDir: string): Promis
 
   for (const dir of dirs) {
     try {
-      result.added.push(await addScannedRepo(ctx, dir))
+      result.added.push(await adoptLocalRepo(ctx, dir))
     } catch (error) {
       result.skipped.push({ path: dir, reason: error instanceof Error ? error.message : String(error) })
     }
@@ -75,7 +75,16 @@ export async function scanAndAddRepos(ctx: RepoContext, scanDir: string): Promis
   return result
 }
 
-async function addScannedRepo(ctx: RepoContext, dir: string): Promise<RepoRegistryEntry> {
+/**
+ * Adopts the single git repo at `dir` into spork's managed cache (see
+ * `scanAndAddRepos`'s doc comment for the clone/identity/HEAD mechanics —
+ * this is the one-repo-at-a-time building block it loops over). Exported
+ * separately so a caller that wants to schedule/display adopting several
+ * repos itself (e.g. concurrently, with its own progress reporting) can
+ * call this per repo instead of only getting `scanAndAddRepos`'s
+ * sequential, skip-and-continue batch behavior.
+ */
+export async function adoptLocalRepo(ctx: RepoContext, dir: string): Promise<RepoRegistryEntry> {
   const origin = await getRemoteUrl(dir)
   const source = origin ?? path.resolve(dir)
   const defaultBranch = origin ? await getRemoteDefaultBranch(origin) : null

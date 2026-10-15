@@ -13,7 +13,7 @@ vi.mock('../../src/repo/repos.js', () => ({
 
 const { getRemoteUrl, getRemoteDefaultBranch } = await import('../../src/git/remote.js')
 const { addRepoSource } = await import('../../src/repo/repos.js')
-const { findGitRepoDirs, scanAndAddRepos } = await import('../../src/repo/scan.js')
+const { findGitRepoDirs, scanAndAddRepos, adoptLocalRepo } = await import('../../src/repo/scan.js')
 
 const getRemoteUrlMock = vi.mocked(getRemoteUrl)
 const getRemoteDefaultBranchMock = vi.mocked(getRemoteDefaultBranch)
@@ -134,6 +134,34 @@ describe('scanAndAddRepos', () => {
     const result = await scanAndAddRepos(ctx, scanDir)
 
     expect(result.skipped).toEqual([{ path: broken, reason: 'not an Error instance' }])
+  })
+})
+
+describe('adoptLocalRepo', () => {
+  const ctx = { reposRoot: '/repos', repoRegistryPath: '/registry.json' }
+
+  it('adopts a single repo directory, the same way scanAndAddRepos does per repo', async () => {
+    const widgets = await makeRepoDir('widgets')
+    getRemoteUrlMock.mockResolvedValue('git@github.com:acme/widgets.git')
+    getRemoteDefaultBranchMock.mockResolvedValue('trunk')
+    addRepoSourceMock.mockResolvedValue({ alias: 'widgets', source: 'git@github.com:acme/widgets.git', addedAt: '' })
+
+    const entry = await adoptLocalRepo(ctx, widgets)
+
+    expect(addRepoSourceMock).toHaveBeenCalledWith(ctx, 'git@github.com:acme/widgets.git', {
+      cloneFrom: widgets,
+      correctOriginTo: 'git@github.com:acme/widgets.git',
+      correctHeadTo: 'trunk',
+    })
+    expect(entry.alias).toBe('widgets')
+  })
+
+  it('propagates a rejection to its caller rather than swallowing it (unlike scanAndAddRepos)', async () => {
+    const broken = await makeRepoDir('broken')
+    getRemoteUrlMock.mockResolvedValue(null)
+    addRepoSourceMock.mockRejectedValue(new Error('clone failed'))
+
+    await expect(adoptLocalRepo(ctx, broken)).rejects.toThrow('clone failed')
   })
 })
 

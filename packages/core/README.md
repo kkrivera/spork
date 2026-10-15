@@ -80,7 +80,7 @@ for the design this package implements.
   - `scan.ts` — bulk-adopts an existing folder of clones (e.g. `~/code`)
     into the managed cache: `findGitRepoDirs(scanDir)` finds its immediate
     subdirectories that look like git repos (one level deep, not
-    recursive), and `scanAndAddRepos(ctx, scanDir)` clones each one via
+    recursive), and `adoptLocalRepo(ctx, dir)` clones one of them via
     `addRepoSource`'s `cloneFrom` (from the local checkout, so the clone is
     fast and hardlinked), falling back to its resolved local path as
     identity when it has no `origin`. When it does have one,
@@ -88,12 +88,16 @@ for the design this package implements.
     (resolved from the real upstream via `getRemoteDefaultBranch`, never
     trusted from the local checkout) restores the cache's HEAD to the
     repo's actual default branch — both would otherwise reflect the local
-    clone source instead. Skips and continues past a per-repo failure —
-    collected in the returned `ScanResult`'s `skipped` list — rather than
-    failing the whole scan, unlike `workspace create --repo`'s fail-fast
-    behavior; that is a short, explicitly-typed list, while this operates
-    over discovered repos where one broken entry shouldn't block adopting
-    the rest.
+    clone source instead. `scanAndAddRepos(ctx, scanDir)` is the sequential
+    convenience wrapper over `adoptLocalRepo` for every discovered dir,
+    skipping and continuing past a per-repo failure — collected in the
+    returned `ScanResult`'s `skipped` list — rather than failing the whole
+    scan, unlike `workspace create --repo`'s fail-fast behavior; that is a
+    short, explicitly-typed list, while this operates over discovered repos
+    where one broken entry shouldn't block adopting the rest. `adoptLocalRepo`
+    is exported separately for a caller that wants to schedule/display
+    adopting several repos itself (e.g. concurrently) instead of only
+    getting the sequential batch behavior.
 - `src/util/` — `slugify` (filesystem/branch-name-safe strings),
   `repoShortName` (the repo's short name out of a source URL/path), and
   `repoOwner` (the owner/org segment out of a URL-shaped source, e.g. "acme"
