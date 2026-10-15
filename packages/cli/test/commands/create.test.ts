@@ -1,17 +1,23 @@
 import { Command } from 'commander'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FunctionTask, TaskResult } from '@spork/task-runner'
 
 vi.mock('@spork/core', () => ({
   createWorkspace: vi.fn(),
   listWorkspaces: vi.fn(),
   registerWorkspace: vi.fn(),
   addRepo: vi.fn(),
+  defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
   SporkError: class SporkError extends Error {},
+}))
+vi.mock('@spork/task-runner', () => ({
+  runTasks: vi.fn(),
 }))
 
 const { createWorkspace, listWorkspaces, registerWorkspace, addRepo, resolveWorkspaceDir, SporkError } =
   await import('@spork/core')
+const { runTasks } = await import('@spork/task-runner')
 const { runCreate, runCreateWithRepos, registerCreateCommand } = await import('../../src/commands/workspace/create.js')
 const { createUi } = await import('../../src/output/color.js')
 
@@ -19,6 +25,21 @@ const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryP
 
 function fakeEntry(folder: string) {
   return { folder, source: `git@github.com:acme/${folder}.git`, requestedRef: 'HEAD', localBranch: `spork/demo/${folder}`, addedAt: '' }
+}
+
+/** Drives every FunctionTask runConcurrently builds, the way the real runFunctionTask would. */
+async function fakeRunTasks(tasks: readonly FunctionTask[]): Promise<TaskResult[]> {
+  const results: TaskResult[] = []
+  for (const task of tasks) {
+    const output: string[] = []
+    try {
+      await task.run({ log: (line) => output.push(line) }, new AbortController().signal)
+    } catch (error) {
+      output.push(error instanceof Error ? error.message : String(error))
+    }
+    results.push({ name: task.name, exitCode: null, signal: null, durationMs: 1, output, cancelled: false })
+  }
+  return results
 }
 
 beforeEach(() => {
@@ -29,6 +50,9 @@ beforeEach(() => {
   vi.mocked(registerWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(resolveWorkspaceDir).mockReset().mockResolvedValue('/ws/demo')
   vi.mocked(addRepo).mockReset()
+  vi.mocked(runTasks)
+    .mockReset()
+    .mockImplementation((tasks) => fakeRunTasks(tasks as FunctionTask[]))
 })
 
 describe('runCreate', () => {
@@ -62,38 +86,47 @@ describe('runCreateWithRepos', () => {
     const result = await runCreateWithRepos(ctx, 'demo', {})
 
     expect(result.handle.name).toBe('demo')
-    expect(result.addRepoResults).toEqual([])
+    expect(result.repoOutcomes).toEqual([])
     expect(addRepo).not.toHaveBeenCalled()
   })
 
-  it('adds each --repo in order via the same addRepo the standalone command uses', async () => {
+  it('adds every --repo concurrently, in the given order, via the same addRepo the standalone command uses', async () => {
     vi.mocked(addRepo)
-      .mockResolvedValueOnce({ entry: fakeEntry('widgets'), aliasScope: 'local', submodulesInitialized: false })
-      .mockResolvedValueOnce({ entry: fakeEntry('gadgets'), aliasScope: 'local', submodulesInitialized: false })
+      .mockImplementationOnce(async () => fakeEntryResult('widgets'))
+      .mockImplementationOnce(async () => fakeEntryResult('gadgets'))
 
     const result = await runCreateWithRepos(ctx, 'demo', { repo: ['widgets-source', 'gadgets-source'] })
 
-    expect(result.addRepoResults.map((r) => r.entry.folder)).toEqual(['widgets', 'gadgets'])
-    expect(addRepo).toHaveBeenNthCalledWith(1, expect.anything(), '/ws/demo', expect.objectContaining({ source: 'widgets-source' }))
-    expect(addRepo).toHaveBeenNthCalledWith(2, expect.anything(), '/ws/demo', expect.objectContaining({ source: 'gadgets-source' }))
+    expect(result.repoOutcomes.map((o) => o.result?.entry.folder)).toEqual(['widgets', 'gadgets'])
+    expect(addRepo).toHaveBeenCalledWith(expect.anything(), '/ws/demo', expect.objectContaining({ source: 'widgets-source' }))
+    expect(addRepo).toHaveBeenCalledWith(expect.anything(), '/ws/demo', expect.objectContaining({ source: 'gadgets-source' }))
   })
 
-  it('is fail-fast: stops at the first failing repo, leaving the workspace already created', async () => {
-    vi.mocked(addRepo).mockRejectedValueOnce(new SporkError('boom'))
+  it('keeps running the rest after one --repo fails, reporting both outcomes', async () => {
+    vi.mocked(addRepo).mockImplementation(async (_ctx, _dir, opts: { source: string }) => {
+      if (opts.source === 'bad-source') throw new Error('boom')
+      return fakeEntryResult('widgets')
+    })
 
-    await expect(runCreateWithRepos(ctx, 'demo', { repo: ['bad-source', 'never-reached'] })).rejects.toThrow('boom')
-    expect(addRepo).toHaveBeenCalledTimes(1)
-    expect(createWorkspace).toHaveBeenCalled()
+    const result = await runCreateWithRepos(ctx, 'demo', { repo: ['bad-source', 'widgets-source'] })
+
+    expect(addRepo).toHaveBeenCalledTimes(2)
+    expect(result.repoOutcomes[0]?.failure).toEqual({ source: 'bad-source', reason: 'boom', cancelled: false })
+    expect(result.repoOutcomes[1]?.result?.entry.folder).toBe('widgets')
   })
 
   it('forwards --global to every repo added', async () => {
-    vi.mocked(addRepo).mockResolvedValue({ entry: fakeEntry('widgets'), aliasScope: 'global', submodulesInitialized: false })
+    vi.mocked(addRepo).mockResolvedValue(fakeEntryResult('widgets'))
 
     await runCreateWithRepos(ctx, 'demo', { repo: ['widgets-source'], global: true })
 
     expect(addRepo).toHaveBeenCalledWith(expect.anything(), '/ws/demo', expect.objectContaining({ global: true }))
   })
 })
+
+function fakeEntryResult(folder: string) {
+  return { entry: fakeEntry(folder), aliasScope: 'local' as const, submodulesInitialized: false }
+}
 
 describe('registerCreateCommand', () => {
   it('wires the create command and prints a confirmation', async () => {
@@ -110,8 +143,8 @@ describe('registerCreateCommand', () => {
 
   it('accepts repeated --repo flags and prints each result', async () => {
     vi.mocked(addRepo)
-      .mockResolvedValueOnce({ entry: fakeEntry('widgets'), aliasScope: 'local', submodulesInitialized: false })
-      .mockResolvedValueOnce({ entry: fakeEntry('gadgets'), aliasScope: 'local', submodulesInitialized: true })
+      .mockImplementationOnce(async () => ({ entry: fakeEntry('widgets'), aliasScope: 'local', submodulesInitialized: false }))
+      .mockImplementationOnce(async () => ({ entry: fakeEntry('gadgets'), aliasScope: 'local', submodulesInitialized: true }))
     const program = new Command()
     registerCreateCommand(program, ctx)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -123,6 +156,24 @@ describe('registerCreateCommand', () => {
     expect(output).toContain('"gadgets"')
     expect(output).toContain('Initialized submodules in "gadgets"')
     expect(output).not.toContain('Add a repo with')
+    logSpy.mockRestore()
+  })
+
+  it('prints every outcome then throws when a --repo fails, so the process exits non-zero', async () => {
+    vi.mocked(addRepo).mockImplementation(async (_ctx, _dir, opts: { source: string }) => {
+      if (opts.source === 'bad-source') throw new Error('boom')
+      return fakeEntryResult('widgets')
+    })
+    const program = new Command()
+    registerCreateCommand(program, ctx)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const run = program.parseAsync(['node', 'test', 'create', 'demo', '--repo', 'bad-source', '--repo', 'widgets-source'])
+    await expect(run).rejects.toThrow(/1 of 2 --repo adds did not succeed/)
+
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Failed to add "bad-source": boom')
+    expect(output).toContain('"widgets"')
     logSpy.mockRestore()
   })
 })

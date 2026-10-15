@@ -56,8 +56,20 @@ logic lives here.
   the shared registry instead — `printAddRepoResult` always shows which one
   happened (`(alias: local)`/`(alias: global)`), plus whether submodules
   were initialized or a warning if that failed (the add itself still
-  succeeds — see `AddRepoResult` in `@spork/core`). `index.ts` in this
-  folder registers them all under the `workspace` parent command. See
+  succeeds — see `AddRepoResult` in `@spork/core`). `add-repo` runs its
+  single `addRepo` call through `runConcurrently` for a live spinner, and
+  re-throws the raw error on failure (preserving the usual propagate-to-
+  the-top-level-handler contract) rather than reporting it the way a batch
+  command does. `create --repo <a> --repo <b> ...` goes a level further:
+  every `--repo` is its own concurrent `runConcurrently` item calling
+  `addRepo` directly (not through `add-repo`'s own single-item wrapper,
+  which would otherwise nest one dashboard per repo) — every outcome gets
+  printed, and if any failed or was cancelled, `registerCreateCommand`
+  throws *after* printing them all, so the process still exits non-zero
+  even though a failure no longer stops the others (a deliberate change
+  from the previous sequential fail-fast behavior — see the architecture
+  doc). `index.ts` in this folder registers them all under the `workspace`
+  parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
   for the command surface and its rationale.
 - `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`,

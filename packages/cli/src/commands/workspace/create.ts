@@ -1,6 +1,8 @@
 import path from 'node:path'
 import {
+  addRepo,
   createWorkspace,
+  defaultAlias,
   listWorkspaces,
   registerWorkspace,
   SporkError,
@@ -8,8 +10,9 @@ import {
   type WorkspaceHandle,
 } from '@spork/core'
 import type { Command } from 'commander'
+import { runConcurrently } from '../../concurrentTasks.js'
 import { workspaceContext, type AppContext } from '../../context.js'
-import { printAddRepoResult, runAddRepo } from './addRepo.js'
+import { printAddRepoResult } from './addRepo.js'
 
 export interface CreateOptions {
   dir?: string
@@ -35,17 +38,38 @@ export async function runCreate(ctx: AppContext, name: string, options: CreateOp
   return handle
 }
 
+export interface CreateRepoFailure {
+  source: string
+  reason: string
+  cancelled: boolean
+}
+
+/** One entry per `--repo`, in the order given — exactly one of `result`/`failure` is set. */
+export interface CreateRepoOutcome {
+  source: string
+  result?: AddRepoResult
+  failure?: CreateRepoFailure
+}
+
 export interface CreateWithReposResult {
   handle: WorkspaceHandle
-  addRepoResults: AddRepoResult[]
+  repoOutcomes: CreateRepoOutcome[]
 }
 
 /**
- * Creates the workspace, then adds each `--repo` in order via the same
- * runAddRepo the standalone `add-repo` command uses. Fail-fast, not atomic:
- * if one repo fails, the already-created (and already-registered) workspace
- * is left as-is with whatever repos succeeded before it — recoverable via
- * `add-repo` for the rest.
+ * Creates the workspace, then adds every `--repo` concurrently (through
+ * `runConcurrently`'s live dashboard), calling `addRepo` directly rather
+ * than going through the standalone `add-repo` command's `runAddRepo` —
+ * that wraps a single item in its own dashboard, which would mean nesting
+ * one per repo here instead of one dashboard for the whole batch.
+ *
+ * Not atomic, and no longer fail-fast: every `--repo` runs regardless of a
+ * sibling's failure (same "best effort over a batch" precedent `repo scan`
+ * already uses), so the already-created workspace ends up with whatever
+ * repos succeeded. Unlike `repo scan`'s best-effort bulk-adopt, a failed or
+ * cancelled `--repo` here is still something the caller asked for and
+ * didn't get, so `registerCreateCommand` throws after printing every
+ * outcome, to keep the process exiting non-zero.
  */
 export async function runCreateWithRepos(
   ctx: AppContext,
@@ -53,13 +77,25 @@ export async function runCreateWithRepos(
   options: CreateOptions,
 ): Promise<CreateWithReposResult> {
   const handle = await runCreate(ctx, name, options)
-  const addRepoResults: AddRepoResult[] = []
+  const sources = options.repo ?? []
 
-  for (const source of options.repo ?? []) {
-    addRepoResults.push(await runAddRepo(ctx, handle.name, source, { global: options.global }))
-  }
+  const outcomes = await runConcurrently(
+    sources.map((source) => ({
+      name: defaultAlias(source),
+      call: () => addRepo(workspaceContext(ctx), handle.dir, { source, global: options.global }),
+    })),
+  )
 
-  return { handle, addRepoResults }
+  const repoOutcomes: CreateRepoOutcome[] = outcomes.map((outcome, index) => {
+    const source = sources[index] as string
+    if (outcome.value) return { source, result: outcome.value }
+    return {
+      source,
+      failure: { source, cancelled: outcome.cancelled, reason: outcome.cancelled ? 'cancelled' : (outcome.errorMessage ?? 'failed') },
+    }
+  })
+
+  return { handle, repoOutcomes }
 }
 
 export function registerCreateCommand(program: Command, ctx: AppContext): void {
@@ -70,16 +106,26 @@ export function registerCreateCommand(program: Command, ctx: AppContext): void {
     .option('--repo <source>', 'repo to add (repeatable)', collectRepo, [] as string[])
     .option('--global', "register each --repo's alias globally instead of locally to this workspace")
     .action(async (name: string, options: CreateOptions) => {
-      const { handle, addRepoResults } = await runCreateWithRepos(ctx, name, options)
+      const { handle, repoOutcomes } = await runCreateWithRepos(ctx, name, options)
       console.log(ctx.ui.color.green(`Created workspace "${handle.name}" at ${handle.dir}`))
 
-      if (addRepoResults.length === 0) {
+      if (repoOutcomes.length === 0) {
         console.log(`Add a repo with: spork workspace add-repo ${handle.name} <repo>`)
         return
       }
 
-      for (const result of addRepoResults) {
-        printAddRepoResult(ctx, handle.name, result)
+      const failures: CreateRepoFailure[] = []
+      for (const outcome of repoOutcomes) {
+        if (outcome.result) {
+          printAddRepoResult(ctx, handle.name, outcome.result)
+        } else if (outcome.failure) {
+          failures.push(outcome.failure)
+          console.log(ctx.ui.color.red(`Failed to add "${outcome.source}": ${outcome.failure.reason}`))
+        }
+      }
+
+      if (failures.length > 0) {
+        throw new SporkError(`${failures.length} of ${repoOutcomes.length} --repo adds did not succeed: ${failures.map((f) => f.source).join(', ')}`)
       }
     })
 }

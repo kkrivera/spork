@@ -1,5 +1,6 @@
-import { addRepo, resolveWorkspaceDir, type AddRepoResult } from '@spork/core'
+import { addRepo, defaultAlias, resolveWorkspaceDir, SporkError, type AddRepoResult } from '@spork/core'
 import type { Command } from 'commander'
+import { runConcurrently } from '../../concurrentTasks.js'
 import { workspaceContext, type AppContext } from '../../context.js'
 
 export interface AddRepoOptions {
@@ -9,6 +10,14 @@ export interface AddRepoOptions {
   global?: boolean
 }
 
+/**
+ * Runs the add through `runConcurrently` (a single-item list) so it gets a
+ * live spinner/elapsed-time display while cloning/fetching, same as every
+ * other wired command — but, unlike a batch command, re-throws the raw
+ * error on failure rather than reporting it, to preserve this project's
+ * existing "let it propagate to the top-level handler" contract for a
+ * single operation.
+ */
 export async function runAddRepo(
   ctx: AppContext,
   workspace: string,
@@ -16,12 +25,23 @@ export async function runAddRepo(
   options: AddRepoOptions,
 ): Promise<AddRepoResult> {
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspace)
-  return addRepo(workspaceContext(ctx), dir, {
-    source,
-    ref: options.branch,
-    folder: options.as,
-    global: options.global,
-  })
+  const [outcome] = await runConcurrently([
+    {
+      name: defaultAlias(source),
+      call: () =>
+        addRepo(workspaceContext(ctx), dir, {
+          source,
+          ref: options.branch,
+          folder: options.as,
+          global: options.global,
+        }),
+    },
+  ])
+
+  if (outcome?.value === undefined) {
+    throw outcome?.cancelled ? new SporkError('Cancelled.') : outcome?.error
+  }
+  return outcome.value
 }
 
 /** Prints an AddRepoResult the same way regardless of whether it came from `add-repo` or `create --repo`. */

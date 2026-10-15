@@ -1,5 +1,6 @@
-import { addRepoSourceOrAlias, type RepoRegistryEntry } from '@spork/core'
+import { addRepoSourceOrAlias, defaultAlias, SporkError, type RepoRegistryEntry } from '@spork/core'
 import type { Command } from 'commander'
+import { runConcurrently } from '../../concurrentTasks.js'
 import type { AppContext } from '../../context.js'
 import { describeRepoScope, resolveRepoScope, type RepoScopeOptions } from '../../repoScope.js'
 
@@ -12,12 +13,25 @@ export interface AddResult {
   scopeLabel: string
 }
 
+/**
+ * Runs the add through `runConcurrently` (a single-item list) for a live
+ * spinner/elapsed-time display while cloning/fetching — but, unlike a batch
+ * command, re-throws the raw error on failure rather than reporting it, to
+ * preserve this project's existing "let it propagate to the top-level
+ * handler" contract for a single operation.
+ */
 export async function runAdd(ctx: AppContext, source: string, options: AddOptions): Promise<AddResult> {
   const scope = resolveRepoScope(ctx, options)
-  const entry = await addRepoSourceOrAlias({ reposRoot: ctx.reposRoot, repoRegistryPath: scope.registryPath }, source, {
-    alias: options.as,
-  })
-  return { entry, scopeLabel: describeRepoScope(scope) }
+  const repoCtx = { reposRoot: ctx.reposRoot, repoRegistryPath: scope.registryPath }
+
+  const [outcome] = await runConcurrently([
+    { name: defaultAlias(source), call: () => addRepoSourceOrAlias(repoCtx, source, { alias: options.as }) },
+  ])
+
+  if (outcome?.value === undefined) {
+    throw outcome?.cancelled ? new SporkError('Cancelled.') : outcome?.error
+  }
+  return { entry: outcome.value, scopeLabel: describeRepoScope(scope) }
 }
 
 export function registerAddCommand(program: Command, ctx: AppContext): void {

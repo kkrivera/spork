@@ -135,11 +135,18 @@ store and deleting it out from under one would corrupt it.
 
 `workspace create` grew a repeatable `--repo <source-or-alias>` flag as
 sugar over calling `add-repo` once per repo — implemented purely in the CLI
-layer (`runCreateWithRepos` loops the same `runAddRepo` the standalone
-`add-repo` command uses), not as new core surface. It's fail-fast, not
-atomic: if one `--repo` fails, the already-created (and already-registered)
-workspace is left as-is with whatever repos succeeded first — recoverable
-via `add-repo` for the rest.
+layer (`runCreateWithRepos` calls `addRepo` directly for every `--repo`,
+concurrently, through `@spork/task-runner`'s dashboard — see
+`concurrentTasks.ts` in [packages/cli/README.md](../../packages/cli/README.md)),
+not as new core surface. Not atomic, and no longer fail-fast as of the
+task-runner integration: every `--repo` runs regardless of a sibling's
+failure (same "best effort over a batch" precedent `repo scan` already
+uses), so the already-created workspace ends up with whatever repos
+succeeded — recoverable via `add-repo` for the rest. Unlike `repo scan`'s
+best-effort bulk-adopt, though, a failed or cancelled `--repo` here is
+still something the caller explicitly asked for and didn't get, so every
+outcome gets printed and the command then throws (after printing, not
+before), keeping the process exit non-zero.
 
 This also settled a CLI taxonomy question: `workspace add-repo`/
 `remove-repo` keep their `-repo` suffix rather than shortening to bare
@@ -256,14 +263,17 @@ as `HEAD` uncorrected, same as before — there's no upstream default to
 correct it against.
 
 `scanAndAddRepos` skips and continues past a per-repo failure rather than
-failing the whole scan — a deliberate departure from `create --repo`'s
-fail-fast behavior. That precedent is a short, explicitly-typed list where
-failing fast surfaces a typo immediately; a scan operates over *discovered*
+failing the whole scan (`create --repo` later adopted this same "run
+everything regardless of a sibling's failure" shape once it got wired into
+`@spork/task-runner` — see above). A scan operates over *discovered*
 repos, potentially dozens, where one broken or corrupt entry shouldn't
-block adopting the rest. `findGitRepoDirs` only looks one level deep
-(immediate subdirectories with a `.git` entry) rather than walking
-recursively, matching "a single flat folder of clones" rather than an
-arbitrary directory tree.
+block adopting the rest — and unlike `create --repo`, which still signals
+an incomplete result via a non-zero exit, a scan's whole point is best-
+effort discovery, so it always reports what it found via `skipped` rather
+than treating any of it as a command failure. `findGitRepoDirs` only looks
+one level deep (immediate subdirectories with a `.git` entry) rather than
+walking recursively, matching "a single flat folder of clones" rather than
+an arbitrary directory tree.
 
 ### `open` uses the `code` CLI, via an injectable opener
 
@@ -292,6 +302,39 @@ so `addRepo` returns `{ entry, submodulesInitialized: false, submoduleWarning
 successful. Nested submodules-of-submodules are handled by `--recursive`;
 a submodule that itself needs authentication delegates to the same system
 git credential setup as everything else here.
+
+### Live concurrent display, via `@spork/task-runner`
+
+A new standalone package, `@spork/task-runner`, runs one or more tasks
+concurrently and renders a terminal dashboard while they run (per-task
+status icon/name/duration, a tail of each still-running task's output,
+reflowing as tasks finish and reclaiming their rows for the ones still
+going — see [packages/task-runner/README.md](../../packages/task-runner/README.md)).
+None of spork's own operations are "spawn one process and tail it" — they're
+async TypeScript calling into `@spork/core`, which has no subprocess to
+tail — so the package's `Task` type covers both a real spawned process
+(`ProcessTask`) and an arbitrary async function (`FunctionTask`, reporting
+its own progress lines). Every current `spork` command that benefits from
+this (`repo scan`, `repo add`, `workspace add-repo`, `workspace create
+--repo`) goes through one shared CLI-layer adapter,
+`packages/cli/src/concurrentTasks.ts`'s `runConcurrently`, rather than each
+command talking to `@spork/task-runner` directly.
+
+Cancellation for a `FunctionTask` is necessarily **cooperative only**: there's
+no child process to forcibly kill if an abort fires mid-`await`, so the task
+just settles (as `cancelled`) once its call actually returns. Giving it the
+same forceful guarantee `ProcessTask` has would mean threading an
+`AbortSignal` through `execGit`/`execFile` (which does support one) into
+every `@spork/core` function this touches — not done as part of this
+integration, and a reasonable candidate for later if it turns out to
+matter in practice.
+
+A single-item command (`repo add`, `workspace add-repo`) still re-throws
+the real error on failure, preserving this project's existing "let it
+propagate to the top-level handler" convention — `runConcurrently`'s
+outcome carries both the raw thrown value (`error`) and a derived string
+(`errorMessage`) for exactly this reason: a batch command reports
+`errorMessage` and moves on, a single-item one re-throws `error`.
 
 ## Explicitly deferred
 
