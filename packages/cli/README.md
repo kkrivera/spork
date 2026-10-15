@@ -68,8 +68,12 @@ logic lives here.
   throws *after* printing them all, so the process still exits non-zero
   even though a failure no longer stops the others (a deliberate change
   from the previous sequential fail-fast behavior — see the architecture
-  doc). `index.ts` in this folder registers them all under the `workspace`
-  parent command. See
+  doc). `status` wraps its (already internally concurrent —
+  `getWorkspaceStatus` reads every worktree via its own `Promise.all`)
+  status read as a single `runConcurrently` item too, for a live spinner
+  instead of a silent wait, rather than exporting a second per-worktree
+  core function just for this. `index.ts` in this folder registers them
+  all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
   for the command surface and its rationale.
 - `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`,
