@@ -339,6 +339,53 @@ outcome carries both the raw thrown value (`error`) and a derived string
 (`errorMessage`) for exactly this reason: a batch command reports
 `errorMessage` and moves on, a single-item one re-throws `error`.
 
+### Interactive repo picking, via `@spork/prompts`
+
+`workspace create` used to always add an empty workspace when no `--repo`
+was given — the only way to add repos at all was typing each source or
+alias as its own `--repo <x>`. A new standalone package, `@spork/prompts`,
+adds a fuzzy-searchable single/multi-select list prompt (`select()`), and
+`workspace create` now offers one when no `--repo` was given and there's
+something registered to pick from (see
+[packages/prompts/README.md](../../packages/prompts/README.md) for the
+package itself).
+
+This is a deliberate change to a convention `packages/cli/CLAUDE.md` used
+to state explicitly: commands stayed non-interactive in v1, explicit
+flags/args only, so every command behaved identically unattended in CI.
+That convention is revised, not dropped — an interactive prompt is now
+sanctioned, but strictly as an *addition*: every command that offers one
+must still work exactly as before when it can't prompt (no TTY) or wasn't
+asked to (an explicit flag was already given). `select()` enforces the
+"can't prompt" half itself — it throws a plain `NotInteractiveError`
+synchronously rather than hanging on keypresses that will never arrive,
+and deliberately has no opinion on what the caller should do instead,
+since that's a different decision per command (empty workspace here;
+some other command might want to require a flag instead). `workspace
+create`'s `resolveRepoSources` catches exactly that error and falls back
+to the old behavior unchanged; a real cancel (the user opened the picker
+and hit Esc/Ctrl+C) is different from "couldn't prompt at all" — `select()`
+resolves that as `null` rather than throwing (the same "cancelled is a
+normal, resolved outcome" shape `@spork/task-runner`'s `TaskResult`
+already uses), and the CLI layer turns a `null` into a thrown
+`SporkError('Cancelled.')`, same as every other cancelled-prompt path in
+this CLI.
+
+`@spork/prompts` itself splits pure decision logic (fuzzy matching, the
+select state reducer, frame rendering — all plain functions, fully unit
+tested with no stream involved) from the one place that touches a real
+stream (`terminal.ts`'s `runSelectPrompt`), mirroring `@spork/task-runner`'s
+own pure-vs-stateful split. A selection is tracked by the option's
+original index rather than its position in the filtered view, so
+narrowing a search and then clearing it doesn't lose what was already
+picked — select/deselect-all only ever toggles the *currently filtered*
+set, leaving anything filtered out untouched. Real `node:readline`
+keypress decoding against an actual terminal was verified manually
+(there's no interactive TTY available to type into in this sandboxed
+environment, so a real pseudo-terminal was driven programmatically
+instead via Python's `pty.fork`) rather than by the automated suite, which
+drives `terminal.ts` with synthetic `'keypress'` events on a fake stream.
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of

@@ -9,15 +9,23 @@ vi.mock('@spork/core', () => ({
   addRepo: vi.fn(),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
+  findEnclosingWorkspaceDir: vi.fn(),
+  listRepoAliases: vi.fn(),
+  localRepoRegistryPath: (workspaceDir: string) => `${workspaceDir}/spork.repos.json`,
   SporkError: class SporkError extends Error {},
 }))
 vi.mock('@spork/task-runner', () => ({
   runTasks: vi.fn(),
 }))
+vi.mock('@spork/prompts', () => ({
+  select: vi.fn(),
+  NotInteractiveError: class NotInteractiveError extends Error {},
+}))
 
-const { createWorkspace, listWorkspaces, registerWorkspace, addRepo, resolveWorkspaceDir, SporkError } =
+const { createWorkspace, listWorkspaces, registerWorkspace, addRepo, resolveWorkspaceDir, findEnclosingWorkspaceDir, listRepoAliases, SporkError } =
   await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
+const { select, NotInteractiveError } = await import('@spork/prompts')
 const { runCreate, runCreateWithRepos, registerCreateCommand } = await import('../../src/commands/workspace/create.js')
 const { createUi } = await import('../../src/output/color.js')
 
@@ -50,6 +58,9 @@ beforeEach(() => {
   vi.mocked(registerWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(resolveWorkspaceDir).mockReset().mockResolvedValue('/ws/demo')
   vi.mocked(addRepo).mockReset()
+  vi.mocked(findEnclosingWorkspaceDir).mockReset().mockReturnValue(null)
+  vi.mocked(listRepoAliases).mockReset().mockResolvedValue([])
+  vi.mocked(select).mockReset()
   vi.mocked(runTasks)
     .mockReset()
     .mockImplementation((tasks) => fakeRunTasks(tasks as FunctionTask[]))
@@ -135,6 +146,51 @@ describe('runCreateWithRepos', () => {
     await runCreateWithRepos(ctx, 'demo', { repo: ['widgets-source'] })
 
     expect(logSpy).toHaveBeenCalledWith('cloning/fetching widgets-source...')
+  })
+})
+
+describe('runCreateWithRepos — interactive repo picker (no --repo given)', () => {
+  it('does not prompt when there is nothing known to pick from', async () => {
+    const result = await runCreateWithRepos(ctx, 'demo', {})
+
+    expect(select).not.toHaveBeenCalled()
+    expect(result.repoOutcomes).toEqual([])
+  })
+
+  it('offers a multi-select of known repos and adds whatever was chosen', async () => {
+    vi.mocked(listRepoAliases).mockResolvedValue([{ alias: 'widgets', source: 'widgets-source', addedAt: '' }])
+    vi.mocked(select).mockResolvedValue(['widgets-source'])
+    vi.mocked(addRepo).mockResolvedValue(fakeEntryResult('widgets'))
+
+    const result = await runCreateWithRepos(ctx, 'demo', {})
+
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ mode: 'multi' }))
+    expect(addRepo).toHaveBeenCalledWith(expect.anything(), '/ws/demo', expect.objectContaining({ source: 'widgets-source' }))
+    expect(result.repoOutcomes[0]?.result?.entry.folder).toBe('widgets')
+  })
+
+  it('falls back to no repos (same as today) when the terminal cannot support a prompt', async () => {
+    vi.mocked(listRepoAliases).mockResolvedValue([{ alias: 'widgets', source: 'widgets-source', addedAt: '' }])
+    vi.mocked(select).mockRejectedValue(new NotInteractiveError())
+
+    const result = await runCreateWithRepos(ctx, 'demo', {})
+
+    expect(result.repoOutcomes).toEqual([])
+    expect(addRepo).not.toHaveBeenCalled()
+  })
+
+  it('throws Cancelled when the user backs out of the picker', async () => {
+    vi.mocked(listRepoAliases).mockResolvedValue([{ alias: 'widgets', source: 'widgets-source', addedAt: '' }])
+    vi.mocked(select).mockResolvedValue(null)
+
+    await expect(runCreateWithRepos(ctx, 'demo', {})).rejects.toThrow(SporkError)
+  })
+
+  it('re-throws a real failure from the picker rather than swallowing it', async () => {
+    vi.mocked(listRepoAliases).mockResolvedValue([{ alias: 'widgets', source: 'widgets-source', addedAt: '' }])
+    vi.mocked(select).mockRejectedValue(new Error('terminal exploded'))
+
+    await expect(runCreateWithRepos(ctx, 'demo', {})).rejects.toThrow('terminal exploded')
   })
 })
 

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@spork/core": "workspace:*",
+    "@spork/prompts": "workspace:*",
     "@spork/task-runner": "workspace:*",
     "commander": "^12.1.0",
     "picocolors": "^1.1.1"

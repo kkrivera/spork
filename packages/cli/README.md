@@ -77,7 +77,15 @@ logic lives here.
   throws *after* printing them all, so the process still exits non-zero
   even though a failure no longer stops the others (a deliberate change
   from the previous sequential fail-fast behavior — see the architecture
-  doc). `status` wraps its (already internally concurrent —
+  doc). `create` with no `--repo` at all tries an interactive multi-select
+  instead of always creating an empty workspace: it lists known repos the
+  same way `repo list` does and, only if there's something to pick from,
+  calls `@spork/prompts`' `select()`. `select()` throws
+  `NotInteractiveError` when it can't prompt (no TTY — CI, a pipe, a
+  script); `resolveRepoSources` catches exactly that and falls back to
+  today's non-interactive behavior (empty workspace), while a real cancel
+  (`select()` resolving `null`) becomes a thrown `SporkError`, same as
+  every other cancelled-prompt path here. `status` wraps its (already internally concurrent —
   `getWorkspaceStatus` reads every worktree via its own `Promise.all`)
   status read as a single `runConcurrently` item too, for a live spinner
   instead of a silent wait, rather than exporting a second per-worktree

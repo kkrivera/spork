@@ -9,11 +9,13 @@ import {
   type AddRepoResult,
   type WorkspaceHandle,
 } from '@spork/core'
+import { NotInteractiveError, select, type PromptOption } from '@spork/prompts'
 import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
 import { workspaceContext, type AppContext } from '../../context.js'
 import { printAddRepoResult } from './addRepo.js'
+import { runList } from '../repo/list.js'
 
 export interface CreateOptions {
   dir?: string
@@ -58,11 +60,49 @@ export interface CreateWithReposResult {
 }
 
 /**
- * Creates the workspace, then adds every `--repo` concurrently (through
- * `runConcurrently`'s live dashboard), calling `addRepo` directly rather
- * than going through the standalone `add-repo` command's `runAddRepo` —
- * that wraps a single item in its own dashboard, which would mean nesting
- * one per repo here instead of one dashboard for the whole batch.
+ * Decides which repo sources to add when no `--repo` was given: an explicit
+ * `--repo` always wins outright (no prompt at all). Otherwise, lists known
+ * repos the same way `repo list` does and — only if there's actually
+ * something to pick from — offers a multi-select. `select` throws
+ * `NotInteractiveError` synchronously when the terminal can't support one
+ * (CI, a pipe, a script); that's caught here and treated the same as
+ * "nothing to pick from": fall back to creating an empty workspace, exactly
+ * today's non-interactive behavior. A real cancel (Esc/Ctrl+C) is
+ * different — the user started picking and backed out, so that becomes a
+ * `SporkError`, same as every other cancelled-prompt path in this CLI.
+ */
+async function resolveRepoSources(ctx: AppContext, name: string, options: CreateOptions): Promise<string[]> {
+  if (options.repo && options.repo.length > 0) return options.repo
+
+  const candidates = await runList(ctx)
+  if (candidates.length === 0) return []
+
+  const promptOptions: PromptOption<string>[] = candidates.map((repo) => ({
+    label: repo.alias,
+    value: repo.source,
+    hint: `${repo.source} (${repo.scope})`,
+  }))
+
+  let chosen: string[] | null
+  try {
+    chosen = await select({ message: `Select repos to add to "${name}"`, options: promptOptions, mode: 'multi' })
+  } catch (error) {
+    if (error instanceof NotInteractiveError) return []
+    throw error
+  }
+
+  if (chosen === null) throw new SporkError('Cancelled.')
+  return chosen
+}
+
+/**
+ * Creates the workspace, then adds every resolved repo source concurrently
+ * (through `runConcurrently`'s live dashboard — see `resolveRepoSources`
+ * for where those sources come from, `--repo` or an interactive pick),
+ * calling `addRepo` directly rather than going through the standalone
+ * `add-repo` command's `runAddRepo` — that wraps a single item in its own
+ * dashboard, which would mean nesting one per repo here instead of one
+ * dashboard for the whole batch.
  *
  * Not atomic, and no longer fail-fast: every `--repo` runs regardless of a
  * sibling's failure (same "best effort over a batch" precedent `repo scan`
@@ -78,7 +118,7 @@ export async function runCreateWithRepos(
   options: CreateOptions,
 ): Promise<CreateWithReposResult> {
   const handle = await runCreate(ctx, name, options)
-  const sources = options.repo ?? []
+  const sources = await resolveRepoSources(ctx, name, options)
 
   const outcomes = await runConcurrently(
     sources.map((source) => ({

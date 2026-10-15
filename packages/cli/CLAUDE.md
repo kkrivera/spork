@@ -7,9 +7,15 @@ new business logic belongs in `@spork/core`, imported only from its
 - All user-facing text goes through `output/color.ts`'s `Ui` — don't call
   `picocolors` directly in a command, and don't `console.log` raw ANSI codes.
   A command must read correctly with color off (CI, `--no-color`, non-TTY).
-- Commands should stay non-interactive in v1 (explicit flags/args only, no
-  prompts) so they work unattended in CI — see the root design doc's
-  deferred-items list for when interactive prompts are reconsidered.
+- An interactive prompt (via `@spork/prompts`) is allowed, but only as an
+  *addition* to an explicit-flag path that still works unattended in CI —
+  never make a prompt the only way to drive a command. `@spork/prompts`'s
+  `select()` throws `NotInteractiveError` when it can't prompt (no TTY);
+  catch that specifically and fall back to the command's existing
+  non-interactive behavior, the way `workspace create`'s
+  `resolveRepoSources` does. A real cancel (Esc/Ctrl+C) resolves `select()`
+  with `null`, not a thrown error — turn that into a thrown `SporkError`
+  at the call site, same as every other cancelled-prompt path here.
 - Errors from `@spork/core` (`SporkError`) are user-facing but are **not**
   caught per-command — they're left to propagate out of the async `.action()`
   handler, through `main()`, to `src/index.ts`'s top-level `handleFatalError`

@@ -787,6 +787,7 @@ __metadata:
   resolution: "@spork/cli@workspace:packages/cli"
   dependencies:
     "@spork/core": "workspace:*"
+    "@spork/prompts": "workspace:*"
     "@spork/task-runner": "workspace:*"
     commander: "npm:^12.1.0"
     picocolors: "npm:^1.1.1"
@@ -804,7 +805,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@spork/prompts@workspace:packages/prompts":
+"@spork/prompts@workspace:*, @spork/prompts@workspace:packages/prompts":
   version: 0.0.0-use.local
   resolution: "@spork/prompts@workspace:packages/prompts"
   dependencies:
