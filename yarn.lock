@@ -804,6 +804,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@spork/prompts@workspace:packages/prompts":
+  version: 0.0.0-use.local
+  resolution: "@spork/prompts@workspace:packages/prompts"
+  dependencies:
+    picocolors: "npm:^1.1.1"
+  languageName: unknown
+  linkType: soft
+
 "@spork/task-runner@workspace:*, @spork/task-runner@workspace:packages/task-runner":
   version: 0.0.0-use.local
   resolution: "@spork/task-runner@workspace:packages/task-runner"
