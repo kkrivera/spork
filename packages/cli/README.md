@@ -67,10 +67,14 @@ logic lives here.
   shadowed alias is visible rather than a silent surprise; `--global`/
   `--local` narrow it to just one. `repo scan [directory]` bulk-adopts every
   git repo found directly under `directory` (e.g. an existing `~/code`),
-  defaulting to the current working directory when omitted, via
-  `@spork/core`'s `scanAndAddRepos` — same `--global`/`--local` scope
-  handling as `add`, and prints one line per added repo, one per skipped
-  repo with its reason, and a final added/skipped count.
+  defaulting to the current working directory when omitted — via
+  `@spork/core`'s `findGitRepoDirs` + `adoptLocalRepo`, run concurrently
+  with a live dashboard through `runConcurrently` (see
+  `concurrentTasks.ts` above). Same `--global`/`--local` scope handling as
+  `add`; a cancelled or failed adopt is reported as skipped (with
+  `'cancelled'` or the captured error as its reason), and prints one line
+  per added repo, one per skipped repo, and a final added/skipped count —
+  same output shape as before, now concurrent.
 
 ## Testing
 

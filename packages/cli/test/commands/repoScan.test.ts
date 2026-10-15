@@ -1,24 +1,50 @@
 import { Command } from 'commander'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FunctionTask, TaskResult } from '@spork/task-runner'
 
 vi.mock('@spork/core', () => ({
-  scanAndAddRepos: vi.fn(),
+  findGitRepoDirs: vi.fn(),
+  adoptLocalRepo: vi.fn(),
   findEnclosingWorkspaceDir: vi.fn(),
   localRepoRegistryPath: (workspaceDir: string) => `${workspaceDir}/spork.repos.json`,
   SporkError: class SporkError extends Error {},
 }))
+vi.mock('@spork/task-runner', () => ({
+  runTasks: vi.fn(),
+}))
 
-const { scanAndAddRepos, findEnclosingWorkspaceDir } = await import('@spork/core')
+const { findGitRepoDirs, adoptLocalRepo, findEnclosingWorkspaceDir } = await import('@spork/core')
+const { runTasks } = await import('@spork/task-runner')
 const { runScan, registerScanCommand } = await import('../../src/commands/repo/scan.js')
 const { createUi } = await import('../../src/output/color.js')
 
 const ctx = { reposRoot: '/repos', registryPath: '/workspaces.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
 const WIDGETS_SOURCE = 'git@github.com:acme/widgets.git'
 
+/** Drives every FunctionTask to completion the way the real runFunctionTask would, for a test's purposes. */
+async function fakeRunTasks(tasks: readonly FunctionTask[]): Promise<TaskResult[]> {
+  const results: TaskResult[] = []
+  for (const task of tasks) {
+    const output: string[] = []
+    try {
+      await task.run({ log: (line) => output.push(line) }, new AbortController().signal)
+      results.push({ name: task.name, exitCode: null, signal: null, durationMs: 1, output, cancelled: false })
+    } catch (error) {
+      output.push(error instanceof Error ? error.message : String(error))
+      results.push({ name: task.name, exitCode: null, signal: null, durationMs: 1, output, cancelled: false })
+    }
+  }
+  return results
+}
+
 beforeEach(() => {
-  vi.mocked(scanAndAddRepos)
+  vi.mocked(findGitRepoDirs).mockReset().mockResolvedValue(['/home/user/code/widgets'])
+  vi.mocked(adoptLocalRepo)
     .mockReset()
-    .mockResolvedValue({ added: [{ alias: 'widgets', source: WIDGETS_SOURCE, addedAt: '' }], skipped: [] })
+    .mockResolvedValue({ alias: 'widgets', source: WIDGETS_SOURCE, addedAt: '' })
+  vi.mocked(runTasks)
+    .mockReset()
+    .mockImplementation((tasks) => fakeRunTasks(tasks as FunctionTask[]))
   vi.mocked(findEnclosingWorkspaceDir).mockReset().mockReturnValue(null)
 })
 
@@ -26,7 +52,8 @@ describe('runScan', () => {
   it('scans globally (outside any workspace) by default', async () => {
     const result = await runScan(ctx, '/home/user/code', {})
 
-    expect(scanAndAddRepos).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/home/user/code')
+    expect(findGitRepoDirs).toHaveBeenCalledWith('/home/user/code')
+    expect(adoptLocalRepo).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/home/user/code/widgets')
     expect(result.scopeLabel).toBe('global')
     expect(result.result.added).toHaveLength(1)
   })
@@ -36,9 +63,9 @@ describe('runScan', () => {
 
     const result = await runScan(ctx, '/home/user/code', {})
 
-    expect(scanAndAddRepos).toHaveBeenCalledWith(
+    expect(adoptLocalRepo).toHaveBeenCalledWith(
       { reposRoot: '/repos', repoRegistryPath: '/ws/demo/spork.repos.json' },
-      '/home/user/code',
+      '/home/user/code/widgets',
     )
     expect(result.scopeLabel).toBe('local to "demo"')
   })
@@ -48,22 +75,33 @@ describe('runScan', () => {
 
     const result = await runScan(ctx, '/home/user/code', { global: true })
 
-    expect(scanAndAddRepos).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/home/user/code')
+    expect(adoptLocalRepo).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/home/user/code/widgets')
     expect(result.scopeLabel).toBe('global')
   })
 
   it('defaults directory to the current working directory when omitted', async () => {
     await runScan(ctx)
 
-    expect(scanAndAddRepos).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, process.cwd())
+    expect(findGitRepoDirs).toHaveBeenCalledWith(process.cwd())
+  })
+
+  it('reports a failed adopt as skipped, with its error as the reason', async () => {
+    vi.mocked(findGitRepoDirs).mockResolvedValue(['/home/user/code/broken'])
+    vi.mocked(adoptLocalRepo).mockRejectedValue(new Error('clone failed'))
+
+    const result = await runScan(ctx, '/home/user/code', {})
+
+    expect(result.result.added).toEqual([])
+    expect(result.result.skipped).toEqual([{ path: '/home/user/code/broken', reason: 'clone failed' }])
   })
 })
 
 describe('registerScanCommand', () => {
   it('prints added and skipped repos plus a summary line', async () => {
-    vi.mocked(scanAndAddRepos).mockResolvedValue({
-      added: [{ alias: 'widgets', source: WIDGETS_SOURCE, addedAt: '' }],
-      skipped: [{ path: '/home/user/code/broken', reason: 'clone failed' }],
+    vi.mocked(findGitRepoDirs).mockResolvedValue(['/home/user/code/widgets', '/home/user/code/broken'])
+    vi.mocked(adoptLocalRepo).mockImplementation(async (_ctx, dir: string) => {
+      if (dir.includes('broken')) throw new Error('clone failed')
+      return { alias: 'widgets', source: WIDGETS_SOURCE, addedAt: '' }
     })
     const program = new Command()
     registerScanCommand(program, ctx)
@@ -85,7 +123,7 @@ describe('registerScanCommand', () => {
 
     await program.parseAsync(['node', 'test', 'scan'])
 
-    expect(scanAndAddRepos).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, process.cwd())
+    expect(findGitRepoDirs).toHaveBeenCalledWith(process.cwd())
     logSpy.mockRestore()
   })
 })
