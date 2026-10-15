@@ -37,12 +37,16 @@ logic lives here.
 - `src/concurrentTasks.ts` — `runConcurrently(items)`: the one place
   `@spork/task-runner` gets adapted for spork's own commands. Builds one
   `FunctionTask` per named async call, runs them all through `runTasks`
-  (the live dashboard), and zips each one's resolved value (captured into
-  an outer array by index — `task-runner`'s own `TaskResult` stays
-  process-shaped, not generic) back into a `{name, value, error,
-  cancelled}` outcome. Every command below that wants concurrent,
-  live-displayed work just builds the `items` list and reads the outcomes;
-  don't reimplement this zipping per command.
+  (the live dashboard), and zips each one's resolved value (or thrown
+  error — both captured into outer arrays by index, since `task-runner`'s
+  own `TaskResult` stays process-shaped, not generic) back into a
+  `{name, value, error, errorMessage, cancelled}` outcome. `error` is the
+  *raw* thrown value (re-throw it to preserve a single-item command's
+  existing "let it propagate to the top-level handler" contract);
+  `errorMessage` is always a plain string, for a batch command that just
+  wants to report a reason and move on. Every command below that wants
+  concurrent, live-displayed work just builds the `items` list and reads
+  the outcomes; don't reimplement this zipping per command.
 - `src/commands/workspace/` — one file per `spork workspace <verb>`
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
   `status`, `open`), each exporting a plain `run<Verb>` function (the

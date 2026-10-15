@@ -38,7 +38,7 @@ export async function runScan(
     if (outcome.value) {
       result.added.push(outcome.value)
     } else {
-      result.skipped.push({ path: dirs[index] as string, reason: outcome.cancelled ? 'cancelled' : (outcome.error ?? 'failed') })
+      result.skipped.push({ path: dirs[index] as string, reason: outcome.cancelled ? 'cancelled' : (outcome.errorMessage ?? 'failed') })
     }
   })
 
