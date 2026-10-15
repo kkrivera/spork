@@ -122,6 +122,20 @@ describe('runCreateWithRepos', () => {
 
     expect(addRepo).toHaveBeenCalledWith(expect.anything(), '/ws/demo', expect.objectContaining({ global: true }))
   })
+
+  it("logs each --repo's own progress line into its own task pane before adding it", async () => {
+    vi.mocked(addRepo).mockResolvedValue(fakeEntryResult('widgets'))
+    const logSpy = vi.fn()
+    vi.mocked(runTasks).mockImplementationOnce(async (tasks) => {
+      const [task] = tasks as FunctionTask[]
+      await task?.run({ log: logSpy }, new AbortController().signal)
+      return [{ name: task?.name ?? '', exitCode: null, signal: null, durationMs: 1, output: [], cancelled: false }]
+    })
+
+    await runCreateWithRepos(ctx, 'demo', { repo: ['widgets-source'] })
+
+    expect(logSpy).toHaveBeenCalledWith('cloning/fetching widgets-source...')
+  })
 })
 
 function fakeEntryResult(folder: string) {

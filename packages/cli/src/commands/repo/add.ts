@@ -1,4 +1,5 @@
 import { addRepoSourceOrAlias, defaultAlias, SporkError, type RepoRegistryEntry } from '@spork/core'
+import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
 import type { AppContext } from '../../context.js'
@@ -25,7 +26,13 @@ export async function runAdd(ctx: AppContext, source: string, options: AddOption
   const repoCtx = { reposRoot: ctx.reposRoot, repoRegistryPath: scope.registryPath }
 
   const [outcome] = await runConcurrently([
-    { name: defaultAlias(source), call: () => addRepoSourceOrAlias(repoCtx, source, { alias: options.as }) },
+    {
+      name: defaultAlias(source),
+      call: (report: TaskReporter) => {
+        report.log(`cloning/fetching ${source}...`)
+        return addRepoSourceOrAlias(repoCtx, source, { alias: options.as })
+      },
+    },
   ])
 
   if (outcome?.value === undefined) {

@@ -1,4 +1,5 @@
 import { getWorkspaceStatus, resolveWorkspaceDir, SporkError, type WorktreeStatusEntry } from '@spork/core'
+import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
 import { workspaceContext, type AppContext } from '../../context.js'
@@ -16,7 +17,15 @@ import { formatTable } from '../../output/format.js'
  */
 export async function runStatus(ctx: AppContext, workspace: string): Promise<WorktreeStatusEntry[]> {
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspace)
-  const [outcome] = await runConcurrently([{ name: workspace, call: () => getWorkspaceStatus(workspaceContext(ctx), dir) }])
+  const [outcome] = await runConcurrently([
+    {
+      name: workspace,
+      call: (report: TaskReporter) => {
+        report.log('reading git status...')
+        return getWorkspaceStatus(workspaceContext(ctx), dir)
+      },
+    },
+  ])
 
   if (outcome?.value === undefined) {
     throw outcome?.cancelled ? new SporkError('Cancelled.') : outcome?.error

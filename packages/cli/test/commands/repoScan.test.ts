@@ -85,6 +85,19 @@ describe('runScan', () => {
     expect(findGitRepoDirs).toHaveBeenCalledWith(process.cwd())
   })
 
+  it("logs each repo's own progress line into its own task pane before adopting it", async () => {
+    const logSpy = vi.fn()
+    vi.mocked(runTasks).mockImplementationOnce(async (tasks) => {
+      const [task] = tasks as FunctionTask[]
+      await task?.run({ log: logSpy }, new AbortController().signal)
+      return [{ name: task?.name ?? '', exitCode: null, signal: null, durationMs: 1, output: [], cancelled: false }]
+    })
+
+    await runScan(ctx, '/home/user/code', {})
+
+    expect(logSpy).toHaveBeenCalledWith('adopting /home/user/code/widgets...')
+  })
+
   it('reports a failed adopt as skipped, with its error as the reason', async () => {
     vi.mocked(findGitRepoDirs).mockResolvedValue(['/home/user/code/broken'])
     vi.mocked(adoptLocalRepo).mockRejectedValue(new Error('clone failed'))

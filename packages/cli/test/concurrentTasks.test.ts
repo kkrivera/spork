@@ -52,6 +52,33 @@ describe('runConcurrently', () => {
       ['b', 'b-value'],
     ])
   })
+
+  it("passes each item's call a working TaskReporter, so a call that logs ends up in that task's own pane", async () => {
+    const seenReporters: Array<{ log: ReturnType<typeof vi.fn> }> = []
+    runTasksMock.mockImplementation(async (tasks) => {
+      const fnTasks = tasks as FunctionTask[]
+      return Promise.all(
+        fnTasks.map(async (task) => {
+          const report = { log: vi.fn() }
+          seenReporters.push(report)
+          await task.run(report, new AbortController().signal)
+          return fakeResult({ name: task.name })
+        }),
+      )
+    })
+
+    await runConcurrently([
+      {
+        name: 'a',
+        call: async (report) => {
+          report.log('working...')
+          return 'a-value'
+        },
+      },
+    ])
+
+    expect(seenReporters[0]?.log).toHaveBeenCalledWith('working...')
+  })
 })
 
 describe('runConcurrently — outcomes', () => {

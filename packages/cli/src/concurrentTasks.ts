@@ -1,8 +1,9 @@
-import { runTasks, type FunctionTask } from '@spork/task-runner'
+import { runTasks, type FunctionTask, type TaskReporter } from '@spork/task-runner'
 
 export interface ConcurrentItem<T> {
   name: string
-  call: () => Promise<T>
+  /** `report.log(...)` pushes a line into this item's own pane in the live dashboard. */
+  call: (report: TaskReporter) => Promise<T>
 }
 
 export interface ConcurrentOutcome<T> {
@@ -27,7 +28,11 @@ export interface ConcurrentOutcome<T> {
  * the `items` list and reads the outcomes — a batch command (several items)
  * typically reports each `errorMessage` and continues, while a single-item
  * command typically re-throws the raw `error` to preserve this project's
- * existing "let it propagate to the top-level handler" convention.
+ * existing "let it propagate to the top-level handler" convention. Each
+ * item's `call` gets its own `TaskReporter` — call `report.log(...)` from
+ * inside it to push a progress line into that item's pane in the live
+ * dashboard; a `call` that never logs anything just shows its header with
+ * an empty pane beneath, same as any other quiet task.
  */
 export async function runConcurrently<T>(items: ConcurrentItem<T>[]): Promise<ConcurrentOutcome<T>[]> {
   const values: Array<T | undefined> = []
@@ -38,9 +43,9 @@ export async function runConcurrently<T>(items: ConcurrentItem<T>[]): Promise<Co
 
   const tasks: FunctionTask[] = items.map((item, index) => ({
     name: item.name,
-    run: async () => {
+    run: async (report) => {
       try {
-        values[index] = await item.call()
+        values[index] = await item.call(report)
         succeeded[index] = true
       } catch (error) {
         errors[index] = error

@@ -9,6 +9,7 @@ import {
   type AddRepoResult,
   type WorkspaceHandle,
 } from '@spork/core'
+import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
 import { workspaceContext, type AppContext } from '../../context.js'
@@ -82,7 +83,10 @@ export async function runCreateWithRepos(
   const outcomes = await runConcurrently(
     sources.map((source) => ({
       name: defaultAlias(source),
-      call: () => addRepo(workspaceContext(ctx), handle.dir, { source, global: options.global }),
+      call: (report: TaskReporter) => {
+        report.log(`cloning/fetching ${source}...`)
+        return addRepo(workspaceContext(ctx), handle.dir, { source, global: options.global })
+      },
     })),
   )
 

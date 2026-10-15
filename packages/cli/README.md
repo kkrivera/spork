@@ -46,7 +46,16 @@ logic lives here.
   `errorMessage` is always a plain string, for a batch command that just
   wants to report a reason and move on. Every command below that wants
   concurrent, live-displayed work just builds the `items` list and reads
-  the outcomes; don't reimplement this zipping per command.
+  the outcomes; don't reimplement this zipping per command. Each item's
+  `call` receives its own `TaskReporter` — call `report.log(...)` from
+  inside it (before/around the `@spork/core` call) to push a short
+  progress line ("cloning/fetching <source>...", etc.) into that item's
+  own pane in the live dashboard; none of spork's core functions report
+  incremental progress themselves (that would mean threading a reporter
+  through `execGit`, out of scope — see `@spork/task-runner`'s README),
+  so this one coarse line per item is what actually fills each task's
+  equal-height pane while it runs. A `call` that never logs anything just
+  shows its header with an empty pane beneath.
 - `src/commands/workspace/` — one file per `spork workspace <verb>`
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
   `status`, `open`), each exporting a plain `run<Verb>` function (the

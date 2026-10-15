@@ -80,6 +80,19 @@ describe('runAddRepo', () => {
 
     await expect(runAddRepo(ctx, 'demo', 'git@github.com:acme/widgets.git', {})).rejects.toThrow('worktree add failed')
   })
+
+  it('logs a progress line into its own task pane before adding', async () => {
+    const logSpy = vi.fn()
+    vi.mocked(runTasks).mockImplementationOnce(async (tasks) => {
+      const [task] = tasks as FunctionTask[]
+      await task?.run({ log: logSpy }, new AbortController().signal)
+      return [{ name: task?.name ?? '', exitCode: null, signal: null, durationMs: 1, output: [], cancelled: false }]
+    })
+
+    await runAddRepo(ctx, 'demo', 'git@github.com:acme/widgets.git', {})
+
+    expect(logSpy).toHaveBeenCalledWith('cloning/fetching git@github.com:acme/widgets.git...')
+  })
 })
 
 describe('printAddRepoResult', () => {

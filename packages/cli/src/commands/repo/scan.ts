@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { adoptLocalRepo, findGitRepoDirs, type ScanResult } from '@spork/core'
+import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
 import type { AppContext } from '../../context.js'
@@ -30,7 +31,13 @@ export async function runScan(
 
   const dirs = await findGitRepoDirs(directory)
   const outcomes = await runConcurrently(
-    dirs.map((dir) => ({ name: path.basename(dir), call: () => adoptLocalRepo(repoCtx, dir) })),
+    dirs.map((dir) => ({
+      name: path.basename(dir),
+      call: (report: TaskReporter) => {
+        report.log(`adopting ${dir}...`)
+        return adoptLocalRepo(repoCtx, dir)
+      },
+    })),
   )
 
   const result: ScanResult = { added: [], skipped: [] }

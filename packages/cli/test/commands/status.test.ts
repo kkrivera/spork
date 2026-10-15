@@ -56,6 +56,20 @@ describe('runStatus', () => {
 
     await expect(runStatus(ctx, 'demo')).rejects.toThrow('git status failed')
   })
+
+  it('logs a progress line into its own task pane before reading status', async () => {
+    vi.mocked(getWorkspaceStatus).mockResolvedValue([])
+    const logSpy = vi.fn()
+    vi.mocked(runTasks).mockImplementationOnce(async (tasks) => {
+      const [task] = tasks as FunctionTask[]
+      await task?.run({ log: logSpy }, new AbortController().signal)
+      return [{ name: task?.name ?? '', exitCode: null, signal: null, durationMs: 1, output: [], cancelled: false }]
+    })
+
+    await runStatus(ctx, 'demo')
+
+    expect(logSpy).toHaveBeenCalledWith('reading git status...')
+  })
 })
 
 describe('registerStatusCommand', () => {

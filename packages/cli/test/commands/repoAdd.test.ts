@@ -89,6 +89,19 @@ describe('runAdd', () => {
 
     await expect(runAdd(ctx, WIDGETS_SOURCE, {})).rejects.toThrow('clone failed')
   })
+
+  it('logs a progress line into its own task pane before adding', async () => {
+    const logSpy = vi.fn()
+    vi.mocked(runTasks).mockImplementationOnce(async (tasks) => {
+      const [task] = tasks as FunctionTask[]
+      await task?.run({ log: logSpy }, new AbortController().signal)
+      return [{ name: task?.name ?? '', exitCode: null, signal: null, durationMs: 1, output: [], cancelled: false }]
+    })
+
+    await runAdd(ctx, WIDGETS_SOURCE, {})
+
+    expect(logSpy).toHaveBeenCalledWith(`cloning/fetching ${WIDGETS_SOURCE}...`)
+  })
 })
 
 describe('registerAddCommand', () => {

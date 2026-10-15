@@ -1,4 +1,5 @@
 import { addRepo, defaultAlias, resolveWorkspaceDir, SporkError, type AddRepoResult } from '@spork/core'
+import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
 import { workspaceContext, type AppContext } from '../../context.js'
@@ -28,13 +29,15 @@ export async function runAddRepo(
   const [outcome] = await runConcurrently([
     {
       name: defaultAlias(source),
-      call: () =>
-        addRepo(workspaceContext(ctx), dir, {
+      call: (report: TaskReporter) => {
+        report.log(`cloning/fetching ${source}...`)
+        return addRepo(workspaceContext(ctx), dir, {
           source,
           ref: options.branch,
           folder: options.as,
           global: options.global,
-        }),
+        })
+      },
     },
   ])
 
