@@ -43,8 +43,10 @@ spork repo remove widgets                         # refuses while any workspace 
 Leave off `--repo` entirely in a real terminal and `workspace create` offers
 a fuzzy-searchable multi-select of every repo you already know about instead
 of starting empty — type to narrow, space to toggle, Ctrl+A to select/
-deselect everything filtered, Enter to confirm. In CI or a script (no TTY)
-it falls back to creating an empty workspace, exactly like today.
+deselect everything filtered, Enter to confirm. It then asks whether to open
+the new workspace in VS Code right away. In CI or a script (no TTY), both
+prompts are skipped — it falls back to creating an empty workspace and
+leaves opening it to you, exactly like today.
 
 Aliases are two-tier — **local to a workspace by default, global as an
 opt-in** — so two different workspaces can give the same short name to two
@@ -79,8 +81,8 @@ spork repo list
 - [packages/task-runner](packages/task-runner) — runs concurrent tasks with a
   live terminal dashboard (used by `repo scan`, `repo add`, `workspace
   add-repo`/`create --repo`, and `workspace status`).
-- [packages/prompts](packages/prompts) — interactive terminal prompts,
-  starting with the fuzzy select `workspace create` uses above.
+- [packages/prompts](packages/prompts) — interactive terminal prompts: the
+  fuzzy select and the yes/no confirm `workspace create` uses above.
 - [tools/readme-sync](tools/readme-sync) — the CI check that keeps module READMEs honest.
 - [docs/plans](docs/plans) — durable design docs, reviewed like code.
 - [.claude/skills](.claude/skills) — Claude Code skills used to maintain this repo.

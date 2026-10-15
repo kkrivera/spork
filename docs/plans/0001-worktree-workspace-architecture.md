@@ -386,6 +386,20 @@ environment, so a real pseudo-terminal was driven programmatically
 instead via Python's `pty.fork`) rather than by the automated suite, which
 drives `terminal.ts` with synthetic `'keypress'` events on a fake stream.
 
+`@spork/prompts` also has a second, simpler prompt: `confirm()`, a
+yes/no question. `workspace create` uses it to ask whether to open the
+new workspace in VS Code right after creating it — a workspace is
+created to be worked in, so offering to jump straight into it removes a
+manual `spork workspace open <name>` most people would type next anyway.
+Same `NotInteractiveError`/no-TTY handling as `select()`, and it reuses
+the same injectable `Opener` (`packages/cli/src/opener.ts`) `workspace
+open` already uses, rather than inventing a second way to shell out to
+the `code` CLI. Unlike `select()`, `confirm()` has no separate
+"cancelled" outcome — Esc/Ctrl+C just resolve `false`, same as answering
+"no", since nothing downstream needs to tell a decline from a bail-out
+apart (either way, the workspace just doesn't open automatically; `spork
+workspace open <name>` still works whenever the user wants it).
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of

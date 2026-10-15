@@ -10,12 +10,15 @@ new business logic belongs in `@spork/core`, imported only from its
 - An interactive prompt (via `@spork/prompts`) is allowed, but only as an
   *addition* to an explicit-flag path that still works unattended in CI —
   never make a prompt the only way to drive a command. `@spork/prompts`'s
-  `select()` throws `NotInteractiveError` when it can't prompt (no TTY);
-  catch that specifically and fall back to the command's existing
-  non-interactive behavior, the way `workspace create`'s
-  `resolveRepoSources` does. A real cancel (Esc/Ctrl+C) resolves `select()`
-  with `null`, not a thrown error — turn that into a thrown `SporkError`
-  at the call site, same as every other cancelled-prompt path here.
+  `select()`/`confirm()` both throw `NotInteractiveError` when they can't
+  prompt (no TTY); catch that specifically and fall back to the command's
+  existing non-interactive behavior, the way `workspace create`'s
+  `resolveRepoSources`/`offerToOpenInVSCode` do. A real cancel (Esc/Ctrl+C)
+  resolves `select()` with `null`, not a thrown error — turn that into a
+  thrown `SporkError` at the call site, same as every other
+  cancelled-prompt path here. `confirm()` doesn't need that: Esc/Ctrl+C
+  just resolve `false`, same as declining, since there's nothing further
+  to distinguish once a yes/no question settles.
 - Errors from `@spork/core` (`SporkError`) are user-facing but are **not**
   caught per-command — they're left to propagate out of the async `.action()`
   handler, through `main()`, to `src/index.ts`'s top-level `handleFatalError`

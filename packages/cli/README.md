@@ -85,7 +85,17 @@ logic lives here.
   script); `resolveRepoSources` catches exactly that and falls back to
   today's non-interactive behavior (empty workspace), while a real cancel
   (`select()` resolving `null`) becomes a thrown `SporkError`, same as
-  every other cancelled-prompt path here. `status` wraps its (already internally concurrent —
+  every other cancelled-prompt path here. After everything else prints
+  (repo outcomes or the "no repos" hint), `create` also offers to open the
+  new workspace in VS Code via `@spork/prompts`' `confirm()` — the user is
+  probably about to start working in it. Same `NotInteractiveError`
+  handling as the repo picker (skipped silently, no behavior change, when
+  it can't prompt); declining just prints how to open it later
+  (`spork workspace open <name>`); confirming reuses the same injectable
+  `Opener` (`opener.ts`) `workspace open` uses, so `registerCreateCommand`
+  takes one too (`opener: Opener = createCodeOpener()`), for the same
+  reason — mockable in tests, no silent failure if `code` isn't installed.
+  `status` wraps its (already internally concurrent —
   `getWorkspaceStatus` reads every worktree via its own `Promise.all`)
   status read as a single `runConcurrently` item too, for a live spinner
   instead of a silent wait, rather than exporting a second per-worktree

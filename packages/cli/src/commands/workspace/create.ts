@@ -1,6 +1,7 @@
 import path from 'node:path'
 import {
   addRepo,
+  codeWorkspaceFilePath,
   createWorkspace,
   defaultAlias,
   listWorkspaces,
@@ -9,11 +10,12 @@ import {
   type AddRepoResult,
   type WorkspaceHandle,
 } from '@spork/core'
-import { NotInteractiveError, select, type PromptOption } from '@spork/prompts'
+import { confirm, NotInteractiveError, select, type PromptOption } from '@spork/prompts'
 import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
 import { workspaceContext, type AppContext } from '../../context.js'
+import { createCodeOpener, type Opener } from '../../opener.js'
 import { printAddRepoResult } from './addRepo.js'
 import { runList } from '../repo/list.js'
 
@@ -142,7 +144,39 @@ export async function runCreateWithRepos(
   return { handle, repoOutcomes }
 }
 
-export function registerCreateCommand(program: Command, ctx: AppContext): void {
+/**
+ * Offers to open the freshly-created workspace in VS Code — the user is
+ * likely creating one to start working in it right away. Skipped silently
+ * (not an error) when `confirm` can't prompt (`NotInteractiveError`: CI, a
+ * pipe, a script), same non-interactive-is-unaffected contract every other
+ * prompt in this CLI follows. Declining just prints how to open it later,
+ * mirroring the "Add a repo with: ..." hint already shown when no repos
+ * were added.
+ */
+async function offerToOpenInVSCode(ctx: AppContext, handle: WorkspaceHandle, opener: Opener): Promise<void> {
+  let shouldOpen: boolean
+  try {
+    shouldOpen = await confirm({ message: `Open "${handle.name}" in VS Code now?`, defaultValue: true })
+  } catch (error) {
+    if (error instanceof NotInteractiveError) return
+    throw error
+  }
+
+  if (!shouldOpen) {
+    console.log(`Open later with: spork workspace open ${handle.name}`)
+    return
+  }
+
+  const filePath = codeWorkspaceFilePath(handle.dir, handle.name)
+  const outcome = await opener.open(filePath)
+  if (outcome.ok) {
+    console.log(ctx.ui.color.green(`Opened ${filePath}`))
+  } else {
+    console.log(`Couldn't launch the "code" CLI (${outcome.reason}). Open manually: ${filePath}`)
+  }
+}
+
+export function registerCreateCommand(program: Command, ctx: AppContext, opener: Opener = createCodeOpener()): void {
   program
     .command('create <name>')
     .description('Create a new workspace')
@@ -153,20 +187,21 @@ export function registerCreateCommand(program: Command, ctx: AppContext): void {
       const { handle, repoOutcomes } = await runCreateWithRepos(ctx, name, options)
       console.log(ctx.ui.color.green(`Created workspace "${handle.name}" at ${handle.dir}`))
 
+      const failures: CreateRepoFailure[] = []
       if (repoOutcomes.length === 0) {
         console.log(`Add a repo with: spork workspace add-repo ${handle.name} <repo>`)
-        return
-      }
-
-      const failures: CreateRepoFailure[] = []
-      for (const outcome of repoOutcomes) {
-        if (outcome.result) {
-          printAddRepoResult(ctx, handle.name, outcome.result)
-        } else if (outcome.failure) {
-          failures.push(outcome.failure)
-          console.log(ctx.ui.color.red(`Failed to add "${outcome.source}": ${outcome.failure.reason}`))
+      } else {
+        for (const outcome of repoOutcomes) {
+          if (outcome.result) {
+            printAddRepoResult(ctx, handle.name, outcome.result)
+          } else if (outcome.failure) {
+            failures.push(outcome.failure)
+            console.log(ctx.ui.color.red(`Failed to add "${outcome.source}": ${outcome.failure.reason}`))
+          }
         }
       }
+
+      await offerToOpenInVSCode(ctx, handle, opener)
 
       if (failures.length > 0) {
         throw new SporkError(`${failures.length} of ${repoOutcomes.length} --repo adds did not succeed: ${failures.map((f) => f.source).join(', ')}`)
