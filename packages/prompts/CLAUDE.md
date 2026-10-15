@@ -1,7 +1,8 @@
 # @spork/prompts — agent context
 
-Interactive terminal prompts, starting with a fuzzy single/multi-select.
-`src/index.ts` is this package's only public surface.
+Interactive terminal prompts: a fuzzy single/multi-select (`select`) and a
+yes/no prompt (`confirm`). `src/index.ts` is this package's only public
+surface.
 
 ## Conventions specific to this package
 
@@ -27,26 +28,30 @@ Interactive terminal prompts, starting with a fuzzy single/multi-select.
   caller piping this package's output elsewhere). `select.ts` is the one
   place that decides `enabled` from the stream it was actually given.
 - **`terminal.ts` never calls `node:readline`'s `emitKeypressEvents`
-  itself** — that's `select.ts`'s job. `terminal.ts`'s `runSelectPrompt`
-  only assumes `input` already emits `'keypress'` events, however they got
-  there, which is exactly what lets its own tests drive it with synthetic
-  `'keypress'` events on a plain `EventEmitter` rather than needing a real
-  TTY's escape-sequence parsing. Don't move the `emitKeypressEvents` call
-  into `terminal.ts` to "simplify" `select.ts` — it would make
-  `runSelectPrompt` untestable without a real pty.
-- **`select()` throws `NotInteractiveError` synchronously rather than
-  guessing a non-interactive fallback.** This package has no idea what a
-  given `spork` command should do when it can't prompt (create something
-  empty? require a flag instead? different per command) — that policy
-  belongs at the call site in `packages/cli`, same way `repoScope.ts`
-  owns the local/global scope policy instead of baking it into
-  `@spork/core`. Don't add a built-in "read a line from stdin instead"
-  fallback here; it would hide a real per-command decision.
-- **Cancellation is a resolved `null`, not a thrown error** — mirrors
-  `@spork/task-runner`'s `TaskResult.cancelled` ("cancelled is a normal
-  outcome"). The CLI layer is where a cancelled prompt becomes a
+  itself** — that's `select.ts`'s/`confirm.ts`'s job. `terminal.ts`'s
+  `runSelectPrompt`/`runConfirmPrompt` only assume `input` already emits
+  `'keypress'` events, however they got there, which is exactly what lets
+  their own tests drive them with synthetic `'keypress'` events on a plain
+  `EventEmitter` rather than needing a real TTY's escape-sequence parsing.
+  Don't move the `emitKeypressEvents` call into `terminal.ts` to
+  "simplify" its callers — it would make both drivers untestable without
+  a real pty.
+- **`select()`/`confirm()` both throw `NotInteractiveError` synchronously
+  rather than guessing a non-interactive fallback.** This package has no
+  idea what a given `spork` command should do when it can't prompt (create
+  something empty? require a flag instead? different per command) — that
+  policy belongs at the call site in `packages/cli`, same way
+  `repoScope.ts` owns the local/global scope policy instead of baking it
+  into `@spork/core`. Don't add a built-in "read a line from stdin
+  instead" fallback here; it would hide a real per-command decision.
+- **`select()`'s cancellation is a resolved `null`, not a thrown error** —
+  mirrors `@spork/task-runner`'s `TaskResult.cancelled` ("cancelled is a
+  normal outcome"). The CLI layer is where a cancelled prompt becomes a
   `SporkError('Cancelled.')`, consistent with every other cancelled-prompt
-  path in that package.
+  path in that package. `confirm()` doesn't need this distinction — Esc/
+  Ctrl+C just resolve `false`, the same as answering "no", since there's
+  no further workflow that cares whether the user explicitly declined or
+  backed out.
 
 ## Tests
 

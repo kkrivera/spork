@@ -7,6 +7,7 @@ import type { Colors, NodeKeypress, PromptInputStream, PromptOutputStream } from
 const HIDE_CURSOR = '\x1b[?25l'
 const SHOW_CURSOR = '\x1b[?25h'
 const CLEAR_DOWN = '\x1b[0J'
+const CLEAR_LINE = '\x1b[2K\r'
 
 function cursorUp(n: number): string {
   return n > 0 ? `\x1b[${n}A` : ''
@@ -97,5 +98,48 @@ export function runSelectPrompt<T>(
 
     output.write(HIDE_CURSOR)
     renderer.draw(state)
+  })
+}
+
+/**
+ * Drives a yes/no confirm prompt to completion, against a stream that
+ * already emits `'keypress'` events (same division of responsibility as
+ * `runSelectPrompt` — wiring up the real decoder is `confirm.ts`'s job).
+ * `y`/`n` answer immediately; Enter accepts `defaultValue`; Esc/Ctrl+C
+ * resolve `false` — a confirm has no separate "cancelled" outcome to
+ * preserve, unlike `select`, since declining and backing out both mean
+ * the same thing here: the action doesn't happen.
+ */
+export function runConfirmPrompt(
+  message: string,
+  defaultValue: boolean,
+  input: PromptInputStream,
+  output: PromptOutputStream,
+  colors: Colors,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const hint = defaultValue ? 'Y/n' : 'y/N'
+    const prompt = `${colors.bold(message)} ${colors.dim(`(${hint})`)} `
+
+    const onKeypress = (str: string | undefined, key: NodeKeypress): void => {
+      if ((key.ctrl && key.name === 'c') || key.name === 'escape') return finish(false)
+      if (key.name === 'return' || key.name === 'enter') return finish(defaultValue)
+      if (str === 'y' || str === 'Y') return finish(true)
+      if (str === 'n' || str === 'N') return finish(false)
+    }
+
+    function finish(value: boolean): void {
+      input.off('keypress', onKeypress)
+      input.setRawMode?.(false)
+      input.pause?.()
+      output.write(`${CLEAR_LINE}${prompt}${value ? 'Yes' : 'No'}\n${SHOW_CURSOR}`)
+      resolve(value)
+    }
+
+    input.setRawMode?.(true)
+    input.resume?.()
+    input.on('keypress', onKeypress)
+
+    output.write(`${HIDE_CURSOR}${prompt}`)
   })
 }

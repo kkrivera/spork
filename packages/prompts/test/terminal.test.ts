@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import pc from 'picocolors'
 import { describe, expect, it } from 'vitest'
-import { runSelectPrompt } from '../src/terminal.js'
+import { runConfirmPrompt, runSelectPrompt } from '../src/terminal.js'
 import { createInitialState } from '../src/state.js'
 import type { NodeKeypress, PromptInputStream, PromptOption, PromptOutputStream } from '../src/types.js'
 
@@ -135,5 +135,86 @@ describe('runSelectPrompt — settling', () => {
     input.press(undefined, { name: 'down' })
 
     expect(output.writes.length).toBe(before)
+  })
+})
+
+describe('runConfirmPrompt — startup', () => {
+  it('hides the cursor, enables raw mode, and writes the prompt with the default-aware hint', () => {
+    const input = new FakeInput()
+    const output = new FakeOutput()
+
+    void runConfirmPrompt('Open now?', true, input, output, colors)
+
+    expect(output.writes[0]).toBe('\x1b[?25l' + 'Open now? (Y/n) ')
+    expect(input.rawMode).toBe(true)
+  })
+})
+
+describe('runConfirmPrompt — answering', () => {
+  it('answers true immediately on "y", restoring the terminal', async () => {
+    const input = new FakeInput()
+    const output = new FakeOutput()
+    const promise = runConfirmPrompt('Open now?', false, input, output, colors)
+
+    input.press('y')
+
+    expect(await promise).toBe(true)
+    expect(input.rawMode).toBe(false)
+    expect(input.resumed).toBe(false)
+    expect(output.writes.at(-1)).toContain('Yes')
+    expect(output.writes.at(-1)).toContain('\x1b[?25h')
+  })
+
+  it('answers false immediately on "n"', async () => {
+    const input = new FakeInput()
+    const output = new FakeOutput()
+    const promise = runConfirmPrompt('Open now?', true, input, output, colors)
+
+    input.press('n')
+
+    expect(await promise).toBe(false)
+  })
+
+  it('enter accepts the default value', async () => {
+    const input = new FakeInput()
+    const output = new FakeOutput()
+    const promise = runConfirmPrompt('Open now?', true, input, output, colors)
+
+    input.press(undefined, { name: 'return' })
+
+    expect(await promise).toBe(true)
+  })
+})
+
+describe('runConfirmPrompt — cancel-like keys', () => {
+  it('escape resolves false regardless of the default', async () => {
+    const input = new FakeInput()
+    const output = new FakeOutput()
+    const promise = runConfirmPrompt('Open now?', true, input, output, colors)
+
+    input.press(undefined, { name: 'escape' })
+
+    expect(await promise).toBe(false)
+  })
+
+  it('ctrl+c resolves false regardless of the default', async () => {
+    const input = new FakeInput()
+    const output = new FakeOutput()
+    const promise = runConfirmPrompt('Open now?', true, input, output, colors)
+
+    input.press('c', { name: 'c', ctrl: true })
+
+    expect(await promise).toBe(false)
+  })
+
+  it('ignores an unrecognized key and keeps waiting', async () => {
+    const input = new FakeInput()
+    const output = new FakeOutput()
+    const promise = runConfirmPrompt('Open now?', true, input, output, colors)
+
+    input.press('q')
+    input.press(undefined, { name: 'return' })
+
+    expect(await promise).toBe(true)
   })
 })

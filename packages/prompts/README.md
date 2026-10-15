@@ -1,10 +1,10 @@
 # @spork/prompts
 
-Interactive terminal prompts for the `spork` CLI, starting with a fuzzy
-single/multi-select list — pick from a list of options by typing to
-narrow it, toggling selections with space, and confirming with Enter.
-Not yet wired into any `spork` command; built standalone first so it has
-a fully tested, self-contained surface to wire in against.
+Interactive terminal prompts for the `spork` CLI: a fuzzy single/multi-select
+list (`select`) and a yes/no prompt (`confirm`). Used by `workspace create`
+to offer a repo picker and, afterward, an offer to open the new workspace in
+VS Code (see `packages/cli/CLAUDE.md` for the "interactive is additive, never
+required" convention every usage here follows).
 
 ## Structure
 
@@ -48,14 +48,20 @@ a fully tested, self-contained surface to wire in against.
   param rather than importing `picocolors` directly — same convention
   `@spork/task-runner`'s `render.ts` uses, since the real `process.stdout`
   can disagree with whatever stream was actually injected.
-- `src/terminal.ts` — `runSelectPrompt`, the stateful driver: hides the
-  cursor, redraws on every `'keypress'`/output-resize event (erase +
-  rewrite, same approach as `@spork/task-runner`'s `LiveDashboard`, except
-  per-keypress rather than on a timer tick), and resolves once the state
-  settles. Expects a stream that already emits `'keypress'` events —
-  wiring up `node:readline`'s real decoder is `select.ts`'s job, not this
-  function's, so tests can drive it with synthetic `'keypress'` events
-  directly, without a real TTY's escape-sequence parsing.
+- `src/terminal.ts` — the stateful drivers, both expecting a stream that
+  already emits `'keypress'` events (wiring up `node:readline`'s real
+  decoder is `select.ts`'s/`confirm.ts`'s job, not this file's, so tests
+  can drive either with synthetic `'keypress'` events directly, without a
+  real TTY's escape-sequence parsing):
+  - `runSelectPrompt` hides the cursor, redraws on every
+    `'keypress'`/output-resize event (erase + rewrite, same approach as
+    `@spork/task-runner`'s `LiveDashboard`, except per-keypress rather
+    than on a timer tick), and resolves once the state settles.
+  - `runConfirmPrompt` is a one-line yes/no prompt: `y`/`n` answer
+    immediately, Enter accepts the given default, Esc/Ctrl+C resolve
+    `false` — there's no separate "cancelled" outcome to preserve here,
+    unlike `select`, since declining and backing out both mean the same
+    thing (the action doesn't happen).
 - `src/select.ts` — the public entry point, `select(config)`. Throws
   `NotInteractiveError` synchronously if either stream isn't a TTY, rather
   than hanging on keypresses that can never arrive; has no opinion on what
@@ -64,15 +70,19 @@ a fully tested, self-contained surface to wire in against.
   values in their original order, or `null` on cancel (Esc/Ctrl+C) — a
   normal, resolved outcome, mirroring `@spork/task-runner`'s own
   "cancelled is a result, not an exception" shape.
+- `src/confirm.ts` — the public entry point, `confirm(config)`. Same
+  `NotInteractiveError` contract as `select`; resolves a plain `boolean`
+  rather than a nullable result, since a confirm has nothing further to
+  distinguish once it settles.
 - `src/types.ts` — `PromptOption`, `SelectConfig`, `NotInteractiveError`,
   the injectable `PromptInputStream`/`PromptOutputStream` (the narrow
   subsets of `NodeJS.ReadStream`/`WriteStream` this package needs — small
   enough to fake in tests, same pattern as `@spork/task-runner`'s
   `RenderStream`), and the raw `NodeKeypress`/terminal-independent `Key`
   shapes.
-- `src/index.ts` — exports `select`, `PromptOption`, `SelectConfig`,
-  `NotInteractiveError`, and the `Colors`/stream types a caller needs to
-  pass its own.
+- `src/index.ts` — exports `select`, `confirm`, `PromptOption`,
+  `SelectConfig`, `ConfirmConfig`, `NotInteractiveError`, and the
+  `Colors`/stream types a caller needs to pass its own.
 
 ## Testing
 
