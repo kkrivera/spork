@@ -34,6 +34,15 @@ logic lives here.
   (`@spork/core`'s `findEnclosingWorkspaceDir`, walking up like git's `.git`
   walk), global otherwise. `workspace` commands never use this — they
   already know their target by name, so there's no ambiguity to resolve.
+- `src/concurrentTasks.ts` — `runConcurrently(items)`: the one place
+  `@spork/task-runner` gets adapted for spork's own commands. Builds one
+  `FunctionTask` per named async call, runs them all through `runTasks`
+  (the live dashboard), and zips each one's resolved value (captured into
+  an outer array by index — `task-runner`'s own `TaskResult` stays
+  process-shaped, not generic) back into a `{name, value, error,
+  cancelled}` outcome. Every command below that wants concurrent,
+  live-displayed work just builds the `items` list and reads the outcomes;
+  don't reimplement this zipping per command.
 - `src/commands/workspace/` — one file per `spork workspace <verb>`
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
   `status`, `open`), each exporting a plain `run<Verb>` function (the
