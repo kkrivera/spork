@@ -33,13 +33,25 @@ describe('renderLiveFrame', () => {
     expect(lines).toEqual(['⠋ widgets  0ms', '  four', '  five'])
   })
 
-  it('collapses a settled task to just its header, freeing rows for the others', () => {
+  it('gives every task an equal, fixed-height pane regardless of status', () => {
+    const done = state({ status: 'success', startedAt: 1000, endedAt: 1500, output: ['done output'] })
+    const running = state({ task: { name: 'gadgets', command: 'echo', args: [] }, output: ['line1', 'line2'] })
+
+    // 2 tasks, 5 rows -> 2 rows each (1 header + 1 tail line), not reallocated toward the still-running one
+    const lines = renderLiveFrame([done, running], 80, 5, 2000, '⠋', colors)
+
+    expect(lines).toEqual(['✓ widgets  500ms', '  done output', '⠋ gadgets  1.000s', '  line2'])
+  })
+
+  it("keeps a settled task's pane the same size as a still-running one's", () => {
     const done = state({ status: 'success', startedAt: 1000, endedAt: 1500, output: ['done output'] })
     const running = state({ task: { name: 'gadgets', command: 'echo', args: [] }, output: ['line1', 'line2'] })
 
     const lines = renderLiveFrame([done, running], 80, 5, 2000, '⠋', colors)
+    const donePane = lines.slice(0, 2)
+    const runningPane = lines.slice(2, 4)
 
-    expect(lines).toEqual(['✓ widgets  500ms', '⠋ gadgets  1.000s', '  line1', '  line2'])
+    expect(donePane).toHaveLength(runningPane.length)
   })
 
   it('shows a failed or cancelled icon', () => {

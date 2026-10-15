@@ -5,16 +5,16 @@ export function formatDuration(ms: number): string {
 }
 
 /**
- * How many lines (header + tail output) each still-running task gets, out of
- * the terminal's total rows, after reserving one line per already-finished
- * task for its one-line summary. Finishing a task immediately hands its
- * share back to the tasks still running. Floors to 0 (never negative) when
- * there are more running tasks than rows to go around.
+ * How many lines (header + tail output) each task's pane gets: the
+ * terminal's total rows split evenly across every task, running or
+ * settled alike, so each one occupies a fixed, equal portion of the full
+ * terminal height for the whole run rather than growing as siblings
+ * finish. Floors to 0 (never negative) when there are more tasks than
+ * rows to go around.
  */
-export function tailLinesPerRunningTask(terminalRows: number, runningCount: number, doneCount: number): number {
-  if (runningCount <= 0) return 0
-  const remaining = Math.max(0, terminalRows - doneCount)
-  return Math.max(0, Math.floor(remaining / runningCount))
+export function equalPaneLines(terminalRows: number, taskCount: number): number {
+  if (taskCount <= 0) return 0
+  return Math.max(0, Math.floor(terminalRows / taskCount))
 }
 
 /** Truncates an overlong line with an ellipsis so it can't wrap and desync the fixed-height layout. */

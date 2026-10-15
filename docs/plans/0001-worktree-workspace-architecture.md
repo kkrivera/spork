@@ -307,9 +307,12 @@ git credential setup as everything else here.
 
 A new standalone package, `@spork/task-runner`, runs one or more tasks
 concurrently and renders a terminal dashboard while they run (per-task
-status icon/name/duration, a tail of each still-running task's output,
-reflowing as tasks finish and reclaiming their rows for the ones still
-going — see [packages/task-runner/README.md](../../packages/task-runner/README.md)).
+status icon/name/duration, a tail of its own output beneath it). Every
+task gets a fixed, equal portion of the terminal's full height for its
+pane, split evenly across the total task count and unchanged for the
+whole run, rather than a settled task collapsing and handing its rows to
+one still going — see
+[packages/task-runner/README.md](../../packages/task-runner/README.md).
 None of spork's own operations are "spawn one process and tail it" — they're
 async TypeScript calling into `@spork/core`, which has no subprocess to
 tail — so the package's `Task` type covers both a real spawned process

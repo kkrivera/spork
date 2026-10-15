@@ -1,10 +1,8 @@
 import pc from 'picocolors'
-import { clampWidth, formatDuration, tailLinesPerRunningTask } from './layout.js'
+import { clampWidth, equalPaneLines, formatDuration } from './layout.js'
 import type { TaskState } from './types.js'
 
 export type Colors = ReturnType<typeof pc.createColors>
-
-const ACTIVE_STATUSES = new Set(['pending', 'running'])
 
 function statusIcon(state: TaskState, spinnerFrame: string, colors: Colors): string {
   switch (state.status) {
@@ -31,10 +29,13 @@ function headerLine(state: TaskState, now: number, spinnerFrame: string, colors:
 }
 
 /**
- * One frame of the live dashboard: every task's header line, plus — for
- * tasks still active — up to `tailLinesPerRunningTask`'s share of their
- * most recent output, dimmed. A task that has settled collapses to just
- * its header, handing its rows back to whichever tasks are still running.
+ * One frame of the live dashboard: every task gets its own fixed, equal
+ * pane — a header line plus up to `equalPaneLines`'s share of its most
+ * recent output, dimmed — sized off the terminal's full height and the
+ * total task count, not just the ones still running. A settled task's
+ * pane keeps showing its last captured output lines (frozen, since
+ * `output` stops growing) rather than collapsing and handing its rows to
+ * a sibling, so every pane stays the same size for the whole run.
  */
 export function renderLiveFrame(
   states: TaskState[],
@@ -44,15 +45,13 @@ export function renderLiveFrame(
   spinnerFrame: string,
   colors: Colors,
 ): string[] {
-  const runningCount = states.filter((s) => ACTIVE_STATUSES.has(s.status)).length
-  const doneCount = states.length - runningCount
-  const perTask = tailLinesPerRunningTask(rows, runningCount, doneCount)
+  const perTask = equalPaneLines(rows, states.length)
   const tailCount = Math.max(0, perTask - 1)
 
   const lines: string[] = []
   for (const state of states) {
     lines.push(clampWidth(headerLine(state, now, spinnerFrame, colors), columns))
-    if (ACTIVE_STATUSES.has(state.status) && tailCount > 0) {
+    if (tailCount > 0) {
       for (const outputLine of state.output.slice(-tailCount)) {
         lines.push(clampWidth(colors.dim(`  ${outputLine}`), columns))
       }

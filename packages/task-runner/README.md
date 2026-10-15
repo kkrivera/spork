@@ -3,9 +3,13 @@
 Runs one or more tasks concurrently and renders a live terminal dashboard
 while they run, styled after
 [ultra-runner](https://www.npmjs.com/package/ultra-runner): a status
-icon + name + duration header per task, a tail of each still-running task's
-most recent output beneath it, and — once everything settles — a permanent
-full log in place of the live view. A task is either a `ProcessTask` (a
+icon + name + duration header per task, a tail of its most recent output
+beneath it, and — once everything settles — a permanent full log in place
+of the live view. Every task gets a fixed, equal portion of the terminal's
+full height for its pane (header + tail), split evenly across the total
+task count and unchanged for the whole run — a settled task's pane keeps
+showing its last captured lines rather than collapsing and handing its
+rows to a sibling still running. A task is either a `ProcessTask` (a
 real spawned command, tailed via its own stdout/stderr) or a `FunctionTask`
 (an arbitrary async function — for work that's just TypeScript calling
 other TypeScript, with no subprocess to tail). Not yet wired into any
@@ -37,15 +41,16 @@ across several repos at once) have somewhere to render.
   `signal.aborted` to stop early, otherwise the task only settles once its
   `run` call actually returns.
 - `src/layout.ts` — pure functions: `formatDuration` (`"919ms"` /
-  `"3.727s"`), `tailLinesPerRunningTask` (splits the terminal's rows evenly
-  across still-running tasks, after reserving one row per already-finished
-  task's one-line summary — the "1/n portion, reclaimed as tasks finish"
-  rule), and `clampWidth` (truncates an overlong line with an ellipsis so
-  it can't wrap and desync the layout).
-- `src/render.ts` — pure `renderLiveFrame` (the truncated, tail-only live
-  view) and `renderFinalLog` (every task's complete captured output, once
-  settled — a quiet successful task naturally shows nothing beneath its
-  header, matching ultra-runner's own screenshot). Both take an explicit
+  `"3.727s"`), `equalPaneLines` (splits the terminal's total rows evenly
+  across every task — the fixed "1/n of the full height, for the whole
+  run" rule, not reallocated as tasks finish), and `clampWidth` (truncates
+  an overlong line with an ellipsis so it can't wrap and desync the
+  layout).
+- `src/render.ts` — pure `renderLiveFrame` (every task's equal-height pane:
+  header + a tail of its most recent output, truncated to fit) and
+  `renderFinalLog` (every task's complete captured output, once settled —
+  a quiet successful task naturally shows nothing beneath its header,
+  matching ultra-runner's own screenshot). Both take an explicit
   `Colors` (a `picocolors.createColors(enabled)` result) rather than
   relying on picocolors' own global TTY auto-detection, since that can
   disagree with whether the *injected* stream is actually a TTY.

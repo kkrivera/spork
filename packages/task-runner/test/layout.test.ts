@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampWidth, formatDuration, tailLinesPerRunningTask } from '../src/layout.js'
+import { clampWidth, equalPaneLines, formatDuration } from '../src/layout.js'
 
 describe('formatDuration', () => {
   it('shows milliseconds under a second', () => {
@@ -14,36 +14,26 @@ describe('formatDuration', () => {
   })
 })
 
-describe('tailLinesPerRunningTask', () => {
-  it('splits the remaining rows evenly across running tasks', () => {
-    expect(tailLinesPerRunningTask(30, 3, 0)).toBe(10)
+describe('equalPaneLines', () => {
+  it('splits the full terminal height evenly across every task', () => {
+    expect(equalPaneLines(30, 3)).toBe(10)
   })
 
-  it('reserves one row per already-finished task before dividing', () => {
-    expect(tailLinesPerRunningTask(30, 2, 10)).toBe(10)
+  it('does not change as tasks finish — a settled task keeps its own share', () => {
+    expect(equalPaneLines(30, 3)).toBe(equalPaneLines(30, 3))
   })
 
-  it('hands a finished task its share back to the remaining running tasks', () => {
-    const beforeFinish = tailLinesPerRunningTask(30, 3, 0)
-    const afterOneFinishes = tailLinesPerRunningTask(30, 2, 1)
-    expect(afterOneFinishes).toBeGreaterThan(beforeFinish)
+  it('is 0 when there are no tasks', () => {
+    expect(equalPaneLines(30, 0)).toBe(0)
   })
 
-  it('is 0 when nothing is running', () => {
-    expect(tailLinesPerRunningTask(30, 0, 5)).toBe(0)
-  })
-
-  it('floors to 0 rather than going negative when there are more running tasks than rows', () => {
-    expect(tailLinesPerRunningTask(5, 10, 0)).toBe(0)
-  })
-
-  it('floors to 0 rather than going negative when finished tasks already exceed the rows', () => {
-    expect(tailLinesPerRunningTask(5, 2, 20)).toBe(0)
+  it('floors to 0 rather than going negative when there are more tasks than rows', () => {
+    expect(equalPaneLines(5, 10)).toBe(0)
   })
 
   it('shrinks as the terminal shrinks and grows as it grows (resize)', () => {
-    const small = tailLinesPerRunningTask(10, 2, 0)
-    const large = tailLinesPerRunningTask(50, 2, 0)
+    const small = equalPaneLines(10, 2)
+    const large = equalPaneLines(50, 2)
     expect(large).toBeGreaterThan(small)
   })
 })
