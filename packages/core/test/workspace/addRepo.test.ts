@@ -11,17 +11,17 @@ vi.mock('../../src/repo/cache.js', async () => {
 vi.mock('../../src/repo/lock.js', () => ({
   withRepoLock: vi.fn((_target: string, fn: () => Promise<unknown>) => fn()),
 }))
-vi.mock('../../src/git/worktree.js', () => ({
-  addWorktree: vi.fn(),
-  removeWorktree: vi.fn(),
-  pruneWorktrees: vi.fn(),
-}))
+vi.mock('../../src/git/worktree.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/git/worktree.js')>('../../src/git/worktree.js')
+  return { ...actual, addWorktree: vi.fn(), removeWorktree: vi.fn(), pruneWorktrees: vi.fn() }
+})
 vi.mock('../../src/git/submodule.js', () => ({
   hasSubmodules: vi.fn(),
   initSubmodules: vi.fn(),
 }))
 
 const { addWorktree } = await import('../../src/git/worktree.js')
+const { GitCommandError } = await import('../../src/git/exec.js')
 const { hasSubmodules, initSubmodules } = await import('../../src/git/submodule.js')
 const { ensureRepoCache, resolveRepoCache } = await import('../../src/repo/cache.js')
 const { createWorkspace, addRepo } = await import('../../src/workspace/workspace.js')
@@ -61,17 +61,17 @@ afterEach(async () => {
 })
 
 describe('addRepo', () => {
-  it('adds a worktree on a spork-owned branch and records it in the manifest', async () => {
+  it('adds a worktree on the workspace\'s own branch and records it in the manifest', async () => {
     const { entry, submodulesInitialized } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
 
     expect(entry).toMatchObject({
       folder: 'widgets',
       source: WIDGETS_SOURCE,
       requestedRef: 'HEAD',
-      localBranch: 'spork/demo/widgets',
+      localBranch: 'demo',
     })
     expect(submodulesInitialized).toBe(false)
-    expect(addWorktreeMock).toHaveBeenCalledWith(widgetsCachePath(), path.join(dir, 'widgets'), 'spork/demo/widgets', 'HEAD')
+    expect(addWorktreeMock).toHaveBeenCalledWith(widgetsCachePath(), path.join(dir, 'widgets'), 'demo', 'HEAD')
     expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE)
     expect((await readManifest(dir)).worktrees).toEqual([entry])
   })
@@ -82,11 +82,11 @@ describe('addRepo', () => {
     expect(addWorktreeMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), 'release/2.0')
   })
 
-  it('honors an explicit --as folder name', async () => {
+  it('honors an explicit --as folder name, without changing the (workspace-wide) branch', async () => {
     const { entry } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE, folder: 'widgets-v2' })
 
     expect(entry.folder).toBe('widgets-v2')
-    expect(entry.localBranch).toBe('spork/demo/widgets-v2')
+    expect(entry.localBranch).toBe('demo')
   })
 
   it('rejects a second worktree with the same folder name', async () => {
@@ -97,15 +97,75 @@ describe('addRepo', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
   })
 
-  it('allows the same repo+branch to be added twice under different folder names', async () => {
+  it('rejects adding the same repo twice, even under a different folder name', async () => {
     await addRepo(ctx, dir, { source: WIDGETS_SOURCE, ref: 'main', folder: 'widgets-a' })
-    await addRepo(ctx, dir, { source: WIDGETS_SOURCE, ref: 'main', folder: 'widgets-b' })
+    addWorktreeMock.mockClear()
 
-    const manifest = await readManifest(dir)
-    expect(manifest.worktrees.map((wt) => wt.localBranch)).toEqual([
-      'spork/demo/widgets-a',
-      'spork/demo/widgets-b',
-    ])
+    await expect(
+      addRepo(ctx, dir, { source: WIDGETS_SOURCE, ref: 'main', folder: 'widgets-b' }),
+    ).rejects.toThrow(SporkError)
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('gives every different repo in the workspace the identical branch name', async () => {
+    const gadgetsSource = 'git@github.com:acme/gadgets.git'
+
+    const { entry: widgetsEntry } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
+    const { entry: gadgetsEntry } = await addRepo(ctx, dir, { source: gadgetsSource })
+
+    expect(widgetsEntry.localBranch).toBe('demo')
+    expect(gadgetsEntry.localBranch).toBe('demo')
+  })
+})
+
+describe('addRepo — branch naming', () => {
+  it('uses the workspace name verbatim as the branch, including a "/" it contains (not slugified)', async () => {
+    const ticketDir = path.join(root, 'krisrivera', 'gw-2-fix')
+    await createWorkspace(ctx, { name: 'krisrivera/gw-2-fix', dir: ticketDir })
+
+    const { entry } = await addRepo(ctx, ticketDir, { source: WIDGETS_SOURCE })
+
+    expect(entry.localBranch).toBe('krisrivera/gw-2-fix')
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      'krisrivera/gw-2-fix',
+      expect.anything(),
+    )
+  })
+})
+
+describe('addRepo — branch collisions', () => {
+  it("surfaces a clear error when the target branch already exists in this repo's cache", async () => {
+    addWorktreeMock.mockRejectedValue(
+      new GitCommandError(['worktree', 'add'], "fatal: a branch named 'demo' already exists\n"),
+    )
+
+    const error: unknown = await addRepo(ctx, dir, { source: WIDGETS_SOURCE }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(SporkError)
+    expect((error as Error).message).toMatch(/already exists/)
+  })
+
+  it("mentions the branch to clean up by hand", async () => {
+    addWorktreeMock.mockRejectedValue(
+      new GitCommandError(['worktree', 'add'], "fatal: a branch named 'demo' already exists\n"),
+    )
+
+    await expect(addRepo(ctx, dir, { source: WIDGETS_SOURCE })).rejects.toThrow(/branch -D demo/)
+  })
+
+  it('surfaces a clear error when the target branch is already checked out elsewhere', async () => {
+    addWorktreeMock.mockRejectedValue(
+      new GitCommandError(['worktree', 'add'], "fatal: 'demo' is already checked out at '/other/path'\n"),
+    )
+
+    await expect(addRepo(ctx, dir, { source: WIDGETS_SOURCE })).rejects.toThrow(SporkError)
+  })
+
+  it('re-throws an unrelated addWorktree failure unchanged', async () => {
+    addWorktreeMock.mockRejectedValue(new Error('disk full'))
+
+    await expect(addRepo(ctx, dir, { source: WIDGETS_SOURCE })).rejects.toThrow('disk full')
   })
 })
 
@@ -146,12 +206,7 @@ describe('addRepo — aliases', () => {
 
     expect(entry.source).toBe(WIDGETS_SOURCE)
     expect(entry.folder).toBe('widgets')
-    expect(addWorktreeMock).toHaveBeenCalledWith(
-      widgetsCachePath(),
-      path.join(dir, 'widgets'),
-      'spork/demo/widgets',
-      'HEAD',
-    )
+    expect(addWorktreeMock).toHaveBeenCalledWith(widgetsCachePath(), path.join(dir, 'widgets'), 'demo', 'HEAD')
   })
 })
 

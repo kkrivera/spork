@@ -10,12 +10,18 @@ surface; nothing in this repo should import from `src/*` paths directly.
   other function in `src/git` (and everything built on top of it later) must
   call through it rather than importing `node:child_process` itself — that's
   what keeps the rest of the codebase mockable in unit tests.
-- Worktrees are always created on a **new local branch** spork owns
-  (`spork/<workspace-slug>/<folder-slug>`), never by checking out the requested
-  ref directly. Don't "simplify" this by passing the ref straight to
-  `worktree add` — it will collide the moment the same repo+branch is added to
-  a second workspace. See
+- Worktrees are always created on a **new local branch** — the workspace's
+  own name, verbatim, shared by every repo added to it — never by checking
+  out the requested ref directly. Don't "simplify" this by passing the ref
+  straight to `worktree add`. `workspace.ts`'s `addRepo` is what guards the
+  two ways this can still collide (the same repo added twice to one
+  workspace; a branch with this name already existing in a repo's cache) —
+  see
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md).
+  Don't add logic elsewhere that tries to auto-resolve either case (reusing
+  or deleting an existing branch) — the branch is a real, potentially-
+  pushable one now, not disposable plumbing, so both must keep failing
+  loudly via `isBranchExistsError`/`isWorktreeCollisionError`.
 
 ## `src/repo`
 

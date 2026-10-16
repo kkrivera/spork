@@ -37,7 +37,7 @@ beforeEach(async () => {
   await createWorkspace(ctx, { name: 'demo', dir })
   vi.mocked(addWorktree).mockReset().mockImplementation(fakeAddWorktree)
   vi.mocked(ensureRepoCache).mockReset().mockResolvedValue({ id: 'widgets-abc', source: '', path: '/unused' })
-  vi.mocked(getStatus).mockReset().mockResolvedValue({ branch: 'spork/demo/widgets', isClean: true, changedFiles: 0 })
+  vi.mocked(getStatus).mockReset().mockResolvedValue({ branch: 'demo', isClean: true, changedFiles: 0 })
   await addRepo(ctx, dir, { source: 'git@github.com:acme/widgets.git' })
 })
 
@@ -52,7 +52,7 @@ describe('getWorkspaceStatus', () => {
     expect(result).toEqual([
       expect.objectContaining({
         folder: 'widgets',
-        status: { branch: 'spork/demo/widgets', isClean: true, changedFiles: 0 },
+        status: { branch: 'demo', isClean: true, changedFiles: 0 },
       }),
     ])
     expect(getStatus).toHaveBeenCalledWith(path.join(dir, 'widgets'))

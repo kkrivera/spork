@@ -13,36 +13,73 @@ structure needed to make that work correctly, and the tradeoffs behind them.
 
 ## Design
 
-### Shared bare clone, unique local branch per worktree
+### Shared bare clone, one branch per workspace, shared by every repo in it
 
 Each repo source is cloned once, as a `git clone --bare` cache under
 `~/.spork/repos/<id>/` — never re-cloned per workspace. Every worktree is created
 against that shared cache via:
 
 ```
-git worktree add -b spork/<workspace-slug>/<folder-slug> <path> <start-point>
+git worktree add -b <workspace-name> <path> <start-point>
 ```
 
-`git worktree add <ref>` fails if `<ref>` is already checked out anywhere else.
-Because the clone is *shared across workspaces*, reusing the requested branch
-name directly would collide the moment two workspaces (or two worktrees in one
-workspace) touch the same repo+branch — a routine scenario for this product, not
-an edge case. Giving every worktree its own spork-owned local branch, derived
-from the workspace and folder names, avoids that entirely. The manifest records
-both the user's requested ref (what they asked to check out) and the actual local
-branch (what git has checked out), so `add-repo --branch <ref>` behaves the way
-users expect while the underlying git state stays collision-free.
+`<workspace-name>` is used verbatim — not slugified, no prefix — so every
+repo added to a given workspace ends up checked out on the exact same
+branch name. This matches a real cross-repo workflow: one ticket/feature
+branch (`workspace create krisrivera/gw-2-fix`, say) shared across every
+repo it touches, pushable as-is for a PR from any of them. The manifest
+still records both the user's requested ref (what they asked to check out)
+and the actual local branch (what git has checked out), so
+`add-repo --branch <ref>` behaves the way users expect.
 
-Ref/folder names are slugified before use in derived branch/folder names (e.g. a
-`feature/foo` branch must not produce a nested path).
+This is a deliberate trade against an earlier design, which gave every
+*worktree* its own branch (`spork/<workspace-slug>/<folder-slug>`)
+specifically to make collisions structurally impossible — the shared bare
+clone meant `git worktree add <ref>` would otherwise fail the moment two
+workspaces (or two worktrees in one workspace) touched the same repo+branch,
+a routine scenario, not an edge case. Dropping that per-worktree uniqueness
+trades structural impossibility for two narrower, explicitly-handled cases:
 
-Since every worktree's branch is namespaced by the *workspace's* name
-(`spork/<workspace-slug>/...`), that name has to mean the same thing
-everywhere it shows up — so `workspace create <name>`'s folder is always
-`<name>` too, not an arbitrary one. `--dir <path>` is a *parent* directory
-(the workspace lands at `<path>/<name>`), never the exact target — letting
-it name the folder directly would let a workspace's on-disk folder and its
-branch-namespace disagree about what it's even called.
+- **The same repo added twice to one workspace** — now impossible by
+  construction (one shared branch means both worktrees would need to check
+  out the identical branch in the identical repo cache at once). `addRepo`
+  checks for this upfront and fails with a clear `SporkError` naming the
+  existing folder, rather than letting git's own "already checked out
+  elsewhere" surface confusingly.
+- **A branch with the workspace's name already existing in a repo's
+  cache** — e.g. a previous, removed workspace of the same name touched
+  this repo before and its branch is still sitting there, or it's
+  unrelated to spork entirely (a branch a user made by hand that happens
+  to share the name). Since the branch is now a real, meaningful,
+  potentially-pushable one rather than disposable `spork/...` plumbing,
+  spork never silently reuses or deletes it — `addRepo` catches git's
+  "branch already exists" failure (`isBranchExistsError`, alongside the
+  existing `isWorktreeCollisionError`, both in `git/worktree.ts`) and fails
+  with a clear `SporkError` instead, naming the cache path and the branch
+  to remove by hand if that's what's wanted. Removing a workspace
+  (`removeRepo`/`removeWorkspace`) never deletes the branch either, for the
+  same reason — only the worktree.
+
+Workspace names are already kept unique by the workspace registry
+(`registerWorkspace` refuses a duplicate), which is what makes "one
+verbatim branch per workspace" a reasonable bet in the first place, with
+the two cases above as the explicit, narrow fallback when it doesn't hold.
+
+Since every worktree's branch *is* the workspace's own name, that name has
+to mean the same thing everywhere it shows up — so `workspace create
+<name>`'s folder is always `<name>` too, not an arbitrary one. `--dir
+<path>` is a *parent* directory (the workspace lands at `<path>/<name>`),
+never the exact target — letting it name the folder directly would let a
+workspace's on-disk folder and its branch disagree about what it's even
+called. `<name>` may itself contain `/` (a `username/ticket-slug`
+convention, say) — `mkdir(..., { recursive: true })` and `path.resolve`
+already handle that correctly for the folder (nested directories, no extra
+code needed), and git ref names support `/` as hierarchy the same way a
+`feature/foo`-style branch does, so the branch needs no special handling
+either — except that the generated `.code-workspace` file's own name uses
+only `name`'s last segment (`path.basename`), not the whole thing, since
+the workspace directory is already nested and using the full name again
+would try to nest the file under a non-existent extra subdirectory.
 
 Clones are full, not shallow — the same cache backs arbitrary future branches
 over time, and shallow clones would complicate later fetches. Shallow-clone

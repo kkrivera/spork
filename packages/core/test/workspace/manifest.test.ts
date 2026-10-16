@@ -43,7 +43,7 @@ describe('writeManifest / readManifest', () => {
       folder: 'widgets',
       source: 'git@github.com:acme/widgets.git',
       requestedRef: 'main',
-      localBranch: 'spork/demo/widgets',
+      localBranch: 'demo',
       addedAt: new Date().toISOString(),
     })
 

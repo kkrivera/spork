@@ -37,6 +37,15 @@ describe('codeWorkspaceFilePath', () => {
   it('names the file after the workspace', () => {
     expect(codeWorkspaceFilePath('/ws/demo', 'demo')).toBe(path.join('/ws/demo', 'demo.code-workspace'))
   })
+
+  it('uses only the last segment of a "/"-containing workspace name, not the whole thing', () => {
+    // workspaceDir is already <parent>/krisrivera/gw-2-fix — using the full
+    // name here too would try to nest the file under a non-existent extra
+    // "krisrivera" subdirectory.
+    expect(codeWorkspaceFilePath('/ws/krisrivera/gw-2-fix', 'krisrivera/gw-2-fix')).toBe(
+      path.join('/ws/krisrivera/gw-2-fix', 'gw-2-fix.code-workspace'),
+    )
+  })
 })
 
 describe('writeCodeWorkspace', () => {

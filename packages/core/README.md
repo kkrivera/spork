@@ -19,9 +19,14 @@ for the design this package implements.
     point at a not-yet-existent ref and resolves once a later fetch brings
     it in.
   - `worktree.ts` — worktree add/remove/prune/list, always creating a new
-    spork-owned local branch per worktree (never reusing the requested ref
-    directly — see the design doc for why), plus `isWorktreeCollisionError` to
-    recognize git's "ref already checked out elsewhere" failure.
+    local branch on `addWorktree` (never reusing the requested ref directly
+    — see the design doc for why) — the *workspace's own name*, verbatim,
+    shared by every repo in it, not a per-worktree one. `isWorktreeCollisionError`
+    recognizes git's "ref already checked out elsewhere" failure;
+    `isBranchExistsError` recognizes it refusing to create a branch that
+    already exists. `workspace.ts`'s `addRepo` uses both to turn either
+    failure into a clear error rather than silently reusing or deleting
+    whatever already has that name.
   - `status.ts` — local-only worktree status (branch + dirty file count, no
     fetch).
   - `remote.ts` — `getRemoteUrl`/`setRemoteUrl`, used by `repo/scan.ts` to
@@ -117,20 +122,29 @@ for the design this package implements.
 - `src/workspace/` — the workspace lifecycle built on top of `git`/`repo`.
   - `manifest.ts` — the `spork.workspace.json` schema and its read/write.
   - `codeWorkspace.ts` — generates the workspace's `.code-workspace` file from
-    its manifest.
+    its manifest. `codeWorkspaceFilePath(workspaceDir, name)` names the file
+    after only `name`'s last path segment (`path.basename`), since `name`
+    may itself contain `/` and the workspace directory is already nested
+    accordingly — using the whole thing again would try to nest the file
+    under a non-existent extra subdirectory.
   - `workspace.ts` — orchestration: `createWorkspace`, `addRepo`, `removeRepo`,
     `removeWorkspace`, `getWorkspaceStatus`, and `reconcileWorkspace` (pruning
     stale git worktree metadata and dropping manifest entries for folders
     deleted by hand — called before every other operation here). This is
-    where the unique-local-branch-per-worktree and per-repo-locking pieces
-    from `git`/`repo` actually get used together. `addRepo` also initializes
-    submodules if the worktree has any, after the repo-cache lock is
-    released; a submodule-init failure produces a warning in the returned
-    `AddRepoResult`, not a thrown error — the worktree is still registered.
-    `addRepo`'s `source` is resolved local-then-global-then-raw
-    (`resolveScopedRepoAlias`), and its alias registers to the workspace's
-    *local* registry by default (`AddRepoOptions.global` opts into the
-    shared one instead) — the result's `aliasScope` says which happened.
+    where the shared-branch-per-workspace and per-repo-locking pieces from
+    `git`/`repo` actually get used together: `addRepo` gives every repo in a
+    workspace the identical branch (the workspace's own name, verbatim —
+    see the design doc), rejects adding the same repo twice upfront, and
+    turns `addWorktree`'s `isBranchExistsError`/`isWorktreeCollisionError`
+    into a clear `SporkError` rather than silently reusing or deleting an
+    existing branch. `addRepo` also initializes submodules if the worktree
+    has any, after the repo-cache lock is released; a submodule-init
+    failure produces a warning in the returned `AddRepoResult`, not a
+    thrown error — the worktree is still registered. `addRepo`'s `source`
+    is resolved local-then-global-then-raw (`resolveScopedRepoAlias`), and
+    its alias registers to the workspace's *local* registry by default
+    (`AddRepoOptions.global` opts into the shared one instead) — the
+    result's `aliasScope` says which happened.
     `addRepo`/`removeRepo`/`reconcileWorkspace` all push their manifest
     mutation through `withFileLock` around the manifest path, re-reading it
     fresh from inside the lock rather than reusing an earlier read — several

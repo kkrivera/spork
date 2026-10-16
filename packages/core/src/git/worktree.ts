@@ -8,11 +8,13 @@ export interface WorktreeEntry {
 }
 
 /**
- * Creates a worktree at `worktreePath` on a new, spork-owned local branch
- * (`localBranch`) starting from `startPoint`. Using a fresh local branch per
- * worktree — rather than checking out the requested ref directly — is what lets
- * the same repo+branch be added to more than one workspace without colliding
- * (see docs/plans/0001-worktree-workspace-architecture.md).
+ * Creates a worktree at `worktreePath` on a new local branch (`localBranch`,
+ * shared by every repo in the workspace it belongs to) starting from
+ * `startPoint`, rather than checking out the requested ref directly — see
+ * docs/plans/0001-worktree-workspace-architecture.md. Fails if `localBranch`
+ * already exists in this repo's cache (`isBranchExistsError`) or is already
+ * checked out elsewhere (`isWorktreeCollisionError`) — the caller decides
+ * what to do about either.
  */
 export async function addWorktree(
   bareRepoPath: string,
@@ -46,6 +48,11 @@ export async function listWorktrees(bareRepoPath: string): Promise<WorktreeEntry
 /** True if `error` is git refusing to check out a ref/branch that's already in use elsewhere. */
 export function isWorktreeCollisionError(error: unknown): boolean {
   return error instanceof GitCommandError && /already (checked out|used by worktree)/i.test(error.stderr)
+}
+
+/** True if `error` is git refusing to create a branch (`worktree add -b`) that already exists. */
+export function isBranchExistsError(error: unknown): boolean {
+  return error instanceof GitCommandError && /already exists/i.test(error.stderr)
 }
 
 function parsePorcelain(output: string): WorktreeEntry[] {

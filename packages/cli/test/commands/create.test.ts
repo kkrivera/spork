@@ -48,7 +48,7 @@ function fakeOpener(outcome: Awaited<ReturnType<Opener['open']>>): Opener {
 const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
 
 function fakeEntry(folder: string) {
-  return { folder, source: `git@github.com:acme/${folder}.git`, requestedRef: 'HEAD', localBranch: `spork/demo/${folder}`, addedAt: '' }
+  return { folder, source: `git@github.com:acme/${folder}.git`, requestedRef: 'HEAD', localBranch: 'demo', addedAt: '' }
 }
 
 /** Drives every FunctionTask runConcurrently builds, the way the real runFunctionTask would. */

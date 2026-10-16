@@ -9,9 +9,8 @@ vi.mock('../../src/git/exec.js', async () => {
 })
 
 const { execGit, GitCommandError } = await import('../../src/git/exec.js')
-const { addWorktree, removeWorktree, pruneWorktrees, listWorktrees, isWorktreeCollisionError } = await import(
-  '../../src/git/worktree.js'
-)
+const { addWorktree, removeWorktree, pruneWorktrees, listWorktrees, isWorktreeCollisionError, isBranchExistsError } =
+  await import('../../src/git/worktree.js')
 
 const execGitMock = vi.mocked(execGit)
 
@@ -20,15 +19,14 @@ beforeEach(() => {
 })
 
 describe('addWorktree', () => {
-  it('creates the worktree on a new spork-owned local branch', async () => {
+  it('creates the worktree on a new local branch', async () => {
     execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
 
-    await addWorktree('/cache/foo', '/ws/foo', 'spork/demo/foo', 'origin/main')
+    await addWorktree('/cache/foo', '/ws/foo', 'demo', 'origin/main')
 
-    expect(execGitMock).toHaveBeenCalledWith(
-      ['worktree', 'add', '-b', 'spork/demo/foo', '/ws/foo', 'origin/main'],
-      { cwd: '/cache/foo' },
-    )
+    expect(execGitMock).toHaveBeenCalledWith(['worktree', 'add', '-b', 'demo', '/ws/foo', 'origin/main'], {
+      cwd: '/cache/foo',
+    })
   })
 })
 
@@ -70,7 +68,7 @@ describe('listWorktrees', () => {
         '',
         'worktree /ws/foo/bar',
         'HEAD def456',
-        'branch refs/heads/spork/demo/bar',
+        'branch refs/heads/demo',
         'prunable gitdir file points to non-existent location',
         '',
       ].join('\n'),
@@ -81,7 +79,7 @@ describe('listWorktrees', () => {
 
     expect(entries).toEqual([
       { path: '/cache/foo', branch: 'main', head: 'abc123', isPrunable: false },
-      { path: '/ws/foo/bar', branch: 'spork/demo/bar', head: 'def456', isPrunable: true },
+      { path: '/ws/foo/bar', branch: 'demo', head: 'def456', isPrunable: true },
     ])
   })
 
@@ -127,5 +125,23 @@ describe('isWorktreeCollisionError', () => {
 
   it('returns false for a non-GitCommandError value', () => {
     expect(isWorktreeCollisionError(new Error('boom'))).toBe(false)
+  })
+})
+
+describe('isBranchExistsError', () => {
+  it('recognizes a "branch already exists" GitCommandError', () => {
+    const error = new GitCommandError(['worktree', 'add', '-b', 'demo'], "fatal: a branch named 'demo' already exists\n")
+
+    expect(isBranchExistsError(error)).toBe(true)
+  })
+
+  it('returns false for an unrelated error', () => {
+    const error = new GitCommandError(['worktree', 'add'], 'fatal: not a git repository\n')
+
+    expect(isBranchExistsError(error)).toBe(false)
+  })
+
+  it('returns false for a non-GitCommandError value', () => {
+    expect(isBranchExistsError(new Error('boom'))).toBe(false)
   })
 })

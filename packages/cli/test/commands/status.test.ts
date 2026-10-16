@@ -79,9 +79,9 @@ describe('registerStatusCommand', () => {
         folder: 'widgets',
         source: 'x',
         requestedRef: 'main',
-        localBranch: 'spork/demo/widgets',
+        localBranch: 'demo',
         addedAt: '',
-        status: { branch: 'spork/demo/widgets', isClean: false, changedFiles: 3 },
+        status: { branch: 'demo', isClean: false, changedFiles: 3 },
       },
     ])
     const program = new Command()
@@ -102,7 +102,7 @@ describe('registerStatusCommand', () => {
         folder: 'widgets',
         source: 'x',
         requestedRef: 'main',
-        localBranch: 'spork/demo/widgets',
+        localBranch: 'demo',
         addedAt: '',
         status: { branch: null, isClean: true, changedFiles: 0 },
       },

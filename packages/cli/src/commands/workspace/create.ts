@@ -34,10 +34,10 @@ function collectRepo(value: string, previous: string[]): string[] {
  * `--dir` names a *parent* directory, not the exact target — the workspace
  * always lands at `<parent>/<name>` (parent defaults to cwd), never at
  * `--dir` verbatim. This guarantees the folder's basename always matches
- * `name`, which also drives every worktree's branch name
- * (`spork/<name>/<folder>` — see `addRepo`) — letting them diverge would
- * mean a workspace whose folder and branch-namespace disagree about what
- * it's even called.
+ * `name`, which is also every worktree's branch name verbatim (shared by
+ * every repo in the workspace — see `addRepo`) — letting them diverge
+ * would mean a workspace whose folder and branch disagree about what it's
+ * even called.
  */
 export async function runCreate(ctx: AppContext, name: string, options: CreateOptions): Promise<WorkspaceHandle> {
   const existing = await listWorkspaces(ctx.registryPath)

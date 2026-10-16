@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { addWorktree, pruneWorktrees, removeWorktree } from '../git/worktree.js'
+import { addWorktree, isBranchExistsError, isWorktreeCollisionError, pruneWorktrees, removeWorktree } from '../git/worktree.js'
 import { getStatus, type WorktreeStatus } from '../git/status.js'
 import { hasSubmodules, initSubmodules } from '../git/submodule.js'
 import { resolveRepoCache } from '../repo/cache.js'
@@ -118,6 +118,58 @@ export interface AddRepoResult {
   submoduleWarning?: string
 }
 
+/**
+ * `folder` must be unused in this workspace, and `source` must not already
+ * be added under a different folder. Every repo in a workspace now shares
+ * one branch (the workspace's own name, verbatim — see `addRepo`'s
+ * `localBranch`), so the same repo can't be added twice: both worktrees
+ * would need to check out the identical branch in the identical repo cache
+ * at once, which git can't do. Catching that here gives a clear, specific
+ * error rather than letting git's own "already checked out elsewhere"
+ * surface confusingly later.
+ */
+function assertCanAddRepo(manifest: WorkspaceManifest, folder: string, source: string): void {
+  if (manifest.worktrees.some((wt) => wt.folder === folder)) {
+    throw new SporkError(
+      `"${folder}" is already used in workspace "${manifest.name}". Pass --as to choose a different folder name.`,
+    )
+  }
+
+  const alreadyAdded = manifest.worktrees.find((wt) => wt.source === source)
+  if (alreadyAdded) {
+    throw new SporkError(
+      `"${source}" is already in workspace "${manifest.name}" (as "${alreadyAdded.folder}"). A workspace shares one branch per repo, so the same repo can only be added once.`,
+    )
+  }
+}
+
+/**
+ * Creates the worktree, translating a branch-name collision into a clear
+ * `SporkError` instead of letting git's own failure surface as-is. A branch
+ * named `localBranch` already existing in this repo's cache — a leftover
+ * from a previous, removed workspace of the same name, or an unrelated
+ * branch someone made by hand — is never silently reused or deleted; spork
+ * only ever touches history it created itself.
+ */
+async function createWorktreeOrThrow(
+  cache: { path: string; lockPath: string },
+  worktreePath: string,
+  localBranch: string,
+  requestedRef: string,
+  source: string,
+): Promise<void> {
+  try {
+    await withRepoLock(cache.lockPath, () => addWorktree(cache.path, worktreePath, localBranch, requestedRef))
+  } catch (error) {
+    if (isBranchExistsError(error) || isWorktreeCollisionError(error)) {
+      throw new SporkError(
+        `Branch "${localBranch}" already exists in the cache for "${source}" (${cache.path}) and isn't available to reuse automatically. Remove it by hand (git -C ${cache.path} branch -D ${localBranch}) or create this workspace under a different name.`,
+      )
+    }
+    throw error
+  }
+}
+
 export async function addRepo(
   ctx: WorkspaceContext,
   workspaceDir: string,
@@ -135,15 +187,15 @@ export async function addRepo(
     options.source,
   )
   const folder = options.folder ?? slugify(repoShortName(source))
-  if (manifest.worktrees.some((wt) => wt.folder === folder)) {
-    throw new SporkError(
-      `"${folder}" is already used in workspace "${manifest.name}". Pass --as to choose a different folder name.`,
-    )
-  }
+  assertCanAddRepo(manifest, folder, source)
 
   const requestedRef = options.ref ?? 'HEAD'
   const worktreePath = path.join(workspaceDir, folder)
-  const localBranch = `spork/${slugify(manifest.name)}/${slugify(folder)}`
+  // Verbatim, not slugified: every repo in this workspace shares this exact
+  // branch name (including any "/" it contains — git ref names support "/"
+  // as hierarchy, same as a "username/feature" convention), so it reads as
+  // a real, pushable branch rather than spork-internal plumbing.
+  const localBranch = manifest.name
 
   // addRepoSource ensures the cache is cloned/fetched and registers (or reuses) an alias for
   // it — its own short lock. addWorktree gets a separate, second lock: see repo/repos.ts.
@@ -155,7 +207,7 @@ export async function addRepo(
   await addRepoSource({ reposRoot: ctx.reposRoot, repoRegistryPath: aliasRegistryPath }, source)
 
   const cache = resolveRepoCache(ctx.reposRoot, source)
-  await withRepoLock(cache.lockPath, () => addWorktree(cache.path, worktreePath, localBranch, requestedRef))
+  await createWorktreeOrThrow(cache, worktreePath, localBranch, requestedRef, source)
 
   const entry: WorktreeEntry = {
     folder,
