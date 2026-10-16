@@ -99,11 +99,17 @@ for the design this package implements.
     adopting several repos itself (e.g. concurrently) instead of only
     getting the sequential batch behavior.
 - `src/util/` — `slugify` (filesystem/branch-name-safe strings),
-  `repoShortName` (the repo's short name out of a source URL/path), and
+  `repoShortName` (the repo's short name out of a source URL/path),
   `repoOwner` (the owner/org segment out of a URL-shaped source, e.g. "acme"
   from `git@github.com:acme/widgets.git` — null for a bare local path, since
   its parent directory isn't a real "owner" and would falsely make every
-  repo in a scanned folder look like it shares one).
+  repo in a scanned folder look like it shares one), and `fileLock.ts`'s
+  `withFileLock(filePath, fn)` — the same `proper-lockfile` mechanism
+  `repo/lock.ts`'s `withRepoLock` uses for the repo cache, applied instead
+  to a small JSON index file (a manifest or a registry). Unlike
+  `withRepoLock`, it doesn't pre-create `filePath` (these files are
+  meaningfully absent until their first write), so it locks with
+  `realpath: false` rather than requiring the target to already exist.
 - `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,
   `~/.spork/workspaces.json`).
 - `src/errors.ts` — `SporkError`, the one error type used for user-facing
@@ -125,16 +131,27 @@ for the design this package implements.
     (`resolveScopedRepoAlias`), and its alias registers to the workspace's
     *local* registry by default (`AddRepoOptions.global` opts into the
     shared one instead) — the result's `aliasScope` says which happened.
+    `addRepo`/`removeRepo`/`reconcileWorkspace` all push their manifest
+    mutation through `withFileLock` around the manifest path, re-reading it
+    fresh from inside the lock rather than reusing an earlier read — several
+    `addRepo` calls run concurrently against the same workspace (`workspace
+    create --repo a --repo b ...`, or the interactive picker, both via
+    `@spork/task-runner`), so without this, two concurrent writers reading
+    the same pre-mutation snapshot would silently overwrite one another.
 
 - `src/registry/registry.ts` — `~/.spork/workspaces.json`: registers/lists/
   unregisters workspaces by name, and `resolveWorkspaceDir`, which is how CLI
   commands accept either a registered workspace name or a raw directory path.
   The registry is treated as an index, not a source of truth — `listWorkspaces`
   drops (and persists the removal of) any entry whose manifest no longer
-  exists on disk rather than trusting stale state.
+  exists on disk rather than trusting stale state. Every write (register,
+  unregister, and the self-heal above) goes through `withFileLock` around
+  the registry path, re-reading fresh inside the lock — same reasoning as
+  `workspace.ts`'s manifest locking.
 - `src/registry/repoRegistry.ts` — `~/.spork/repos.json`: the same
-  index-not-source-of-truth pattern as above, but for repo *sources* rather
-  than workspaces — `alias → source`, so a repo you've already cloned once
+  index-not-source-of-truth pattern (and the same `withFileLock`-around-
+  every-write treatment) as above, but for repo *sources* rather than
+  workspaces — `alias → source`, so a repo you've already cloned once
   can be referred to by a short name instead of its full clone URL next
   time. `resolveRepoAlias` is the alias-or-raw-source lookup `addRepoSource`
   (below) and the CLI use; `listRepoAliases` self-heals against

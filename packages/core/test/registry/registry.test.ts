@@ -93,3 +93,15 @@ describe('resolveWorkspaceDir', () => {
     await expect(resolveWorkspaceDir(registryPath, 'nowhere')).rejects.toThrow(SporkError)
   })
 })
+
+describe('registerWorkspace — concurrency', () => {
+  it('does not lose a sibling registration when several run concurrently', async () => {
+    const dirs = await Promise.all(Array.from({ length: 8 }, (_, i) => makeWorkspaceDir(`demo-${i}`)))
+
+    await Promise.all(dirs.map((dir, i) => registerWorkspace(registryPath, { name: `demo-${i}`, dir })))
+
+    const workspaces = await listWorkspaces(registryPath)
+    expect(workspaces).toHaveLength(8)
+    expect(new Set(workspaces.map((w) => w.name))).toEqual(new Set(dirs.map((_, i) => `demo-${i}`)))
+  })
+})

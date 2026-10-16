@@ -400,6 +400,43 @@ the `code` CLI. Unlike `select()`, `confirm()` has no separate
 apart (either way, the workspace just doesn't open automatically; `spork
 workspace open <name>` still works whenever the user wants it).
 
+### Concurrent writes to the manifest/registries needed their own lock
+
+Making `repo scan`/`workspace create --repo`/the interactive picker run
+concurrently (see "Live concurrent display" above) surfaced a bug those
+commands didn't have when they were sequential: `workspace create demo
+--repo a --repo b --repo c` would create all three worktrees on disk, but
+`spork.workspace.json` and the generated `.code-workspace` would end up
+with only one of them — the other two silently vanished. The repo alias
+registry had the identical bug (`repo scan` over several repos could lose
+one's registration the same way).
+
+The cause was a classic lost update: `addRepo`/`registerRepoAlias` each
+read the manifest/registry file, mutated an in-memory copy, and wrote it
+back — safe one at a time, but with several calls running concurrently
+via `@spork/task-runner`, two of them could both read the same
+pre-mutation snapshot and then each write their own addition back over
+the other's, with no error to signal it. "Locking around the shared
+cache" above already solved this exact shape of problem for the repo
+cache itself (`withRepoLock`, via `proper-lockfile`), but that lock only
+ever covered the cache directory — not the separate manifest/registry
+JSON files `addRepo` and friends also read-mutate-write.
+
+The fix, `packages/core/src/util/fileLock.ts`'s `withFileLock`, applies
+the same `proper-lockfile` mechanism to those files instead: every
+function that mutates a manifest or a registry (`workspace.ts`'s
+`addRepo`/`removeRepo`/`reconcileWorkspace`; `registry.ts` and
+`repoRegistry.ts`'s register/unregister/self-heal) now wraps its whole
+read-mutate-write cycle in a lock on that file, **re-reading fresh from
+inside it** rather than reusing an earlier read — the re-read is what
+actually closes the race; locking around a stale snapshot would just
+serialize the same lost update. Unlike `withRepoLock`, `withFileLock`
+doesn't pre-create its target before locking: a repo cache directory
+always needs to exist to do real work inside it, but a registry file is
+meaningfully *absent* until its first write, and callers' `existsSync`
+checks rely on that to know to start from an empty default. `realpath:
+false` lets `proper-lockfile` lock a path that doesn't exist yet instead.
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of

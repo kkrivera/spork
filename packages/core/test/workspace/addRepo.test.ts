@@ -195,3 +195,28 @@ describe('addRepo — local vs. global alias registration', () => {
     expect(fromOther.entry.source).toBe(otherSource)
   })
 })
+
+describe('addRepo — concurrency', () => {
+  it('does not lose a sibling entry when several --repo adds run concurrently (the task-runner path)', async () => {
+    const sources = Array.from({ length: 8 }, (_, i) => `git@github.com:acme/repo-${i}.git`)
+
+    const results = await Promise.all(sources.map((source) => addRepo(ctx, dir, { source })))
+
+    const manifest = await readManifest(dir)
+    expect(manifest.worktrees).toHaveLength(8)
+    expect(new Set(manifest.worktrees.map((wt) => wt.source))).toEqual(new Set(sources))
+    expect(new Set(results.map((r) => r.entry.folder))).toEqual(new Set(manifest.worktrees.map((wt) => wt.folder)))
+  })
+
+  it('keeps the .code-workspace file in sync with every concurrently-added repo', async () => {
+    const sources = Array.from({ length: 6 }, (_, i) => `git@github.com:acme/repo-${i}.git`)
+
+    await Promise.all(sources.map((source) => addRepo(ctx, dir, { source })))
+
+    const manifest = await readManifest(dir)
+    const codeWorkspace = JSON.parse(await readFile(path.join(dir, 'demo.code-workspace'), 'utf8'))
+    const codeWorkspaceFolders = codeWorkspace.folders.map((f: { path: string }) => f.path)
+    expect(new Set(codeWorkspaceFolders)).toEqual(new Set(manifest.worktrees.map((wt) => `./${wt.folder}`)))
+    expect(codeWorkspaceFolders).toHaveLength(6)
+  })
+})

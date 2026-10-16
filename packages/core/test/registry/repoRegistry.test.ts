@@ -146,3 +146,18 @@ describe('resolveScopedRepoAlias', () => {
     expect(resolved).toBe(WIDGETS_SOURCE)
   })
 })
+
+describe('registerRepoAlias — concurrency', () => {
+  it('does not lose a sibling alias when several registrations run concurrently (repo scan/the task-runner path)', async () => {
+    const sources = Array.from({ length: 8 }, (_, i) => `git@github.com:acme/repo-${i}.git`)
+    await Promise.all(sources.map((source) => fakeClone(source)))
+
+    await Promise.all(
+      sources.map((source, i) => registerRepoAlias(registryPath, { alias: `repo-${i}`, source, addedAt: '' })),
+    )
+
+    const aliases = await listRepoAliases(registryPath, reposRoot)
+    expect(aliases).toHaveLength(8)
+    expect(new Set(aliases.map((a) => a.source))).toEqual(new Set(sources))
+  })
+})

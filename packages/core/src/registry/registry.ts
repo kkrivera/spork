@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { SporkError } from '../errors.js'
+import { withFileLock } from '../util/fileLock.js'
 import { manifestPath } from '../workspace/manifest.js'
 
 export interface RegistryEntry {
@@ -25,19 +26,30 @@ async function writeRegistryFile(registryPath: string, file: RegistryFile): Prom
   await writeFile(registryPath, `${JSON.stringify(file, null, 2)}\n`, 'utf8')
 }
 
+/**
+ * Locks around the whole read-mutate-write cycle, re-reading fresh from
+ * inside the lock, for the same reason `repoRegistry.ts`'s
+ * `registerRepoAlias` does — not currently triggered by any concurrent
+ * caller (workspaces are created one at a time), but kept consistent with
+ * every other index file here rather than relying on that staying true.
+ */
 export async function registerWorkspace(registryPath: string, entry: RegistryEntry): Promise<void> {
-  const file = await readRegistryFile(registryPath)
-  if (file.workspaces.some((workspace) => workspace.name === entry.name)) {
-    throw new SporkError(`A workspace named "${entry.name}" is already registered.`)
-  }
-  file.workspaces.push(entry)
-  await writeRegistryFile(registryPath, file)
+  await withFileLock(registryPath, async () => {
+    const file = await readRegistryFile(registryPath)
+    if (file.workspaces.some((workspace) => workspace.name === entry.name)) {
+      throw new SporkError(`A workspace named "${entry.name}" is already registered.`)
+    }
+    file.workspaces.push(entry)
+    await writeRegistryFile(registryPath, file)
+  })
 }
 
 export async function unregisterWorkspace(registryPath: string, name: string): Promise<void> {
-  const file = await readRegistryFile(registryPath)
-  file.workspaces = file.workspaces.filter((workspace) => workspace.name !== name)
-  await writeRegistryFile(registryPath, file)
+  await withFileLock(registryPath, async () => {
+    const file = await readRegistryFile(registryPath)
+    file.workspaces = file.workspaces.filter((workspace) => workspace.name !== name)
+    await writeRegistryFile(registryPath, file)
+  })
 }
 
 /**
@@ -45,14 +57,19 @@ export async function unregisterWorkspace(registryPath: string, name: string): P
  * truth: any entry whose manifest no longer exists on disk (the workspace
  * directory was deleted by hand) is dropped here and the drop is persisted,
  * rather than trusting stale state — see
- * docs/plans/0001-worktree-workspace-architecture.md.
+ * docs/plans/0001-worktree-workspace-architecture.md. The persisted drop
+ * re-reads fresh from inside the lock, same reasoning as `repoRegistry.ts`.
  */
 export async function listWorkspaces(registryPath: string): Promise<RegistryEntry[]> {
   const file = await readRegistryFile(registryPath)
   const survivors = file.workspaces.filter((workspace) => existsSync(manifestPath(workspace.dir)))
 
   if (survivors.length !== file.workspaces.length) {
-    await writeRegistryFile(registryPath, { workspaces: survivors })
+    await withFileLock(registryPath, async () => {
+      const fresh = await readRegistryFile(registryPath)
+      const freshSurvivors = fresh.workspaces.filter((workspace) => existsSync(manifestPath(workspace.dir)))
+      await writeRegistryFile(registryPath, { workspaces: freshSurvivors })
+    })
   }
 
   return survivors

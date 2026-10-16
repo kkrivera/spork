@@ -24,6 +24,27 @@ cache path must be called from inside `withRepoLock` by the caller — `cache.ts
 itself doesn't lock, it just does the filesystem/git work. Don't call
 `cloneBare`/`fetchAll` directly outside the lock from orchestration code.
 
+## Index files (manifest/registries) need locking too, via `withFileLock`
+
+`@spork/task-runner` means several `addRepo`/`registerRepoAlias`/etc. calls
+now run concurrently against the *same* manifest or registry file
+(`workspace create --repo a --repo b ...`, the interactive picker, `repo
+scan`). Every function that reads one of these small JSON index files,
+mutates it in memory, and writes it back — `workspace.ts`'s
+`addRepo`/`removeRepo`/`reconcileWorkspace`, and both `registry.ts` and
+`repoRegistry.ts`'s register/unregister/self-heal functions — must wrap
+that whole cycle in `util/fileLock.ts`'s `withFileLock(path, fn)`,
+**re-reading the file from inside the lock** rather than reusing an
+earlier read from before the lock was acquired. Skipping the fresh re-read
+defeats the lock entirely: two concurrent callers would each still mutate
+their own stale in-memory copy and the second write would silently
+overwrite the first one's addition. (This bit a real user: `workspace
+create` with several `--repo`s left the manifest and `.code-workspace`
+with only one of them, even though every worktree had actually been
+created on disk.) `withFileLock` is deliberately separate from
+`repo/lock.ts`'s `withRepoLock` — see its own doc comment for why it can't
+reuse that one's "pre-create the target, then lock" approach.
+
 ## `src/registry`
 
 Two registries, same index-not-source-of-truth pattern: `registry.ts` for

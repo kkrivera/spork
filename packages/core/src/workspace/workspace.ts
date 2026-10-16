@@ -10,10 +10,12 @@ import { addRepoSource } from '../repo/repos.js'
 import { localRepoRegistryPath, resolveScopedRepoAlias } from '../registry/repoRegistry.js'
 import { slugify } from '../util/slug.js'
 import { repoShortName } from '../util/repoName.js'
+import { withFileLock } from '../util/fileLock.js'
 import { SporkError } from '../errors.js'
 import { writeCodeWorkspace } from './codeWorkspace.js'
 import {
   createManifest,
+  manifestPath,
   readManifest,
   writeManifest,
   type WorkspaceManifest,
@@ -60,6 +62,13 @@ export interface ReconcileResult {
  * the manifest/.code-workspace if anything changed. Called before every
  * mutating or state-reporting operation below — see
  * docs/plans/0001-worktree-workspace-architecture.md.
+ *
+ * The prune-write re-reads the manifest fresh from inside `withFileLock`
+ * rather than reusing this function's own initial read, and only removes
+ * the specific folders *this* call determined were gone — so a sibling
+ * `addRepo` that wrote a new entry in the meantime (this runs concurrently
+ * with every `--repo`/the interactive picker via `@spork/task-runner`)
+ * doesn't get that entry silently dropped by a stale snapshot.
  */
 export async function reconcileWorkspace(ctx: WorkspaceContext, workspaceDir: string): Promise<ReconcileResult> {
   const manifest = await readManifest(workspaceDir)
@@ -80,8 +89,12 @@ export async function reconcileWorkspace(ctx: WorkspaceContext, workspaceDir: st
 
   if (removedFolders.length > 0) {
     manifest.worktrees = survivors
-    await writeManifest(workspaceDir, manifest)
-    await writeCodeWorkspace(workspaceDir, manifest)
+    await withFileLock(manifestPath(workspaceDir), async () => {
+      const fresh = await readManifest(workspaceDir)
+      fresh.worktrees = fresh.worktrees.filter((wt) => !removedFolders.includes(wt.folder))
+      await writeManifest(workspaceDir, fresh)
+      await writeCodeWorkspace(workspaceDir, fresh)
+    })
   }
 
   return { manifest, removedFolders }
@@ -152,9 +165,21 @@ export async function addRepo(
     addedAt: new Date().toISOString(),
   }
 
-  manifest.worktrees.push(entry)
-  await writeManifest(workspaceDir, manifest)
-  await writeCodeWorkspace(workspaceDir, manifest)
+  // Re-reads the manifest fresh from inside the lock rather than reusing
+  // this call's own (possibly now-stale) `manifest` — `--repo a --repo b
+  // --repo c`/the interactive picker add every repo concurrently via
+  // @spork/task-runner, so by the time this runs, a sibling call may
+  // already have written its own entry. Pushing onto the stale in-memory
+  // `manifest` and writing that back would silently clobber it. (A
+  // narrower race — two concurrent adds resolving to the exact same
+  // folder name — isn't re-checked here; the lock's job is just to stop
+  // writes from stomping on each other, not to add new validation.)
+  await withFileLock(manifestPath(workspaceDir), async () => {
+    const fresh = await readManifest(workspaceDir)
+    fresh.worktrees.push(entry)
+    await writeManifest(workspaceDir, fresh)
+    await writeCodeWorkspace(workspaceDir, fresh)
+  })
 
   // Submodule init is per-worktree, not shared-cache state, so it runs after
   // the lock is released — no reason to hold up other spork operations on
@@ -189,9 +214,15 @@ export async function removeRepo(ctx: WorkspaceContext, workspaceDir: string, fo
     await removeWorktree(cache.path, worktreePath, { force: true })
   })
 
-  manifest.worktrees = manifest.worktrees.filter((wt) => wt.folder !== folder)
-  await writeManifest(workspaceDir, manifest)
-  await writeCodeWorkspace(workspaceDir, manifest)
+  // Same re-read-fresh-inside-the-lock reasoning as `addRepo` — not
+  // currently called concurrently by any wired command, but kept
+  // consistent so that stays true by construction rather than by accident.
+  await withFileLock(manifestPath(workspaceDir), async () => {
+    const fresh = await readManifest(workspaceDir)
+    fresh.worktrees = fresh.worktrees.filter((wt) => wt.folder !== folder)
+    await writeManifest(workspaceDir, fresh)
+    await writeCodeWorkspace(workspaceDir, fresh)
+  })
 }
 
 export interface RemoveWorkspaceOptions {

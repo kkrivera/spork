@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { SporkError } from '../errors.js'
 import { repoCacheExists } from '../repo/cache.js'
+import { withFileLock } from '../util/fileLock.js'
 
 export interface RepoRegistryEntry {
   alias: string
@@ -32,32 +33,52 @@ async function writeRegistryFile(registryPath: string, file: RepoRegistryFile): 
   await writeFile(registryPath, `${JSON.stringify(file, null, 2)}\n`, 'utf8')
 }
 
+/**
+ * Registering (and unregistering, below) locks around the whole
+ * read-mutate-write cycle, re-reading fresh from inside the lock — several
+ * `repo scan`/`workspace create --repo`/the interactive picker adds run
+ * concurrently via `@spork/task-runner`, each registering its own alias
+ * against the *same* registry file. Without this, two concurrent callers
+ * reading the same pre-mutation snapshot would each write their own
+ * addition back over the other's, silently losing one.
+ */
 export async function registerRepoAlias(registryPath: string, entry: RepoRegistryEntry): Promise<void> {
-  const file = await readRegistryFile(registryPath)
-  if (file.repos.some((repo) => repo.alias === entry.alias)) {
-    throw new SporkError(`A repo alias named "${entry.alias}" is already registered.`)
-  }
-  file.repos.push(entry)
-  await writeRegistryFile(registryPath, file)
+  await withFileLock(registryPath, async () => {
+    const file = await readRegistryFile(registryPath)
+    if (file.repos.some((repo) => repo.alias === entry.alias)) {
+      throw new SporkError(`A repo alias named "${entry.alias}" is already registered.`)
+    }
+    file.repos.push(entry)
+    await writeRegistryFile(registryPath, file)
+  })
 }
 
 export async function unregisterRepoAlias(registryPath: string, alias: string): Promise<void> {
-  const file = await readRegistryFile(registryPath)
-  file.repos = file.repos.filter((repo) => repo.alias !== alias)
-  await writeRegistryFile(registryPath, file)
+  await withFileLock(registryPath, async () => {
+    const file = await readRegistryFile(registryPath)
+    file.repos = file.repos.filter((repo) => repo.alias !== alias)
+    await writeRegistryFile(registryPath, file)
+  })
 }
 
 /**
  * Lists registered repo aliases. Like the workspace registry, this is an
  * index, not a source of truth: an entry whose cache no longer exists on
- * disk is dropped here and the drop is persisted.
+ * disk is dropped here and the drop is persisted — the persisted drop
+ * re-reads fresh from inside the lock too, for the same reason
+ * `registerRepoAlias` does, even though the returned list itself reflects
+ * this call's own (slightly earlier) read.
  */
 export async function listRepoAliases(registryPath: string, reposRoot: string): Promise<RepoRegistryEntry[]> {
   const file = await readRegistryFile(registryPath)
   const survivors = file.repos.filter((repo) => repoCacheExists(reposRoot, repo.source))
 
   if (survivors.length !== file.repos.length) {
-    await writeRegistryFile(registryPath, { repos: survivors })
+    await withFileLock(registryPath, async () => {
+      const fresh = await readRegistryFile(registryPath)
+      const freshSurvivors = fresh.repos.filter((repo) => repoCacheExists(reposRoot, repo.source))
+      await writeRegistryFile(registryPath, { repos: freshSurvivors })
+    })
   }
 
   return survivors
