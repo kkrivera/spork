@@ -96,10 +96,13 @@ describe('runCreate', () => {
     cwd.mockRestore()
   })
 
-  it('honors an explicit --dir', async () => {
+  it('treats --dir as a parent directory, landing at <dir>/<name>', async () => {
     await runCreate(ctx, 'demo', { dir: '/custom/path' })
 
-    expect(createWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, { name: 'demo', dir: '/custom/path' })
+    expect(createWorkspace).toHaveBeenCalledWith(
+      { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
+      { name: 'demo', dir: '/custom/path/demo' },
+    )
   })
 
   it('refuses to create a workspace whose name is already registered', async () => {
@@ -224,7 +227,10 @@ describe('registerCreateCommand', () => {
 
     await program.parseAsync(['node', 'test', 'create', 'demo', '--dir', '/custom'])
 
-    expect(createWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, { name: 'demo', dir: '/custom' })
+    expect(createWorkspace).toHaveBeenCalledWith(
+      { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
+      { name: 'demo', dir: '/custom/demo' },
+    )
     expect(logSpy.mock.calls.flat().join('\n')).toContain('Created workspace "demo"')
     logSpy.mockRestore()
   })

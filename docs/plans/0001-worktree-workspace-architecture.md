@@ -36,6 +36,14 @@ users expect while the underlying git state stays collision-free.
 Ref/folder names are slugified before use in derived branch/folder names (e.g. a
 `feature/foo` branch must not produce a nested path).
 
+Since every worktree's branch is namespaced by the *workspace's* name
+(`spork/<workspace-slug>/...`), that name has to mean the same thing
+everywhere it shows up — so `workspace create <name>`'s folder is always
+`<name>` too, not an arbitrary one. `--dir <path>` is a *parent* directory
+(the workspace lands at `<path>/<name>`), never the exact target — letting
+it name the folder directly would let a workspace's on-disk folder and its
+branch-namespace disagree about what it's even called.
+
 Clones are full, not shallow — the same cache backs arbitrary future branches
 over time, and shallow clones would complicate later fetches. Shallow-clone
 support is a possible future optimization, not a v1 concern.
