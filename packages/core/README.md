@@ -12,12 +12,20 @@ for the design this package implements.
     through it, and it's the seam unit tests mock instead of spawning real `git`
     processes.
   - `clone.ts` — bare-clone creation, fetching, and ref resolution against a
-    shared repo cache. `setHeadBranch(bareRepoPath, branch)` repoints the
-    cache's own HEAD, for correcting it after a clone whose source wasn't
-    the repo's real upstream (see `repo/scan.ts` below) — safe even if
-    `branch` doesn't exist in the cache yet, since HEAD can symbolically
-    point at a not-yet-existent ref and resolves once a later fetch brings
-    it in.
+    shared repo cache. `fetchAll` configures the cache's fetch refspec
+    (`remote.origin.fetch = +refs/heads/*:refs/heads/*`) before every fetch,
+    re-asserting it rather than relying on it being set once — `git clone
+    --bare` deliberately doesn't set one (git-clone(1)), so without this,
+    `git fetch` only updates `FETCH_HEAD` and the cache's branches stay
+    frozen at whatever they were at clone time, confirmed by direct
+    testing. Deliberately no `--prune`: that would delete any local
+    `refs/heads/*` entry missing from the remote, including every
+    spork-owned workspace branch (local-only, never pushed upstream).
+    `setHeadBranch(bareRepoPath, branch)` repoints the cache's own HEAD, for
+    correcting it after a clone whose source wasn't the repo's real
+    upstream (see `repo/scan.ts` below) — safe even if `branch` doesn't
+    exist in the cache yet, since HEAD can symbolically point at a
+    not-yet-existent ref and resolves once a later fetch brings it in.
   - `worktree.ts` — worktree add/remove/prune/list. `addWorktree` always
     checks out one local branch per workspace — the *workspace's own name*,
     verbatim, shared by every repo in it, never the requested ref directly

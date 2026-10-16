@@ -5,8 +5,27 @@ export async function cloneBare(remote: string, destination: string): Promise<vo
   await execGit(['clone', '--bare', remote, destination])
 }
 
-/** Refreshes a bare cache's refs so newly-requested branches/tags can be resolved. */
+/**
+ * Refreshes a bare cache's refs so newly-requested branches/tags, and the
+ * latest tip of an already-known one, can be resolved.
+ *
+ * `git clone --bare` deliberately does *not* configure a fetch refspec —
+ * "neither remote-tracking branches nor the related configuration
+ * variables are created" (git-clone(1)) — so without this, `git fetch` has
+ * nothing telling it to update `refs/heads/*` from the remote: it only
+ * writes `FETCH_HEAD`, and the cache's branches stay frozen at whatever
+ * they were at clone time, even after repeated "fetches," confirmed by
+ * direct testing. This re-asserts the refspec (`git config`, which
+ * replaces rather than accumulates, so it's safe to call every time) before
+ * every fetch rather than relying on it having been set once at clone
+ * time, so a cache that already existed before this fix still self-heals
+ * the next time anything touches it. Deliberately has no `--prune`: that
+ * would delete any local `refs/heads/*` entry missing from the remote —
+ * including every spork-owned workspace branch, since those are local-only
+ * and never exist upstream.
+ */
 export async function fetchAll(bareRepoPath: string): Promise<void> {
+  await execGit(['config', 'remote.origin.fetch', '+refs/heads/*:refs/heads/*'], { cwd: bareRepoPath })
   await execGit(['fetch', '--all', '--tags'], { cwd: bareRepoPath })
 }
 

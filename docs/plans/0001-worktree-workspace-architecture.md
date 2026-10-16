@@ -490,6 +490,42 @@ meaningfully *absent* until its first write, and callers' `existsSync`
 checks rely on that to know to start from an empty default. `realpath:
 false` lets `proper-lockfile` lock a path that doesn't exist yet instead.
 
+### `fetchAll` was never actually refreshing branches
+
+A repo's cache is supposed to stay current via `ensureRepoCache`'s
+"fetch if already cloned" path — but `fetchAll` (`git fetch --all --tags`)
+turned out to be a near-complete no-op for that purpose, confirmed by
+directly testing against a real bare clone: pushing a new commit upstream
+and re-fetching inside the cache left `refs/heads/main` exactly where it
+was at clone time. The fetch only updated `FETCH_HEAD`.
+
+The cause: `git clone --bare` deliberately does not configure a fetch
+refspec — "neither remote-tracking branches nor the related configuration
+variables are created" (git-clone(1)), unlike a normal clone, which sets
+one mapping the remote's branches into `refs/remotes/origin/*`. Without
+any refspec at all, a bare clone's own `git fetch` has nothing telling it
+what to do with the branches it downloads, so they only ever land in
+`FETCH_HEAD` and the cache's actual `refs/heads/*` — what `addWorktree`'s
+`-b <branch> <path> HEAD` actually builds a fresh branch from — never
+moved past whatever it was at clone time. In practice this meant adding a
+repo to a workspace long after it was first cached (by any earlier
+`repo add`/`repo scan`/another workspace) silently started the new
+worktree from a stale snapshot instead of the real upstream tip.
+
+The fix: `fetchAll` now runs `git config remote.origin.fetch
++refs/heads/*:refs/heads/*` immediately before every fetch — `git config`
+replaces rather than accumulates, so it's cheap and safe to re-assert on
+every call rather than needing to have been set once at clone time (which
+also means an already-existing cache from before this fix self-heals the
+next time anything touches it, no migration needed). Deliberately **not**
+`--mirror` and deliberately no `--prune`: either would make fetch
+*delete* any local `refs/heads/*` entry missing from the remote side —
+and every spork-owned workspace branch (`spork create <name>`'s verbatim,
+shared-per-workspace branch — see above) is exactly that: local-only,
+never pushed upstream. A mirroring or pruning fetch would silently delete
+a user's own in-progress workspace branches the next time any sibling
+`addRepo` call happened to touch the same repo's cache.
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of

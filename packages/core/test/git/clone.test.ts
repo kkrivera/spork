@@ -31,6 +31,29 @@ describe('fetchAll', () => {
 
     expect(execGitMock).toHaveBeenCalledWith(['fetch', '--all', '--tags'], { cwd: '/cache/foo-bar' })
   })
+
+  it('configures the fetch refspec before fetching, so refs/heads/* actually refreshes (git clone --bare sets none by default)', async () => {
+    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await fetchAll('/cache/foo-bar')
+
+    expect(execGitMock).toHaveBeenCalledWith(
+      ['config', 'remote.origin.fetch', '+refs/heads/*:refs/heads/*'],
+      { cwd: '/cache/foo-bar' },
+    )
+    const configCallOrder = execGitMock.mock.calls.findIndex((call) => call[0][0] === 'config')
+    const fetchCallOrder = execGitMock.mock.calls.findIndex((call) => call[0][0] === 'fetch')
+    expect(configCallOrder).toBeLessThan(fetchCallOrder)
+  })
+
+  it('never passes --prune, which would delete local-only spork-owned branches missing from the remote', async () => {
+    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await fetchAll('/cache/foo-bar')
+
+    const fetchCall = execGitMock.mock.calls.find((call) => call[0][0] === 'fetch')
+    expect(fetchCall?.[0]).not.toContain('--prune')
+  })
 })
 
 describe('resolveRef', () => {
