@@ -116,6 +116,8 @@ export interface AddRepoResult {
   submodulesInitialized: boolean
   /** Set if the worktree has submodules but initializing them failed — the worktree itself is still valid and registered. */
   submoduleWarning?: string
+  /** True if `localBranch` already existed in this repo's cache and was checked out as-is, rather than created fresh. */
+  reusedExistingBranch: boolean
 }
 
 /**
@@ -144,12 +146,16 @@ function assertCanAddRepo(manifest: WorkspaceManifest, folder: string, source: s
 }
 
 /**
- * Creates the worktree, translating a branch-name collision into a clear
- * `SporkError` instead of letting git's own failure surface as-is. A branch
- * named `localBranch` already existing in this repo's cache — a leftover
- * from a previous, removed workspace of the same name, or an unrelated
- * branch someone made by hand — is never silently reused or deleted; spork
- * only ever touches history it created itself.
+ * Creates the worktree — reusing `localBranch` as-is if it already exists in
+ * this repo's cache (e.g. a previous, removed workspace of the same name
+ * touched it before), or creating it fresh from `requestedRef` otherwise —
+ * and returns whether it reused an existing branch. The one thing this
+ * can't resolve is `localBranch` already being checked out *elsewhere*
+ * right now (`isWorktreeCollisionError`; `isBranchExistsError` is kept as a
+ * defensive fallback for a check-then-act race, though `addWorktree`'s own
+ * existence check means it shouldn't normally fire) — a branch can only be
+ * checked out in one worktree at a time, so that still becomes a clear
+ * `SporkError` instead of letting git's own failure surface as-is.
  */
 async function createWorktreeOrThrow(
   cache: { path: string; lockPath: string },
@@ -157,13 +163,16 @@ async function createWorktreeOrThrow(
   localBranch: string,
   requestedRef: string,
   source: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
-    await withRepoLock(cache.lockPath, () => addWorktree(cache.path, worktreePath, localBranch, requestedRef))
+    const { reusedExistingBranch } = await withRepoLock(cache.lockPath, () =>
+      addWorktree(cache.path, worktreePath, localBranch, requestedRef),
+    )
+    return reusedExistingBranch
   } catch (error) {
     if (isBranchExistsError(error) || isWorktreeCollisionError(error)) {
       throw new SporkError(
-        `Branch "${localBranch}" already exists in the cache for "${source}" (${cache.path}) and isn't available to reuse automatically. Remove it by hand (git -C ${cache.path} branch -D ${localBranch}) or create this workspace under a different name.`,
+        `Branch "${localBranch}" is already checked out elsewhere in the cache for "${source}" (${cache.path}) and can't be reused here. Resolve that checkout first, or create this workspace under a different name.`,
       )
     }
     throw error
@@ -207,7 +216,7 @@ export async function addRepo(
   await addRepoSource({ reposRoot: ctx.reposRoot, repoRegistryPath: aliasRegistryPath }, source)
 
   const cache = resolveRepoCache(ctx.reposRoot, source)
-  await createWorktreeOrThrow(cache, worktreePath, localBranch, requestedRef, source)
+  const reusedExistingBranch = await createWorktreeOrThrow(cache, worktreePath, localBranch, requestedRef, source)
 
   const entry: WorktreeEntry = {
     folder,
@@ -239,15 +248,15 @@ export async function addRepo(
   // failure here doesn't undo the worktree/manifest entry above: the repo
   // itself checked out fine, so the add is still considered successful.
   if (!hasSubmodules(worktreePath)) {
-    return { entry, aliasScope, submodulesInitialized: false }
+    return { entry, aliasScope, submodulesInitialized: false, reusedExistingBranch }
   }
 
   try {
     await initSubmodules(worktreePath)
-    return { entry, aliasScope, submodulesInitialized: true }
+    return { entry, aliasScope, submodulesInitialized: true, reusedExistingBranch }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { entry, aliasScope, submodulesInitialized: false, submoduleWarning: message }
+    return { entry, aliasScope, submodulesInitialized: false, submoduleWarning: message, reusedExistingBranch }
   }
 }
 

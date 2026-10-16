@@ -20,7 +20,8 @@ Each repo source is cloned once, as a `git clone --bare` cache under
 against that shared cache via:
 
 ```
-git worktree add -b <workspace-name> <path> <start-point>
+git worktree add -b <workspace-name> <path> <start-point>   # branch doesn't exist yet
+git worktree add <path> <workspace-name>                    # branch already exists — reuse it as-is
 ```
 
 `<workspace-name>` is used verbatim — not slugified, no prefix — so every
@@ -40,7 +41,7 @@ workspaces (or two worktrees in one workspace) touched the same repo+branch,
 a routine scenario, not an edge case. Dropping that per-worktree uniqueness
 trades structural impossibility for two narrower, explicitly-handled cases:
 
-- **The same repo added twice to one workspace** — now impossible by
+- **The same repo added twice to one workspace** — still impossible by
   construction (one shared branch means both worktrees would need to check
   out the identical branch in the identical repo cache at once). `addRepo`
   checks for this upfront and fails with a clear `SporkError` naming the
@@ -48,17 +49,24 @@ trades structural impossibility for two narrower, explicitly-handled cases:
   elsewhere" surface confusingly.
 - **A branch with the workspace's name already existing in a repo's
   cache** — e.g. a previous, removed workspace of the same name touched
-  this repo before and its branch is still sitting there, or it's
-  unrelated to spork entirely (a branch a user made by hand that happens
-  to share the name). Since the branch is now a real, meaningful,
-  potentially-pushable one rather than disposable `spork/...` plumbing,
-  spork never silently reuses or deletes it — `addRepo` catches git's
-  "branch already exists" failure (`isBranchExistsError`, alongside the
-  existing `isWorktreeCollisionError`, both in `git/worktree.ts`) and fails
-  with a clear `SporkError` instead, naming the cache path and the branch
-  to remove by hand if that's what's wanted. Removing a workspace
-  (`removeRepo`/`removeWorkspace`) never deletes the branch either, for the
-  same reason — only the worktree.
+  this repo before and its branch is still sitting there. `addWorktree`
+  (`git/worktree.ts`) checks for this first (`branchExists`) and, when it's
+  there, checks it out as-is — continuing its history — rather than trying
+  (and failing) to create a duplicate. This is deliberately *reuse*, not
+  recreate: the branch is a real, meaningful, potentially-pushable one now,
+  not disposable `spork/...` plumbing, so picking up where a previous,
+  removed workspace of the same name left off is exactly what's wanted.
+  Removing a workspace (`removeRepo`/`removeWorkspace`) never deletes the
+  branch either, for the same reason — only the worktree, which is what
+  makes recreating the workspace later able to find and resume it. The one
+  thing this can't resolve is the branch being checked out *elsewhere right
+  now* (a genuinely different, concurrent conflict) — git can only ever
+  check out a given branch in one worktree at a time, so `addRepo` catches
+  that failure (`isWorktreeCollisionError`; `isBranchExistsError` is kept
+  as a defensive fallback for a check-then-act race, though the upfront
+  check means it shouldn't normally fire) and fails with a clear
+  `SporkError` naming the cache path, rather than silently working around
+  something it fundamentally can't.
 
 Workspace names are already kept unique by the workspace registry
 (`registerWorkspace` refuses a duplicate), which is what makes "one

@@ -10,11 +10,10 @@ vi.mock('../../src/repo/cache.js', async () => {
 vi.mock('../../src/repo/lock.js', () => ({
   withRepoLock: vi.fn((_target: string, fn: () => Promise<unknown>) => fn()),
 }))
-vi.mock('../../src/git/worktree.js', () => ({
-  addWorktree: vi.fn(),
-  removeWorktree: vi.fn(),
-  pruneWorktrees: vi.fn(),
-}))
+vi.mock('../../src/git/worktree.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/git/worktree.js')>('../../src/git/worktree.js')
+  return { ...actual, addWorktree: vi.fn(), removeWorktree: vi.fn(), pruneWorktrees: vi.fn() }
+})
 
 const { addWorktree, removeWorktree } = await import('../../src/git/worktree.js')
 const { ensureRepoCache, resolveRepoCache } = await import('../../src/repo/cache.js')

@@ -56,6 +56,10 @@ export function printAddRepoResult(ctx: AppContext, workspace: string, result: A
     ),
   )
 
+  if (result.reusedExistingBranch) {
+    console.log(ctx.ui.color.dim(`Reused existing branch "${entry.localBranch}" for "${entry.folder}".`))
+  }
+
   if (result.submodulesInitialized) {
     console.log(`Initialized submodules in "${entry.folder}"`)
   } else if (result.submoduleWarning) {

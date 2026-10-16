@@ -134,6 +134,48 @@ describe('printAddRepoResult', () => {
   })
 })
 
+describe('printAddRepoResult — branch reuse', () => {
+  it('notes when an existing branch was reused instead of creating a fresh one', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    printAddRepoResult(ctx, 'demo', {
+      entry: {
+        folder: 'widgets',
+        source: 'git@github.com:acme/widgets.git',
+        requestedRef: 'HEAD',
+        localBranch: 'demo',
+        addedAt: '',
+      },
+      aliasScope: 'local',
+      submodulesInitialized: false,
+      reusedExistingBranch: true,
+    })
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('Reused existing branch "demo"')
+    logSpy.mockRestore()
+  })
+
+  it('says nothing about reuse when a fresh branch was created', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    printAddRepoResult(ctx, 'demo', {
+      entry: {
+        folder: 'widgets',
+        source: 'git@github.com:acme/widgets.git',
+        requestedRef: 'HEAD',
+        localBranch: 'demo',
+        addedAt: '',
+      },
+      aliasScope: 'local',
+      submodulesInitialized: false,
+      reusedExistingBranch: false,
+    })
+
+    expect(logSpy.mock.calls.flat().join('\n')).not.toContain('Reused')
+    logSpy.mockRestore()
+  })
+})
+
 describe('registerAddRepoCommand', () => {
   it('wires the add-repo command and prints a confirmation with alias scope', async () => {
     const program = new Command()

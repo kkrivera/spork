@@ -63,9 +63,11 @@ logic lives here.
   and prints the result. `add-repo` (and `create --repo`) register the
   repo's alias locally to the workspace by default, `--global` opts into
   the shared registry instead — `printAddRepoResult` always shows which one
-  happened (`(alias: local)`/`(alias: global)`), plus whether submodules
-  were initialized or a warning if that failed (the add itself still
-  succeeds — see `AddRepoResult` in `@spork/core`). `add-repo` runs its
+  happened (`(alias: local)`/`(alias: global)`), whether an existing branch
+  was reused instead of creating a fresh one (`AddRepoResult.reusedExistingBranch`
+  — e.g. recreating a workspace that touched this repo before), plus
+  whether submodules were initialized or a warning if that failed (the add
+  itself still succeeds — see `AddRepoResult` in `@spork/core`). `add-repo` runs its
   single `addRepo` call through `runConcurrently` for a live spinner, and
   re-throws the raw error on failure (preserving the usual propagate-to-
   the-top-level-handler contract) rather than reporting it the way a batch

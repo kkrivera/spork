@@ -10,18 +10,23 @@ surface; nothing in this repo should import from `src/*` paths directly.
   other function in `src/git` (and everything built on top of it later) must
   call through it rather than importing `node:child_process` itself — that's
   what keeps the rest of the codebase mockable in unit tests.
-- Worktrees are always created on a **new local branch** — the workspace's
-  own name, verbatim, shared by every repo added to it — never by checking
-  out the requested ref directly. Don't "simplify" this by passing the ref
-  straight to `worktree add`. `workspace.ts`'s `addRepo` is what guards the
-  two ways this can still collide (the same repo added twice to one
-  workspace; a branch with this name already existing in a repo's cache) —
-  see
+- Worktrees are created on **one local branch per workspace** — the
+  workspace's own name, verbatim, shared by every repo added to it — never
+  by checking out the requested ref directly, and never slugified (it may
+  contain `/`). `addWorktree` (`git/worktree.ts`) checks whether that
+  branch already exists in a repo's cache first (`branchExists`) and
+  reuses it as-is (continuing its history) when it does, only creating a
+  fresh one from the start point when it doesn't — don't "simplify" this
+  back to always passing `-b`, that breaks resuming a repo a previous,
+  removed workspace of the same name already touched. The one thing this
+  can't resolve is the branch being checked out *elsewhere right now* — git
+  can only check out a branch in one worktree at a time — which
+  `workspace.ts`'s `addRepo` turns into a clear `SporkError`
+  (`isWorktreeCollisionError`; `isBranchExistsError` is a defensive
+  fallback for a check-then-act race) rather than letting git's own
+  failure surface, or trying to work around something it fundamentally
+  can't. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md).
-  Don't add logic elsewhere that tries to auto-resolve either case (reusing
-  or deleting an existing branch) — the branch is a real, potentially-
-  pushable one now, not disposable plumbing, so both must keep failing
-  loudly via `isBranchExistsError`/`isWorktreeCollisionError`.
 
 ## `src/repo`
 

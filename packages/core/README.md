@@ -18,15 +18,20 @@ for the design this package implements.
     `branch` doesn't exist in the cache yet, since HEAD can symbolically
     point at a not-yet-existent ref and resolves once a later fetch brings
     it in.
-  - `worktree.ts` — worktree add/remove/prune/list, always creating a new
-    local branch on `addWorktree` (never reusing the requested ref directly
-    — see the design doc for why) — the *workspace's own name*, verbatim,
-    shared by every repo in it, not a per-worktree one. `isWorktreeCollisionError`
-    recognizes git's "ref already checked out elsewhere" failure;
-    `isBranchExistsError` recognizes it refusing to create a branch that
-    already exists. `workspace.ts`'s `addRepo` uses both to turn either
-    failure into a clear error rather than silently reusing or deleting
-    whatever already has that name.
+  - `worktree.ts` — worktree add/remove/prune/list. `addWorktree` always
+    checks out one local branch per workspace — the *workspace's own name*,
+    verbatim, shared by every repo in it, never the requested ref directly
+    (see the design doc for why) — via `branchExists` first: reuses it
+    as-is (continuing its history) if it already exists in this repo's
+    cache, otherwise creates it fresh from the start point, and reports
+    which happened (`AddWorktreeResult.reusedExistingBranch`).
+    `isWorktreeCollisionError` recognizes git refusing because the branch
+    is checked out *elsewhere right now* (the one thing reuse can't
+    resolve); `isBranchExistsError` is a defensive fallback for the
+    equivalent "branch already exists" failure, kept in case of a
+    check-then-act race (`addWorktree`'s own check means it shouldn't
+    normally fire). `workspace.ts`'s `addRepo` turns either into a clear
+    error rather than letting git's own failure surface.
   - `status.ts` — local-only worktree status (branch + dirty file count, no
     fetch).
   - `remote.ts` — `getRemoteUrl`/`setRemoteUrl`, used by `repo/scan.ts` to
@@ -136,8 +141,9 @@ for the design this package implements.
     workspace the identical branch (the workspace's own name, verbatim —
     see the design doc), rejects adding the same repo twice upfront, and
     turns `addWorktree`'s `isBranchExistsError`/`isWorktreeCollisionError`
-    into a clear `SporkError` rather than silently reusing or deleting an
-    existing branch. `addRepo` also initializes submodules if the worktree
+    into a clear `SporkError` when the branch is checked out elsewhere
+    right now — the one case `addWorktree`'s own reuse-if-exists logic
+    can't resolve on its own. `addRepo` also initializes submodules if the worktree
     has any, after the repo-cache lock is released; a submodule-init
     failure produces a warning in the returned `AddRepoResult`, not a
     thrown error — the worktree is still registered. `addRepo`'s `source`

@@ -62,7 +62,7 @@ afterEach(async () => {
 
 describe('addRepo', () => {
   it('adds a worktree on the workspace\'s own branch and records it in the manifest', async () => {
-    const { entry, submodulesInitialized } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
+    const { entry, submodulesInitialized, reusedExistingBranch } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
 
     expect(entry).toMatchObject({
       folder: 'widgets',
@@ -71,6 +71,7 @@ describe('addRepo', () => {
       localBranch: 'demo',
     })
     expect(submodulesInitialized).toBe(false)
+    expect(reusedExistingBranch).toBe(false)
     expect(addWorktreeMock).toHaveBeenCalledWith(widgetsCachePath(), path.join(dir, 'widgets'), 'demo', 'HEAD')
     expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE)
     expect((await readManifest(dir)).worktrees).toEqual([entry])
@@ -133,30 +134,31 @@ describe('addRepo — branch naming', () => {
       expect.anything(),
     )
   })
+
+  it('reports reusedExistingBranch when addWorktree checked out an existing branch instead of creating one', async () => {
+    addWorktreeMock.mockResolvedValue({ reusedExistingBranch: true })
+
+    const { reusedExistingBranch } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
+
+    expect(reusedExistingBranch).toBe(true)
+  })
 })
 
 describe('addRepo — branch collisions', () => {
-  it("surfaces a clear error when the target branch already exists in this repo's cache", async () => {
+  it('surfaces a clear error when the target branch is already checked out elsewhere', async () => {
     addWorktreeMock.mockRejectedValue(
-      new GitCommandError(['worktree', 'add'], "fatal: a branch named 'demo' already exists\n"),
+      new GitCommandError(['worktree', 'add'], "fatal: 'demo' is already checked out at '/other/path'\n"),
     )
 
     const error: unknown = await addRepo(ctx, dir, { source: WIDGETS_SOURCE }).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(SporkError)
-    expect((error as Error).message).toMatch(/already exists/)
+    expect((error as Error).message).toMatch(/already checked out elsewhere/)
+    expect((error as Error).message).toMatch(/create this workspace under a different name/)
   })
 
-  it("mentions the branch to clean up by hand", async () => {
+  it('also catches a "branch already exists" failure as a defensive fallback (addWorktree normally avoids this by checking first)', async () => {
     addWorktreeMock.mockRejectedValue(
       new GitCommandError(['worktree', 'add'], "fatal: a branch named 'demo' already exists\n"),
-    )
-
-    await expect(addRepo(ctx, dir, { source: WIDGETS_SOURCE })).rejects.toThrow(/branch -D demo/)
-  })
-
-  it('surfaces a clear error when the target branch is already checked out elsewhere', async () => {
-    addWorktreeMock.mockRejectedValue(
-      new GitCommandError(['worktree', 'add'], "fatal: 'demo' is already checked out at '/other/path'\n"),
     )
 
     await expect(addRepo(ctx, dir, { source: WIDGETS_SOURCE })).rejects.toThrow(SporkError)

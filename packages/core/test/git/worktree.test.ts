@@ -9,8 +9,15 @@ vi.mock('../../src/git/exec.js', async () => {
 })
 
 const { execGit, GitCommandError } = await import('../../src/git/exec.js')
-const { addWorktree, removeWorktree, pruneWorktrees, listWorktrees, isWorktreeCollisionError, isBranchExistsError } =
-  await import('../../src/git/worktree.js')
+const {
+  addWorktree,
+  branchExists,
+  removeWorktree,
+  pruneWorktrees,
+  listWorktrees,
+  isWorktreeCollisionError,
+  isBranchExistsError,
+} = await import('../../src/git/worktree.js')
 
 const execGitMock = vi.mocked(execGit)
 
@@ -18,15 +25,66 @@ beforeEach(() => {
   execGitMock.mockReset()
 })
 
-describe('addWorktree', () => {
-  it('creates the worktree on a new local branch', async () => {
-    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
+/** show-ref --verify always "fails" (branch not found), everything else succeeds. */
+function mockNoBranchExists(): void {
+  execGitMock.mockImplementation(async (args) => {
+    if (args[0] === 'show-ref') throw new GitCommandError(args, 'not found')
+    return { stdout: '', stderr: '' }
+  })
+}
+
+describe('addWorktree — creating fresh', () => {
+  it('creates the worktree on a new local branch when none exists yet', async () => {
+    mockNoBranchExists()
 
     await addWorktree('/cache/foo', '/ws/foo', 'demo', 'origin/main')
 
     expect(execGitMock).toHaveBeenCalledWith(['worktree', 'add', '-b', 'demo', '/ws/foo', 'origin/main'], {
       cwd: '/cache/foo',
     })
+  })
+
+  it('reports reusedExistingBranch: false', async () => {
+    mockNoBranchExists()
+
+    expect(await addWorktree('/cache/foo', '/ws/foo', 'demo', 'origin/main')).toEqual({
+      reusedExistingBranch: false,
+    })
+  })
+})
+
+describe('addWorktree — reusing an existing branch', () => {
+  it('checks out the existing branch as-is, without -b or a start point', async () => {
+    execGitMock.mockResolvedValue({ stdout: '', stderr: '' }) // show-ref succeeds: branch exists
+
+    await addWorktree('/cache/foo', '/ws/foo', 'demo', 'origin/main')
+
+    expect(execGitMock).toHaveBeenCalledWith(['worktree', 'add', '/ws/foo', 'demo'], { cwd: '/cache/foo' })
+  })
+
+  it('reports reusedExistingBranch: true', async () => {
+    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    expect(await addWorktree('/cache/foo', '/ws/foo', 'demo', 'origin/main')).toEqual({
+      reusedExistingBranch: true,
+    })
+  })
+})
+
+describe('branchExists', () => {
+  it('returns true when show-ref succeeds', async () => {
+    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    expect(await branchExists('/cache/foo', 'demo')).toBe(true)
+    expect(execGitMock).toHaveBeenCalledWith(['show-ref', '--verify', '--quiet', 'refs/heads/demo'], {
+      cwd: '/cache/foo',
+    })
+  })
+
+  it('returns false when show-ref fails', async () => {
+    execGitMock.mockRejectedValue(new GitCommandError(['show-ref'], 'not found'))
+
+    expect(await branchExists('/cache/foo', 'demo')).toBe(false)
   })
 })
 
