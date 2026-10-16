@@ -6,9 +6,17 @@ vi.mock('@spork/core', () => ({
   codeWorkspaceFilePath: vi.fn(),
   reconcileWorkspace: vi.fn(),
   resolveWorkspaceDir: vi.fn(),
+  listWorkspaces: vi.fn(),
+  SporkError: class SporkError extends Error {},
+}))
+vi.mock('@spork/prompts', () => ({
+  select: vi.fn(),
+  NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 
-const { codeWorkspaceFilePath, reconcileWorkspace, resolveWorkspaceDir } = await import('@spork/core')
+const { codeWorkspaceFilePath, reconcileWorkspace, resolveWorkspaceDir, listWorkspaces, SporkError } =
+  await import('@spork/core')
+const { select, NotInteractiveError } = await import('@spork/prompts')
 const { runOpen, registerOpenCommand } = await import('../../src/commands/workspace/open.js')
 const { createUi } = await import('../../src/output/color.js')
 
@@ -24,6 +32,8 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue({ manifest: { name: 'demo', createdAt: '', worktrees: [] }, removedFolders: [] })
   vi.mocked(codeWorkspaceFilePath).mockReset().mockReturnValue('/ws/demo/demo.code-workspace')
+  vi.mocked(listWorkspaces).mockReset().mockResolvedValue([])
+  vi.mocked(select).mockReset()
 })
 
 describe('runOpen', () => {
@@ -50,6 +60,58 @@ describe('runOpen', () => {
   })
 })
 
+describe('runOpen — picking from a list (no workspace name given)', () => {
+  it('offers a single-select of registered workspaces and opens the chosen one', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([
+      { name: 'demo', dir: '/ws/demo' },
+      { name: 'other', dir: '/ws/other' },
+    ])
+    vi.mocked(select).mockResolvedValue(['/ws/other'])
+    vi.mocked(reconcileWorkspace).mockResolvedValue({
+      manifest: { name: 'other', createdAt: '', worktrees: [] },
+      removedFolders: [],
+    })
+    const opener = fakeOpener({ ok: true })
+
+    const result = await runOpen(ctx, undefined, opener)
+
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ mode: 'single' }))
+    expect(resolveWorkspaceDir).not.toHaveBeenCalled()
+    expect(reconcileWorkspace).toHaveBeenCalledWith(expect.anything(), '/ws/other')
+    expect(result.opened).toBe(true)
+  })
+
+  it('refuses with a clear error when nothing is registered yet', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([])
+
+    await expect(runOpen(ctx, undefined, fakeOpener({ ok: true }))).rejects.toThrow(SporkError)
+    expect(select).not.toHaveBeenCalled()
+  })
+
+  it('throws Cancelled when the user backs out of the picker', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(select).mockResolvedValue(null)
+
+    await expect(runOpen(ctx, undefined, fakeOpener({ ok: true }))).rejects.toThrow(SporkError)
+  })
+
+  it('asks for an explicit name when the terminal cannot support a prompt', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(select).mockRejectedValue(new NotInteractiveError())
+
+    const error: unknown = await runOpen(ctx, undefined, fakeOpener({ ok: true })).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(SporkError)
+    expect((error as Error).message).toContain('spork workspace open <name>')
+  })
+
+  it('re-throws a real picker failure rather than swallowing it', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(select).mockRejectedValue(new Error('terminal exploded'))
+
+    await expect(runOpen(ctx, undefined, fakeOpener({ ok: true }))).rejects.toThrow('terminal exploded')
+  })
+})
+
 describe('registerOpenCommand', () => {
   it('prints a success message when the opener succeeds', async () => {
     const program = new Command()
@@ -72,6 +134,19 @@ describe('registerOpenCommand', () => {
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('not found')
     expect(output).toContain('Open manually')
+    logSpy.mockRestore()
+  })
+
+  it('accepts no workspace name, picking from the list instead', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(select).mockResolvedValue(['/ws/demo'])
+    const program = new Command()
+    registerOpenCommand(program, ctx, fakeOpener({ ok: true }))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await program.parseAsync(['node', 'test', 'open'])
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('Opened')
     logSpy.mockRestore()
   })
 })

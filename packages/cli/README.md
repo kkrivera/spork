@@ -101,7 +101,14 @@ logic lives here.
   `getWorkspaceStatus` reads every worktree via its own `Promise.all`)
   status read as a single `runConcurrently` item too, for a live spinner
   instead of a silent wait, rather than exporting a second per-worktree
-  core function just for this. `index.ts` in this folder registers them
+  core function just for this. `open [workspace]`'s name is optional — when
+  omitted, `pickWorkspaceDir` lists every registered workspace
+  (`@spork/core`'s `listWorkspaces`) and offers a single-select
+  (`@spork/prompts`' `select()`) instead; `NotInteractiveError` becomes a
+  `SporkError` asking for the name explicitly (there's no sensible default
+  to fall back to here, unlike `create`'s empty-workspace fallback), and a
+  cancel becomes `SporkError('Cancelled.')`, same as every other
+  cancelled-prompt path here. `index.ts` in this folder registers them
   all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
   for the command surface and its rationale.

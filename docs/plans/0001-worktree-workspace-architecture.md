@@ -453,6 +453,14 @@ the `code` CLI. Unlike `select()`, `confirm()` has no separate
 apart (either way, the workspace just doesn't open automatically; `spork
 workspace open <name>` still works whenever the user wants it).
 
+`workspace open <name>`'s name argument is itself now optional, using
+`select()` a second way: omit it and `open` lists every registered
+workspace and offers a single-select instead of requiring you to already
+know (or retype) the name. Unlike `create`'s repo picker, there's no
+sensible non-interactive fallback for `open` without a name — it can't
+guess which workspace you meant — so `NotInteractiveError` becomes a
+`SporkError` asking for the name explicitly rather than being swallowed.
+
 ### Concurrent writes to the manifest/registries needed their own lock
 
 Making `repo scan`/`workspace create --repo`/the interactive picker run
