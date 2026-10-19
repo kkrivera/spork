@@ -7,6 +7,7 @@ vi.mock('@spork/core', () => ({
   reconcileWorkspace: vi.fn(),
   resolveWorkspaceDir: vi.fn(),
   listWorkspaces: vi.fn(),
+  findEnclosingWorkspaceDir: vi.fn(),
   SporkError: class SporkError extends Error {},
 }))
 vi.mock('@spork/prompts', () => ({
@@ -14,7 +15,7 @@ vi.mock('@spork/prompts', () => ({
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 
-const { codeWorkspaceFilePath, reconcileWorkspace, resolveWorkspaceDir, listWorkspaces, SporkError } =
+const { codeWorkspaceFilePath, reconcileWorkspace, resolveWorkspaceDir, listWorkspaces, findEnclosingWorkspaceDir, SporkError } =
   await import('@spork/core')
 const { select, NotInteractiveError } = await import('@spork/prompts')
 const { runOpen, registerOpenCommand } = await import('../../src/commands/workspace/open.js')
@@ -33,6 +34,7 @@ beforeEach(() => {
     .mockResolvedValue({ manifest: { name: 'demo', createdAt: '', worktrees: [] }, removedFolders: [] })
   vi.mocked(codeWorkspaceFilePath).mockReset().mockReturnValue('/ws/demo/demo.code-workspace')
   vi.mocked(listWorkspaces).mockReset().mockResolvedValue([])
+  vi.mocked(findEnclosingWorkspaceDir).mockReset().mockReturnValue(null)
   vi.mocked(select).mockReset()
 })
 
@@ -87,6 +89,17 @@ describe('runOpen — picking from a list (no workspace name given)', () => {
 
     await expect(runOpen(ctx, undefined, fakeOpener({ ok: true }))).rejects.toThrow(SporkError)
     expect(select).not.toHaveBeenCalled()
+  })
+
+  it('auto-detects the enclosing workspace from cwd, without prompting', async () => {
+    vi.mocked(findEnclosingWorkspaceDir).mockReturnValue('/ws/demo')
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+
+    const result = await runOpen(ctx, undefined, fakeOpener({ ok: true }))
+
+    expect(select).not.toHaveBeenCalled()
+    expect(resolveWorkspaceDir).toHaveBeenCalledWith('/registry.json', 'demo')
+    expect(result.opened).toBe(true)
   })
 
   it('throws Cancelled when the user backs out of the picker', async () => {

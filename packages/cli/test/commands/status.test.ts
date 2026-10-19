@@ -6,6 +6,7 @@ vi.mock('@spork/core', () => ({
   getWorkspaceStatus: vi.fn(),
   resolveWorkspaceDir: vi.fn(),
   listWorkspaces: vi.fn(),
+  findEnclosingWorkspaceDir: vi.fn(),
   SporkError: class SporkError extends Error {},
 }))
 vi.mock('@spork/task-runner', () => ({
@@ -16,7 +17,7 @@ vi.mock('@spork/prompts', () => ({
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 
-const { getWorkspaceStatus, resolveWorkspaceDir, listWorkspaces, SporkError } = await import('@spork/core')
+const { getWorkspaceStatus, resolveWorkspaceDir, listWorkspaces, findEnclosingWorkspaceDir, SporkError } = await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
 const { select } = await import('@spork/prompts')
 const { runStatus, registerStatusCommand } = await import('../../src/commands/workspace/status.js')
@@ -43,6 +44,7 @@ beforeEach(() => {
   vi.mocked(resolveWorkspaceDir).mockReset().mockResolvedValue('/ws/demo')
   vi.mocked(getWorkspaceStatus).mockReset()
   vi.mocked(listWorkspaces).mockReset().mockResolvedValue([])
+  vi.mocked(findEnclosingWorkspaceDir).mockReset().mockReturnValue(null)
   vi.mocked(select).mockReset()
   vi.mocked(runTasks)
     .mockReset()
@@ -97,6 +99,17 @@ describe('runStatus — picking from a list (no workspace given)', () => {
 
     await expect(runStatus(ctx, undefined)).rejects.toThrow(SporkError)
     expect(select).not.toHaveBeenCalled()
+  })
+
+  it('auto-detects the enclosing workspace from cwd, without prompting', async () => {
+    vi.mocked(findEnclosingWorkspaceDir).mockReturnValue('/ws/demo')
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(getWorkspaceStatus).mockResolvedValue([])
+
+    await runStatus(ctx, undefined)
+
+    expect(select).not.toHaveBeenCalled()
+    expect(resolveWorkspaceDir).toHaveBeenCalledWith('/registry.json', 'demo')
   })
 })
 

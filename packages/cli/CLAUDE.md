@@ -50,7 +50,14 @@ new business logic belongs in `@spork/core`, imported only from its
   `select()` call — keeps the `NotInteractiveError`→`SporkError` wording
   and the "resolves to a name, not a dir" contract consistent across
   `add-repo`/`remove-repo`/`remove`/`status`/`open`. `create` and `list`
-  don't get this (see their own doc comments for why).
+  don't get this (see their own doc comments for why). `pickWorkspaceName`
+  (single-select only, not the multi-select `pickWorkspaceNames`) also
+  auto-detects the cwd's enclosing workspace first and skips the prompt
+  entirely when there is one — mirroring `repoScope.ts`'s cwd-based
+  local/global default for `spork repo`. Don't extend that auto-detect to
+  `pickWorkspaceNames`: picking several is the whole point of a multi-select,
+  so silently collapsing it to "just the one you're sitting in" would
+  undermine it, not help it.
 - A destructive `workspace` command (`remove`, `remove-repo`) always runs
   through `confirmDestructive.ts`, even when its target was given
   explicitly rather than picked — don't gate the confirmation on "was this
@@ -80,13 +87,18 @@ new business logic belongs in `@spork/core`, imported only from its
   today that actually needs forced sequential ordering; add it when one
   does.
 - When a command has one positional argument that must stay required
-  (can't be prompted away) alongside one becoming optional, don't just
-  mark both `[optional]` and trust commander's left-to-right fill — it
-  always fills the *first* declared slot from a lone argument, regardless
-  of which one you meant to keep. `add-repo`'s `resolveAddRepoArgs` is the
-  pattern: capture both as plain optional strings, then disambiguate by
-  count in the action handler so a lone argument lands on the one that was
-  never optional to begin with. Only needed when the *other*, always-
-  optional argument comes first in the declared order (`remove-repo`'s
-  `[workspace] [folder]` doesn't need this — a lone argument already
-  landing on `workspace`, the right one, is what you want there).
+  (can't be prompted away) alongside a second one becoming optional, don't
+  reach for a second positional and disambiguate by argument count — it's
+  fragile the moment a third real use case (a lone argument meaning either
+  one, depending on what the user had in mind) shows up, and commander's
+  own left-to-right fill will always assign a lone argument to the
+  *first* declared slot regardless of which one you meant to keep. Put the
+  optional one behind its own named flag instead (`add-repo`'s
+  `[source]` positional plus `--workspace`/`-w <name>` is the pattern):
+  the one positional left is then always unambiguous, and the flag is
+  either given or it isn't, no count-based guessing required. This only
+  matters when a lone argument would otherwise be genuinely ambiguous
+  between two different meanings — `remove-repo`'s `[workspace] [folder]`
+  doesn't have that problem (a lone argument unambiguously means
+  `workspace`, the outer context `folder` is picked from), so it keeps two
+  plain positionals.

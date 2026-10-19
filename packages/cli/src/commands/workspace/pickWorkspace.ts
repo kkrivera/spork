@@ -1,4 +1,5 @@
-import { listWorkspaces, SporkError } from '@spork/core'
+import { realpath } from 'node:fs/promises'
+import { findEnclosingWorkspaceDir, listWorkspaces, SporkError, type RegistryEntry } from '@spork/core'
 import { NotInteractiveError, select, type PromptOption } from '@spork/prompts'
 import type { AppContext } from '../../context.js'
 
@@ -11,15 +12,54 @@ async function pickableWorkspaces(ctx: AppContext): Promise<PromptOption<string>
 }
 
 /**
- * Offers a single-select of every registered workspace's name — used by any
- * `workspace <verb>` command whose workspace argument was omitted. `select`
- * throws `NotInteractiveError` when it can't prompt (no TTY); there's no
- * sensible default to fall back to, so that becomes a clear `SporkError`
- * naming the explicit-argument form instead. A real cancel (Esc/Ctrl+C)
- * becomes `SporkError`'s usual `'Cancelled.'`, same as every other
- * cancelled-prompt path in this CLI.
+ * `findEnclosingWorkspaceDir` resolves from `process.cwd()`, which Node
+ * always returns as the canonical, symlink-resolved path — but a
+ * registered workspace's `dir` is whatever was passed to `--dir` at
+ * creation time, verbatim, which may not be (e.g. macOS's `/tmp` being a
+ * symlink to `/private/tmp`). A plain string comparison between the two
+ * would silently never match on a system like that, so the registry side
+ * is resolved before comparing. `listWorkspaces` only ever returns entries
+ * it has already confirmed still exist on disk, so `realpath` here is
+ * never pointed at something missing — but a race (deleted between that
+ * check and this one) falls back to the raw string rather than throwing.
  */
-export async function pickWorkspaceName(ctx: AppContext, message: string, usageHint: string): Promise<string> {
+async function matchesEnclosingDir(workspace: RegistryEntry, enclosingDir: string): Promise<boolean> {
+  if (workspace.dir === enclosingDir) return true
+  try {
+    return (await realpath(workspace.dir)) === enclosingDir
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Resolves a single workspace name for a command whose workspace argument
+ * was omitted. First checks whether `cwd` is already inside a registered
+ * workspace (`@spork/core`'s `findEnclosingWorkspaceDir`, walking up like
+ * git's `.git` walk — the same convention `repoScope.ts` already uses for
+ * `spork repo`'s local/global default) and, if so, uses it directly with
+ * no prompt at all — there's nothing ambiguous to ask about. Otherwise
+ * offers a single-select of every registered workspace. `select` throws
+ * `NotInteractiveError` when it can't prompt (no TTY); there's no sensible
+ * default to fall back to, so that becomes a clear `SporkError` naming the
+ * explicit-argument form instead. A real cancel (Esc/Ctrl+C) becomes
+ * `SporkError`'s usual `'Cancelled.'`, same as every other cancelled-prompt
+ * path in this CLI.
+ */
+export async function pickWorkspaceName(
+  ctx: AppContext,
+  message: string,
+  usageHint: string,
+  cwd: string = process.cwd(),
+): Promise<string> {
+  const enclosingDir = findEnclosingWorkspaceDir(cwd)
+  if (enclosingDir) {
+    const workspaces = await listWorkspaces(ctx.registryPath)
+    for (const workspace of workspaces) {
+      if (await matchesEnclosingDir(workspace, enclosingDir)) return workspace.name
+    }
+  }
+
   const options = await pickableWorkspaces(ctx)
 
   let chosen: string[] | null
@@ -34,7 +74,12 @@ export async function pickWorkspaceName(ctx: AppContext, message: string, usageH
   return chosen[0] as string
 }
 
-/** Same as `pickWorkspaceName`, but a multi-select — for a command that can act on several workspaces at once. */
+/**
+ * Same as `pickWorkspaceName`, but a multi-select — for a command that can
+ * act on several workspaces at once. Deliberately no cwd auto-detect:
+ * picking several is the point, so it always offers the full list rather
+ * than collapsing to "just the one you're sitting in".
+ */
 export async function pickWorkspaceNames(ctx: AppContext, message: string, usageHint: string): Promise<string[]> {
   const options = await pickableWorkspaces(ctx)
 

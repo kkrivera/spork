@@ -6,6 +6,7 @@ vi.mock('@spork/core', () => ({
   resolveWorkspaceDir: vi.fn(),
   reconcileWorkspace: vi.fn(),
   listWorkspaces: vi.fn(),
+  findEnclosingWorkspaceDir: vi.fn(),
   SporkError: class SporkError extends Error {},
 }))
 vi.mock('@spork/prompts', () => ({
@@ -14,7 +15,7 @@ vi.mock('@spork/prompts', () => ({
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 
-const { removeRepo, resolveWorkspaceDir, reconcileWorkspace, listWorkspaces, SporkError } = await import('@spork/core')
+const { removeRepo, resolveWorkspaceDir, reconcileWorkspace, listWorkspaces, findEnclosingWorkspaceDir, SporkError } = await import('@spork/core')
 const { select, confirm } = await import('@spork/prompts')
 const { runRemoveRepo, registerRemoveRepoCommand } = await import('../../src/commands/workspace/removeRepo.js')
 const { createUi } = await import('../../src/output/color.js')
@@ -35,6 +36,7 @@ beforeEach(() => {
   vi.mocked(removeRepo).mockReset().mockResolvedValue(undefined)
   vi.mocked(reconcileWorkspace).mockReset().mockResolvedValue(manifestWithOneWorktree)
   vi.mocked(listWorkspaces).mockReset().mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+  vi.mocked(findEnclosingWorkspaceDir).mockReset().mockReturnValue(null)
   vi.mocked(select).mockReset()
   vi.mocked(confirm).mockReset().mockResolvedValue(true)
 })
@@ -72,6 +74,16 @@ describe('runRemoveRepo — picking workspace and folder from a list', () => {
 
     const result = await runRemoveRepo(ctx, undefined, 'widgets', { yes: true })
 
+    expect(result.workspace).toBe('demo')
+  })
+
+  it('auto-detects the enclosing workspace from cwd, without prompting', async () => {
+    vi.mocked(findEnclosingWorkspaceDir).mockReturnValue('/ws/demo')
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+
+    const result = await runRemoveRepo(ctx, undefined, 'widgets', { yes: true })
+
+    expect(select).not.toHaveBeenCalled()
     expect(result.workspace).toBe('demo')
   })
 

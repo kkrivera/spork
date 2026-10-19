@@ -561,12 +561,14 @@ because of *which* argument needs to stay effectively required: commander
 always assigns a lone argument to the *first* declared slot, but `source`
 (the second slot) is the one that can never be prompted away — there's no
 sensible picker for "which repo", only for "which workspace". So
-`resolveAddRepoArgs` captures both positionals as plain optional strings
-and disambiguates by count itself: two arguments keep today's
-`<workspace> <source>` order unchanged; a lone argument is always
-`source`, with `workspace` left for `runAddRepo` to prompt for; zero
-non-flag arguments is a clear, immediate error rather than a confusing
-"no workspaces registered" from a picker that was never going to help.
+`resolveAddRepoArgs` captured both positionals as plain optional strings
+and disambiguated by count itself: two arguments kept the
+`<workspace> <source>` order; a lone argument was always `source`, with
+`workspace` left for `runAddRepo` to prompt for. (This count-based
+disambiguation was later replaced by a `--workspace` flag once omitting
+`source` entirely — to pick from the repo registry — became the more
+common case; see "`add-repo` defaults to picking from the repo registry"
+further below for why and what changed.)
 
 The confirmation half is a separate, shared gate: `confirmDestructive.ts`
 wraps `@spork/prompts`' `confirm()` and applies to `remove`/`remove-repo`
@@ -620,6 +622,56 @@ needs a per-item callback invoked as each one settles, mirroring how
 progress without `run<Verb>` calling `console.log` directly. No command
 needs that today, so it isn't built speculatively — see
 `packages/cli/CLAUDE.md`.
+
+### `add-repo` defaults to picking from the repo registry, and cwd auto-detects the workspace
+
+Cloning an entirely new, unregistered repo turned out to be the rare case
+for `add-repo`, not the common one — most of the time the repo in
+question was already scanned/registered (via `repo scan`/`repo add`)
+elsewhere, and retyping its full source every time was pure friction. Two
+changes address that:
+
+**`pickWorkspaceName` (single-select only) now auto-detects the cwd's
+enclosing workspace first**, via `@spork/core`'s `findEnclosingWorkspaceDir`
+— the same convention `repoScope.ts` already uses for `spork repo`'s
+local/global default. If `cwd` is already inside a registered workspace,
+every command that falls back to `pickWorkspaceName` (`add-repo`,
+`remove-repo`, `status`, `open`) resolves to it directly, with no prompt at
+all — there's nothing ambiguous to ask about. `pickWorkspaceNames` (the
+multi-select `remove` uses) deliberately does **not** get this: picking
+several workspaces at once is the entire point of a multi-select, so
+collapsing it to "just the one you're sitting in" would work against that
+rather than help it.
+
+**`add-repo`'s `[source]` is now the only positional, with workspace moved
+to a `--workspace`/`-w <name>` flag.** The previous design — two optional
+positionals, `[workspace] [source]`, disambiguated by argument count
+(`resolveAddRepoArgs`) — worked for "is `source` always required" but broke
+down once the *common* invocation became "I know the workspace, let me pick
+repos interactively": `spork workspace add-repo demo` would have treated
+`demo` as a repo source to clone (and failed confusingly) rather than as
+the workspace to add registered repos to, because a lone positional
+argument can't tell those two meanings apart without guessing. Moving
+`workspace` to a named flag removes the ambiguity entirely rather than
+trying to resolve it more cleverly: `[source]` is unambiguous on its own
+(it's the only positional there is), and `--workspace` is either given or
+it isn't.
+
+**Omitting `[source]` lists every registered repo** (the same merged
+local+global view `repo list` shows) and offers a multi-select, reusing
+`addReposBatch.ts`'s `addReposToWorkspace` — the exact same concurrent,
+best-effort batch-add logic `create --repo a --repo b ...` already used,
+now extracted into its own module so both call sites share one
+implementation instead of two copies drifting apart. `--branch`/`--as`
+only make sense for one explicit source (which ref to check out, what to
+name its folder) — they can't generalize across an arbitrary multi-repo
+pick, so passing either without `[source]` is a clear, immediate error
+rather than silently applying to every picked repo or silently being
+ignored.
+
+Adding a genuinely new, unregistered repo is still fully supported — pass
+it as an explicit `[source]`, same as before; nothing about that path
+changed.
 
 ## Explicitly deferred
 

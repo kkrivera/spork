@@ -70,13 +70,28 @@ logic lives here.
 - `src/commands/workspace/pickWorkspace.ts` — `pickWorkspaceName`/
   `pickWorkspaceNames`: the shared single-/multi-select picker every
   `workspace <verb>` command below uses when its workspace argument was
-  omitted, listing every registered workspace (`@spork/core`'s
-  `listWorkspaces`) via `@spork/prompts`' `select()`. `NotInteractiveError`
-  (no TTY) becomes a `SporkError` naming the explicit-argument form instead
+  omitted. `pickWorkspaceName` (single) first checks whether `cwd` is
+  already inside a registered workspace (`@spork/core`'s
+  `findEnclosingWorkspaceDir`, the same convention `repoScope.ts` uses for
+  `spork repo`'s local/global default) and, if so, resolves to it directly
+  with no prompt at all; otherwise it lists every registered workspace
+  (`@spork/core`'s `listWorkspaces`) via `@spork/prompts`' `select()`.
+  `pickWorkspaceNames` (multi) has no such auto-detect — picking several is
+  the point, so it always offers the full list. `NotInteractiveError` (no
+  TTY) becomes a `SporkError` naming the explicit-argument form instead
   (there's no sensible default to fall back to); a real cancel (Esc/
   Ctrl+C) becomes `SporkError('Cancelled.')`. Both resolve to the
   workspace's *name*, not its directory, so a caller still goes through
   `resolveWorkspaceDir` the normal way afterward.
+- `src/commands/workspace/addReposBatch.ts` — `addReposToWorkspace`: adds
+  several sources to one workspace directory concurrently
+  (`runConcurrently`'s live dashboard), calling `@spork/core`'s `addRepo`
+  directly rather than through `add-repo`'s own single-item wrapper (which
+  would otherwise nest one dashboard per repo). Best-effort, not fail-fast
+  — every source is attempted regardless of a sibling's failure. Shared by
+  `create --repo a --repo b ...` and `add-repo`'s own no-source,
+  pick-from-the-registry flow (see below), so this batch-add/outcome logic
+  only lives in one place.
 - `src/commands/workspace/` — one file per `spork workspace <verb>`
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
   `status`, `open`), each exporting a plain `run<Verb>` function (the
@@ -99,12 +114,19 @@ logic lives here.
   each one completes. `remove-repo` goes a step further and makes *both* of
   its positionals (`[workspace] [folder]`) optional — a folder, once the
   workspace is known, is picked from that workspace's own worktrees.
-  `add-repo`'s two positionals (`[workspace] [source]`) can't use the same
-  plain left-to-right fill, since `source` is the one argument that must
-  never become optional: a lone argument is always treated as `source`
-  (workspace prompted), two arguments keep today's `<workspace> <source>`
-  order, and zero non-flag arguments is a clear error (there's no picker
-  for "which repo" — only for "which workspace"). `remove` and
+  `add-repo` takes its workspace as a `--workspace`/`-w <name>` flag rather
+  than a positional — `[source]` is its only positional, so there's no
+  two-positional ambiguity to resolve (a bare `[workspace] [source]` pair
+  can't tell "a lone argument is the workspace" from "a lone argument is
+  the source" apart; moving `workspace` to a flag sidesteps that rather
+  than guessing). Omitting `[source]` lists every already-registered repo
+  (the same merged local+global view `repo list` shows) and offers a
+  multi-select instead of requiring a raw source string — the common case
+  is adding something already scanned/registered elsewhere, not cloning
+  something brand new; `--branch`/`--as` only make sense for one explicit
+  source (which ref, what folder name), so passing either without
+  `[source]` is a clear error rather than silently applying to every
+  picked repo. `remove` and
   `remove-repo` are destructive (they delete worktrees, and `remove`
   deletes the workspace directory too unless `--keep-files`), so both run
   every removal through `confirmDestructive` — *even* when the target was
@@ -117,17 +139,19 @@ logic lives here.
   was reused instead of creating a fresh one (`AddRepoResult.reusedExistingBranch`
   — e.g. recreating a workspace that touched this repo before), plus
   whether submodules were initialized or a warning if that failed (the add
-  itself still succeeds — see `AddRepoResult` in `@spork/core`). `add-repo` runs its
-  single `addRepo` call through `runConcurrently` for a live spinner, and
-  re-throws the raw error on failure (preserving the usual propagate-to-
-  the-top-level-handler contract) rather than reporting it the way a batch
-  command does. `create --repo <a> --repo <b> ...` goes a level further:
-  every `--repo` is its own concurrent `runConcurrently` item calling
-  `addRepo` directly (not through `add-repo`'s own single-item wrapper,
-  which would otherwise nest one dashboard per repo) — every outcome gets
-  printed, and if any failed or was cancelled, `registerCreateCommand`
-  throws *after* printing them all, so the process still exits non-zero
-  even though a failure no longer stops the others (a deliberate change
+  itself still succeeds — see `AddRepoResult` in `@spork/core`). `add-repo`
+  with an explicit `[source]` runs its single `addRepo` call through
+  `runConcurrently` for a live spinner, and re-throws the raw error on
+  failure (preserving the usual propagate-to-the-top-level-handler
+  contract) rather than reporting it the way a batch command does; without
+  one, it goes through `addReposBatch.ts`'s `addReposToWorkspace` instead
+  (see above) for the multi-select batch, printing every outcome and
+  throwing afterward if any failed, same as `create --repo <a> --repo <b>
+  ...` — which uses that exact same helper, not a separate copy of the
+  same logic — every outcome gets printed, and if any failed or was
+  cancelled, `registerCreateCommand` throws *after* printing them all, so
+  the process still exits non-zero even though a failure no longer stops
+  the others (a deliberate change
   from the previous sequential fail-fast behavior — see the architecture
   doc). `create` with no `--repo` at all tries an interactive multi-select
   instead of always creating an empty workspace: it lists known repos the
