@@ -44,3 +44,27 @@ new business logic belongs in `@spork/core`, imported only from its
   rather than reimplementing the `--global`/`--local`/cwd-detection decision
   per command. `workspace` commands don't need this at all (they already
   know their target workspace by name) — don't add scope flags there.
+- A `workspace <verb>` command whose workspace argument can be omitted
+  routes through `commands/workspace/pickWorkspace.ts`'s
+  `pickWorkspaceName`/`pickWorkspaceNames` rather than hand-rolling a
+  `select()` call — keeps the `NotInteractiveError`→`SporkError` wording
+  and the "resolves to a name, not a dir" contract consistent across
+  `add-repo`/`remove-repo`/`remove`/`status`/`open`. `create` and `list`
+  don't get this (see their own doc comments for why).
+- A destructive `workspace` command (`remove`, `remove-repo`) always runs
+  through `confirmDestructive.ts`, even when its target was given
+  explicitly rather than picked — don't gate the confirmation on "was this
+  interactive," the destructiveness is what matters. Give it a `--yes`/`-y`
+  flag so scripts/CI have an explicit bypass; don't invent a second way to
+  skip it.
+- When a command has one positional argument that must stay required
+  (can't be prompted away) alongside one becoming optional, don't just
+  mark both `[optional]` and trust commander's left-to-right fill — it
+  always fills the *first* declared slot from a lone argument, regardless
+  of which one you meant to keep. `add-repo`'s `resolveAddRepoArgs` is the
+  pattern: capture both as plain optional strings, then disambiguate by
+  count in the action handler so a lone argument lands on the one that was
+  never optional to begin with. Only needed when the *other*, always-
+  optional argument comes first in the declared order (`remove-repo`'s
+  `[workspace] [folder]` doesn't need this — a lone argument already
+  landing on `workspace`, the right one, is what you want there).

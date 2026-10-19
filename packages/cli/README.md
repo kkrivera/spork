@@ -27,6 +27,17 @@ logic lives here.
 - `src/opener.ts` — `createCodeOpener`, an injectable abstraction around
   shelling out to the `code` CLI (used by `workspace open`), so it's mockable
   in tests and doesn't fail silently if `code` isn't installed.
+- `src/confirmDestructive.ts` — `confirmDestructive(message, yes)`: the
+  shared yes/no gate every destructive `workspace` command (`remove`,
+  `remove-repo`) runs through before acting, even when its target was given
+  explicitly rather than picked interactively. `yes: true` (a command's own
+  `--yes`/`-y` flag) skips the prompt outright — the escape hatch a
+  script/CI run needs. Without it and without a TTY, fails with a clear
+  `SporkError` demanding `--yes` rather than silently proceeding with (or
+  silently skipping) something destructive; declining the prompt itself
+  becomes `SporkError`'s usual `'Cancelled.'`. Defaults to "no" on bare
+  Enter, unlike `workspace create`'s open-in-VS-Code confirm — there's no
+  safe default to lean toward for something destructive.
 - `src/repoScope.ts` — `resolveRepoScope`/`describeRepoScope`: decides which
   repo-alias registry a standalone `repo` command should use. `--global`/
   `--local` are explicit overrides (passing both is an error); with neither,
@@ -56,11 +67,43 @@ logic lives here.
   so this one coarse line per item is what actually fills each task's
   equal-height pane while it runs. A `call` that never logs anything just
   shows its header with an empty pane beneath.
+- `src/commands/workspace/pickWorkspace.ts` — `pickWorkspaceName`/
+  `pickWorkspaceNames`: the shared single-/multi-select picker every
+  `workspace <verb>` command below uses when its workspace argument was
+  omitted, listing every registered workspace (`@spork/core`'s
+  `listWorkspaces`) via `@spork/prompts`' `select()`. `NotInteractiveError`
+  (no TTY) becomes a `SporkError` naming the explicit-argument form instead
+  (there's no sensible default to fall back to); a real cancel (Esc/
+  Ctrl+C) becomes `SporkError('Cancelled.')`. Both resolve to the
+  workspace's *name*, not its directory, so a caller still goes through
+  `resolveWorkspaceDir` the normal way afterward.
 - `src/commands/workspace/` — one file per `spork workspace <verb>`
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
   `status`, `open`), each exporting a plain `run<Verb>` function (the
   testable logic) and a `register<Verb>Command` that wires it to commander
-  and prints the result. `add-repo` (and `create --repo`) register the
+  and prints the result. Every subcommand except `create` and `list` takes
+  its workspace by name but can omit it — `add-repo`, `remove-repo`,
+  `remove`, `status`, and `open` all fall back to `pickWorkspace.ts`'s
+  picker rather than requiring the name up front; `create`'s `name` is the
+  *new* workspace being created (nothing to pick from) and `list` takes no
+  workspace at all, so neither needed this. `remove` takes its workspaces
+  as a variadic `[workspaces...]` and, when none are given, offers a
+  *multi*-select instead of a single one, since removing several at once is
+  a real use case; `remove-repo` goes a step further and makes *both* of
+  its positionals (`[workspace] [folder]`) optional — a folder, once the
+  workspace is known, is picked from that workspace's own worktrees.
+  `add-repo`'s two positionals (`[workspace] [source]`) can't use the same
+  plain left-to-right fill, since `source` is the one argument that must
+  never become optional: a lone argument is always treated as `source`
+  (workspace prompted), two arguments keep today's `<workspace> <source>`
+  order, and zero non-flag arguments is a clear error (there's no picker
+  for "which repo" — only for "which workspace"). `remove` and
+  `remove-repo` are destructive (they delete worktrees, and `remove`
+  deletes the workspace directory too unless `--keep-files`), so both run
+  every removal through `confirmDestructive` — *even* when the target was
+  given explicitly, not just when picked — with a `--yes`/`-y` flag to skip
+  it for scripts/CI; see `confirmDestructive.ts` above for the
+  non-interactive failure mode. `add-repo` (and `create --repo`) register the
   repo's alias locally to the workspace by default, `--global` opts into
   the shared registry instead — `printAddRepoResult` always shows which one
   happened (`(alias: local)`/`(alias: global)`), whether an existing branch
@@ -101,14 +144,8 @@ logic lives here.
   `getWorkspaceStatus` reads every worktree via its own `Promise.all`)
   status read as a single `runConcurrently` item too, for a live spinner
   instead of a silent wait, rather than exporting a second per-worktree
-  core function just for this. `open [workspace]`'s name is optional — when
-  omitted, `pickWorkspaceDir` lists every registered workspace
-  (`@spork/core`'s `listWorkspaces`) and offers a single-select
-  (`@spork/prompts`' `select()`) instead; `NotInteractiveError` becomes a
-  `SporkError` asking for the name explicitly (there's no sensible default
-  to fall back to here, unlike `create`'s empty-workspace fallback), and a
-  cancel becomes `SporkError('Cancelled.')`, same as every other
-  cancelled-prompt path here. `index.ts` in this folder registers them
+  core function just for this. `open [workspace]`'s name is optional too,
+  same `pickWorkspace.ts` picker as the rest. `index.ts` in this folder registers them
   all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
   for the command surface and its rationale.

@@ -534,6 +534,54 @@ never pushed upstream. A mirroring or pruning fetch would silently delete
 a user's own in-progress workspace branches the next time any sibling
 `addRepo` call happened to touch the same repo's cache.
 
+### Every `workspace <verb>` can omit its workspace argument, and destructive ones confirm
+
+`workspace open <name>`'s name was the first argument made optional (see
+above); this extends the same idea to every other subcommand that takes an
+existing workspace by name — `add-repo`, `remove-repo`, `remove`, and
+`status` — and adds a second, independent change: a destructive command now
+always asks for confirmation before acting, not just when its target came
+from a picker.
+
+`pickWorkspace.ts` factors the picker itself out of `open.ts` into a shared
+`pickWorkspaceName`/`pickWorkspaceNames`, so every command gets the same
+`NotInteractiveError`→`SporkError` wording and resolves to a workspace
+*name* (not a directory) the same way `open` already did. `remove` takes
+its workspaces as a variadic `[workspaces...]` and offers a *multi*-select
+when none are given — unlike every other command here, removing several
+workspaces in one pass is a real, common case (cleaning up a batch of
+finished branches), not just an omitted single argument. `remove-repo`
+makes both of its positionals optional (`[workspace] [folder]`): a folder,
+once the workspace is known, is picked from that workspace's own worktrees
+rather than requiring it up front.
+
+`add-repo`'s two positionals couldn't use the same plain "declare both
+optional, let commander fill left-to-right" approach `remove-repo` uses,
+because of *which* argument needs to stay effectively required: commander
+always assigns a lone argument to the *first* declared slot, but `source`
+(the second slot) is the one that can never be prompted away — there's no
+sensible picker for "which repo", only for "which workspace". So
+`resolveAddRepoArgs` captures both positionals as plain optional strings
+and disambiguates by count itself: two arguments keep today's
+`<workspace> <source>` order unchanged; a lone argument is always
+`source`, with `workspace` left for `runAddRepo` to prompt for; zero
+non-flag arguments is a clear, immediate error rather than a confusing
+"no workspaces registered" from a picker that was never going to help.
+
+The confirmation half is a separate, shared gate: `confirmDestructive.ts`
+wraps `@spork/prompts`' `confirm()` and applies to `remove`/`remove-repo`
+*regardless* of whether the target was typed explicitly or picked — the
+risk is the action, not how the target was chosen. A command's own
+`--yes`/`-y` flag skips the prompt outright (the bypass a script or CI run
+needs, since there's nothing to answer without a TTY anyway); without
+`--yes` and without a TTY, `confirmDestructive` fails with a clear
+`SporkError` demanding `--yes` instead of silently proceeding with, or
+silently skipping, something destructive — consistent with this project's
+existing preference for failing loudly over guessing (see the branch-
+collision handling above). Declining the prompt itself is
+`SporkError('Cancelled.')`, same as every other cancelled-prompt path in
+this CLI.
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of

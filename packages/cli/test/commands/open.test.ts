@@ -66,7 +66,8 @@ describe('runOpen — picking from a list (no workspace name given)', () => {
       { name: 'demo', dir: '/ws/demo' },
       { name: 'other', dir: '/ws/other' },
     ])
-    vi.mocked(select).mockResolvedValue(['/ws/other'])
+    vi.mocked(select).mockResolvedValue(['other'])
+    vi.mocked(resolveWorkspaceDir).mockResolvedValue('/ws/other')
     vi.mocked(reconcileWorkspace).mockResolvedValue({
       manifest: { name: 'other', createdAt: '', worktrees: [] },
       removedFolders: [],
@@ -76,7 +77,7 @@ describe('runOpen — picking from a list (no workspace name given)', () => {
     const result = await runOpen(ctx, undefined, opener)
 
     expect(select).toHaveBeenCalledWith(expect.objectContaining({ mode: 'single' }))
-    expect(resolveWorkspaceDir).not.toHaveBeenCalled()
+    expect(resolveWorkspaceDir).toHaveBeenCalledWith('/registry.json', 'other')
     expect(reconcileWorkspace).toHaveBeenCalledWith(expect.anything(), '/ws/other')
     expect(result.opened).toBe(true)
   })
@@ -139,7 +140,7 @@ describe('registerOpenCommand', () => {
 
   it('accepts no workspace name, picking from the list instead', async () => {
     vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
-    vi.mocked(select).mockResolvedValue(['/ws/demo'])
+    vi.mocked(select).mockResolvedValue(['demo'])
     const program = new Command()
     registerOpenCommand(program, ctx, fakeOpener({ ok: true }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

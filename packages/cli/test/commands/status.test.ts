@@ -5,14 +5,20 @@ import type { FunctionTask, TaskResult } from '@spork/task-runner'
 vi.mock('@spork/core', () => ({
   getWorkspaceStatus: vi.fn(),
   resolveWorkspaceDir: vi.fn(),
+  listWorkspaces: vi.fn(),
   SporkError: class SporkError extends Error {},
 }))
 vi.mock('@spork/task-runner', () => ({
   runTasks: vi.fn(),
 }))
+vi.mock('@spork/prompts', () => ({
+  select: vi.fn(),
+  NotInteractiveError: class NotInteractiveError extends Error {},
+}))
 
-const { getWorkspaceStatus, resolveWorkspaceDir } = await import('@spork/core')
+const { getWorkspaceStatus, resolveWorkspaceDir, listWorkspaces, SporkError } = await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
+const { select } = await import('@spork/prompts')
 const { runStatus, registerStatusCommand } = await import('../../src/commands/workspace/status.js')
 const { createUi } = await import('../../src/output/color.js')
 
@@ -36,6 +42,8 @@ async function fakeRunTasks(tasks: readonly FunctionTask[]): Promise<TaskResult[
 beforeEach(() => {
   vi.mocked(resolveWorkspaceDir).mockReset().mockResolvedValue('/ws/demo')
   vi.mocked(getWorkspaceStatus).mockReset()
+  vi.mocked(listWorkspaces).mockReset().mockResolvedValue([])
+  vi.mocked(select).mockReset()
   vi.mocked(runTasks)
     .mockReset()
     .mockImplementation((tasks) => fakeRunTasks(tasks as FunctionTask[]))
@@ -69,6 +77,26 @@ describe('runStatus', () => {
     await runStatus(ctx, 'demo')
 
     expect(logSpy).toHaveBeenCalledWith('reading git status...')
+  })
+})
+
+describe('runStatus — picking from a list (no workspace given)', () => {
+  it('offers a single-select of registered workspaces and reads the chosen one', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(select).mockResolvedValue(['demo'])
+    vi.mocked(getWorkspaceStatus).mockResolvedValue([])
+
+    await runStatus(ctx, undefined)
+
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ mode: 'single' }))
+    expect(resolveWorkspaceDir).toHaveBeenCalledWith('/registry.json', 'demo')
+  })
+
+  it('refuses with a clear error when nothing is registered yet', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([])
+
+    await expect(runStatus(ctx, undefined)).rejects.toThrow(SporkError)
+    expect(select).not.toHaveBeenCalled()
   })
 })
 

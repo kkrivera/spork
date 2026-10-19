@@ -6,14 +6,20 @@ vi.mock('@spork/core', () => ({
   addRepo: vi.fn(),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
+  listWorkspaces: vi.fn(),
   SporkError: class SporkError extends Error {},
 }))
 vi.mock('@spork/task-runner', () => ({
   runTasks: vi.fn(),
 }))
+vi.mock('@spork/prompts', () => ({
+  select: vi.fn(),
+  NotInteractiveError: class NotInteractiveError extends Error {},
+}))
 
-const { addRepo, resolveWorkspaceDir } = await import('@spork/core')
+const { addRepo, resolveWorkspaceDir, listWorkspaces, SporkError } = await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
+const { select } = await import('@spork/prompts')
 const { runAddRepo, printAddRepoResult, registerAddRepoCommand } = await import('../../src/commands/workspace/addRepo.js')
 const { createUi } = await import('../../src/output/color.js')
 
@@ -51,6 +57,8 @@ beforeEach(() => {
   vi.mocked(runTasks)
     .mockReset()
     .mockImplementation((tasks) => fakeRunTasks(tasks as FunctionTask[]))
+  vi.mocked(listWorkspaces).mockReset().mockResolvedValue([])
+  vi.mocked(select).mockReset()
 })
 
 describe('runAddRepo', () => {
@@ -92,6 +100,45 @@ describe('runAddRepo', () => {
     await runAddRepo(ctx, 'demo', 'git@github.com:acme/widgets.git', {})
 
     expect(logSpy).toHaveBeenCalledWith('cloning/fetching git@github.com:acme/widgets.git...')
+  })
+})
+
+describe('runAddRepo — picking a workspace when omitted', () => {
+  it('offers a single-select and resolves against the chosen name', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(select).mockResolvedValue(['demo'])
+
+    const { workspace } = await runAddRepo(ctx, undefined, 'git@github.com:acme/widgets.git', {})
+
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ mode: 'single' }))
+    expect(resolveWorkspaceDir).toHaveBeenCalledWith('/registry.json', 'demo')
+    expect(workspace).toBe('demo')
+  })
+
+  it('refuses with a clear error when nothing is registered yet', async () => {
+    await expect(runAddRepo(ctx, undefined, 'git@github.com:acme/widgets.git', {})).rejects.toThrow(SporkError)
+  })
+})
+
+describe('registerAddRepoCommand — arg disambiguation', () => {
+  it('treats a single positional argument as the source, prompting for the workspace', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(select).mockResolvedValue(['demo'])
+    const program = new Command()
+    registerAddRepoCommand(program, ctx)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await program.parseAsync(['node', 'test', 'add-repo', 'git@github.com:acme/widgets.git'])
+
+    expect(addRepo).toHaveBeenCalledWith(expect.anything(), '/ws/demo', expect.objectContaining({ source: 'git@github.com:acme/widgets.git' }))
+    logSpy.mockRestore()
+  })
+
+  it('fails clearly when no arguments at all are given (source can never be prompted away)', async () => {
+    const program = new Command()
+    registerAddRepoCommand(program, ctx)
+
+    await expect(program.parseAsync(['node', 'test', 'add-repo'])).rejects.toThrow(SporkError)
   })
 })
 
