@@ -582,6 +582,45 @@ collision handling above). Declining the prompt itself is
 `SporkError('Cancelled.')`, same as every other cancelled-prompt path in
 this CLI.
 
+### `remove`'s batch removal moved off a plain sequential loop
+
+Removing several workspaces at once (`spork workspace remove a b c`, or a
+multi-select with several chosen) originally ran through a plain `for`
+loop, awaiting one `removeWorkspace` at a time with nothing printed until
+every workspace had finished — the whole batch looked frozen and then
+dumped every result at once. Since `run<Verb>` functions in this CLI never
+`console.log` themselves (`register<Verb>Command` always owns printing),
+a sequential loop like that has no way to surface progress as it happens
+— the caller only ever sees the final, fully-resolved array.
+
+The fix: `runRemove` now builds one `runConcurrently` item per workspace,
+the same live-dashboard mechanism `create --repo a --repo b ...` and
+`repo scan` already use (including its automatic fallback to a plain
+streamed `[name] line` mode when stdout isn't a TTY — CI, a pipe). Nothing
+about removing one workspace actually depends on another: each only
+touches its own directory and registry entry, and the one genuinely
+shared resource — a repo's cache, when the same source is used by more
+than one workspace — is already protected by its own lock
+(`removeRepo`'s `withRepoLock`), not by the CLI calling things in a
+particular order. So there was no real correctness reason for the
+sequential loop in the first place, just an accident of how the variadic
+signature was first written. Best-effort, not fail-fast, matching
+`runCreateWithRepos`/`repo scan`'s existing precedent: every workspace is
+attempted regardless of a sibling's failure, and `registerRemoveCommand`
+throws only after printing every outcome, so one failure can't silently
+swallow the removals that did succeed.
+
+This generalizes: any future multi-item `run<Verb>` must stream progress
+rather than buffer it, whether or not its items can run concurrently.
+`runConcurrently` is the default answer when they can (it gets you live
+progress for free). If a future operation's items genuinely cannot be
+reordered, `run<Verb>` still can't go silent for the whole loop — it
+needs a per-item callback invoked as each one settles, mirroring how
+`runConcurrently`'s `TaskReporter.log()` lets a concurrent item report
+progress without `run<Verb>` calling `console.log` directly. No command
+needs that today, so it isn't built speculatively — see
+`packages/cli/CLAUDE.md`.
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of

@@ -89,7 +89,14 @@ logic lives here.
   workspace at all, so neither needed this. `remove` takes its workspaces
   as a variadic `[workspaces...]` and, when none are given, offers a
   *multi*-select instead of a single one, since removing several at once is
-  a real use case; `remove-repo` goes a step further and makes *both* of
+  a real use case — and, once confirmed (see below), removes them through
+  `runConcurrently` rather than a sequential loop, same live dashboard
+  `create --repo a --repo b ...`/`repo scan` already use: each workspace's
+  removal only touches its own directory/registry entry (any shared repo
+  cache is already lock-protected), so there's nothing requiring one-at-a-
+  time ordering, and a plain sequential loop would otherwise buffer every
+  result until the whole batch finished instead of showing progress as
+  each one completes. `remove-repo` goes a step further and makes *both* of
   its positionals (`[workspace] [folder]`) optional — a folder, once the
   workspace is known, is picked from that workspace's own worktrees.
   `add-repo`'s two positionals (`[workspace] [source]`) can't use the same

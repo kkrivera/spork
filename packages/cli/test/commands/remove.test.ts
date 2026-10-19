@@ -1,5 +1,6 @@
 import { Command } from 'commander'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FunctionTask, TaskResult } from '@spork/task-runner'
 
 vi.mock('@spork/core', () => ({
   listWorkspaces: vi.fn(),
@@ -13,13 +14,32 @@ vi.mock('@spork/prompts', () => ({
   confirm: vi.fn(),
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
+vi.mock('@spork/task-runner', () => ({
+  runTasks: vi.fn(),
+}))
 
 const { listWorkspaces, removeWorkspace, resolveWorkspaceDir, unregisterWorkspace, SporkError } = await import('@spork/core')
 const { select, confirm } = await import('@spork/prompts')
+const { runTasks } = await import('@spork/task-runner')
 const { runRemove, registerRemoveCommand } = await import('../../src/commands/workspace/remove.js')
 const { createUi } = await import('../../src/output/color.js')
 
 const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
+
+/** Drives every FunctionTask runConcurrently builds, the way the real runFunctionTask would — concurrently, same as production. */
+async function fakeRunTasks(tasks: readonly FunctionTask[]): Promise<TaskResult[]> {
+  return Promise.all(
+    tasks.map(async (task) => {
+      const output: string[] = []
+      try {
+        await task.run({ log: (line) => output.push(line) }, new AbortController().signal)
+      } catch (error) {
+        output.push(error instanceof Error ? error.message : String(error))
+      }
+      return { name: task.name, exitCode: null, signal: null, durationMs: 1, output, cancelled: false }
+    }),
+  )
+}
 
 beforeEach(() => {
   vi.mocked(resolveWorkspaceDir).mockReset().mockResolvedValue('/ws/demo')
@@ -28,14 +48,18 @@ beforeEach(() => {
   vi.mocked(unregisterWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(select).mockReset()
   vi.mocked(confirm).mockReset().mockResolvedValue(true)
+  vi.mocked(runTasks)
+    .mockReset()
+    .mockImplementation((tasks) => fakeRunTasks(tasks as FunctionTask[]))
 })
 
 describe('runRemove', () => {
   it('removes the workspace and unregisters its matching registry entry', async () => {
-    await runRemove(ctx, ['demo'], { yes: true })
+    const outcomes = await runRemove(ctx, ['demo'], { yes: true })
 
     expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/ws/demo', { keepFiles: undefined })
     expect(unregisterWorkspace).toHaveBeenCalledWith('/registry.json', 'demo')
+    expect(outcomes).toEqual([{ name: 'demo', removed: true, reason: undefined }])
   })
 
   it('forwards keepFiles', async () => {
@@ -52,17 +76,38 @@ describe('runRemove', () => {
     expect(unregisterWorkspace).not.toHaveBeenCalled()
   })
 
-  it('removes every workspace given, in order', async () => {
+  it('removes every workspace given, concurrently', async () => {
     vi.mocked(resolveWorkspaceDir).mockImplementation((_registry, name) => Promise.resolve(`/ws/${name}`))
     vi.mocked(listWorkspaces).mockResolvedValue([
       { name: 'a', dir: '/ws/a' },
       { name: 'b', dir: '/ws/b' },
     ])
 
-    const removed = await runRemove(ctx, ['a', 'b'], { yes: true })
+    const outcomes = await runRemove(ctx, ['a', 'b'], { yes: true })
 
     expect(removeWorkspace).toHaveBeenCalledTimes(2)
-    expect(removed).toEqual(['a', 'b'])
+    expect(outcomes).toEqual([
+      { name: 'a', removed: true, reason: undefined },
+      { name: 'b', removed: true, reason: undefined },
+    ])
+  })
+
+  it('reports one failure without losing the others (best-effort, not fail-fast)', async () => {
+    vi.mocked(resolveWorkspaceDir).mockImplementation((_registry, name) => Promise.resolve(`/ws/${name}`))
+    vi.mocked(listWorkspaces).mockResolvedValue([
+      { name: 'a', dir: '/ws/a' },
+      { name: 'b', dir: '/ws/b' },
+    ])
+    vi.mocked(removeWorkspace).mockImplementation((_ctx, dir) =>
+      dir === '/ws/a' ? Promise.reject(new Error('disk full')) : Promise.resolve(undefined),
+    )
+
+    const outcomes = await runRemove(ctx, ['a', 'b'], { yes: true })
+
+    expect(outcomes).toEqual([
+      { name: 'a', removed: false, reason: 'disk full' },
+      { name: 'b', removed: true, reason: undefined },
+    ])
   })
 })
 
@@ -97,10 +142,10 @@ describe('runRemove — picking from a list (no workspace given)', () => {
     vi.mocked(select).mockResolvedValue(['other'])
     vi.mocked(resolveWorkspaceDir).mockResolvedValue('/ws/other')
 
-    const removed = await runRemove(ctx, [], { yes: true })
+    const outcomes = await runRemove(ctx, [], { yes: true })
 
     expect(select).toHaveBeenCalledWith(expect.objectContaining({ mode: 'multi' }))
-    expect(removed).toEqual(['other'])
+    expect(outcomes).toEqual([{ name: 'other', removed: true, reason: undefined }])
   })
 
   it('refuses with a clear error when nothing is registered yet', async () => {
@@ -121,6 +166,27 @@ describe('registerRemoveCommand', () => {
 
     expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/ws/demo', { keepFiles: true })
     expect(logSpy.mock.calls.flat().join('\n')).toContain('Removed workspace "demo"')
+    logSpy.mockRestore()
+  })
+
+  it('prints each failure and throws afterward, keeping the exit code non-zero', async () => {
+    vi.mocked(resolveWorkspaceDir).mockImplementation((_registry, name) => Promise.resolve(`/ws/${name}`))
+    vi.mocked(listWorkspaces).mockResolvedValue([
+      { name: 'a', dir: '/ws/a' },
+      { name: 'b', dir: '/ws/b' },
+    ])
+    vi.mocked(removeWorkspace).mockImplementation((_ctx, dir) =>
+      dir === '/ws/a' ? Promise.reject(new Error('disk full')) : Promise.resolve(undefined),
+    )
+    const program = new Command()
+    registerRemoveCommand(program, ctx)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await expect(program.parseAsync(['node', 'test', 'remove', 'a', 'b', '--yes'])).rejects.toThrow(SporkError)
+
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('Failed to remove "a": disk full')
+    expect(output).toContain('Removed workspace "b"')
     logSpy.mockRestore()
   })
 })

@@ -57,6 +57,28 @@ new business logic belongs in `@spork/core`, imported only from its
   interactive," the destructiveness is what matters. Give it a `--yes`/`-y`
   flag so scripts/CI have an explicit bypass; don't invent a second way to
   skip it.
+- A multi-item command must never buffer every item's result into an
+  array and print it only after the whole batch finishes — a user watching
+  the terminal needs to see progress as each item completes, not a wall of
+  silence followed by a burst of output at the end (`remove`'s old plain
+  `for` loop did exactly this, by accident, before it was moved onto
+  `runConcurrently`). When the items can run concurrently (the common
+  case — check whether anything actually requires strict ordering, the way
+  `remove`'s doc comment reasons through it), route them through
+  `runConcurrently`/`concurrentTasks.ts` and get live per-item progress for
+  free, including its non-TTY streamed-line fallback — don't reach for a
+  bespoke progress mechanism when this one already exists and is already
+  the established pattern (`create --repo`, `repo scan`, now `remove`). If
+  a future command's items genuinely cannot run out of order (a real
+  dependency between them, not just "it happens to be simpler to write"),
+  `run<Verb>` still must not go silent for the whole loop — give it a
+  per-item callback (invoked right after each item settles) that
+  `register<Verb>Command` uses to print immediately, the same way
+  `runConcurrently`'s `TaskReporter.log()` lets a concurrent item's `call`
+  report progress without `run<Verb>` itself calling `console.log`. Don't
+  build this callback plumbing speculatively, though — there's no command
+  today that actually needs forced sequential ordering; add it when one
+  does.
 - When a command has one positional argument that must stay required
   (can't be prompted away) alongside one becoming optional, don't just
   mark both `[optional]` and trust commander's left-to-right fill — it
