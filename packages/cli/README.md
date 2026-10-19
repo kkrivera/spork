@@ -33,7 +33,16 @@ logic lives here.
   terminal directly (raw output, working Ctrl+C, no capturing/buffering),
   rather than being routed through `@spork/task-runner`'s live dashboard,
   which is built for several short tasks that settle and summarize, not
-  one long-running or interactive foreground process.
+  one long-running or interactive foreground process. A real terminal's
+  Ctrl+C already reaches the child for free (the child isn't `detached`,
+  so it shares spork's own process group, and the terminal signals the
+  whole group at once) — on top of that, spork also forwards
+  `SIGINT`/`SIGTERM`/`SIGHUP` to the child if *spork itself* is signaled
+  directly (a supervisor, a plain `kill <pid>`, not through the terminal),
+  and doesn't resolve until the child has actually exited, so it's never
+  left orphaned. A child that outlives a grace period after the forwarded
+  signal — or gets a second, impatient one of the same kind — is escalated
+  straight to `SIGKILL`.
 - `src/confirmDestructive.ts` — `confirmDestructive(message, yes)`: the
   shared yes/no gate every destructive `workspace` command (`remove`,
   `remove-repo`) runs through before acting, even when its target was given

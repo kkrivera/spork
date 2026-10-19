@@ -764,6 +764,64 @@ same shape `packages/cli/CLAUDE.md` describes for a hypothetical forced-
 sequential batch command's per-item progress callback, just applied to a
 single action instead of several.
 
+### `exec` can be ESC'ed/Ctrl+C'ed, including when spork itself (not the terminal) is signaled
+
+The stated use case for `exec` is starting dev servers/watchers — things a
+person needs to be able to stop. The first question was whether `stdio:
+'inherit'` alone was enough, or whether spork needed to do anything
+explicit to make Ctrl+C work. Verified directly against a real pty rather
+than assumed: a plain long-running process with no signal handling of its
+own (the common case — most dev servers don't trap SIGINT themselves)
+really does receive a real terminal's Ctrl+C and stop immediately, and
+spork's own wrapping process exits cleanly alongside it (confirmed via
+`waitpid` — not hung, not orphaned). This works with zero code for it:
+`spawn` isn't given `detached: true`, so the child lands in spork's own
+process group, and a terminal delivers SIGINT to the *entire* foreground
+process group at once — spork and the child both, exactly as if the
+child had been run directly with no wrapper.
+
+That same testing surfaced a real gap in a different, narrower scenario:
+sending a signal to *spork's own PID specifically* (`kill <pid>`, a
+process supervisor — not a real terminal's Ctrl+C, which always targets
+the whole group) only reached spork, not the child, because killing one
+PID says nothing about its children. The child became an orphan,
+continuing to run headless. A real terminal's Ctrl+C was never affected
+by this — it already addresses the whole group directly via the OS — but
+it's a real gap for anything that manages spork as a subprocess rather
+than a human typing at a terminal.
+
+The fix: `createShellExecutor` now also registers its own
+`SIGINT`/`SIGTERM`/`SIGHUP` handlers for the duration of the child's run
+and forwards whichever one spork receives straight to the child via
+`child.kill(signal)`, then waits for the child to actually exit before
+resolving — registering the handlers at all is what stops Node's default
+disposition (terminate immediately) from winning the race and orphaning
+the child before the forward even happens. A child that outlives a grace
+period after the forwarded signal, or that gets a second, impatient
+signal of the same kind before then, is escalated straight to `SIGKILL`
+— mirroring `@spork/task-runner`'s own cancellation grace period
+(`spawnTask.ts`), for the identical reason: something inside the child
+could catch and ignore the first signal.
+
+Deliberately *not* done to fix this: putting the child in its own
+process group (`detached: true`) so a single `process.kill(-child.pid,
+signal)` could cascade to every descendant at once, the way tools like
+`concurrently`/`foreman` do. That would have fixed the compound-command
+edge case below, but at the cost of removing the child from spork's own
+group — which is exactly what makes a real terminal's Ctrl+C reach it for
+free in the first place. Trading away the common case to harden a rarer
+one was the wrong trade.
+
+One limit this doesn't paper over, inherent to signal-based process trees
+rather than something spork failed to handle: forwarding reaches the one
+child `spawn` returns. For a single simple command, most shells replace
+themselves with it directly (`exec`, no separate process layer stays
+around), so that child *is* the real work and forwarding reaches it
+directly. For a compound command (`a && b`, a pipe), the shell keeps
+itself around as a wrapper to sequence the steps — forwarding still
+reaches that wrapper, but whether it cascades further depends on that
+shell's own signal handling, not spork's.
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of

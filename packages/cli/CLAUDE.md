@@ -115,4 +115,11 @@ new business logic belongs in `@spork/core`, imported only from its
   `stdio: 'inherit'` gives it. If a future command's job is similarly "run
   one interactive/long-lived foreground process," follow `exec`'s
   pattern (an injectable `CommandExecutor`-shaped abstraction), not
-  `runConcurrently`'s.
+  `runConcurrently`'s. `createShellExecutor` also forwards
+  `SIGINT`/`SIGTERM`/`SIGHUP` from spork's own process to the child and
+  waits for it to actually exit before resolving (escalating to
+  `SIGKILL` past a grace period, or immediately on a repeat signal) —
+  don't assume a real terminal's Ctrl+C alone covers this: that reaches
+  the child for free via process-group inheritance, but something
+  signaling spork's own PID directly (a supervisor, a script) wouldn't,
+  without this, and the child would be orphaned rather than stopped.
