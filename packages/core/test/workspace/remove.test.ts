@@ -18,7 +18,8 @@ vi.mock('../../src/git/worktree.js', async () => {
 
 const { addWorktree, removeWorktree } = await import('../../src/git/worktree.js')
 const { ensureRepoCache } = await import('../../src/repo/cache.js')
-const { createWorkspace, addRepo, removeWorkspace } = await import('../../src/workspace/workspace.js')
+const { createWorkspace, addRepo, removeWorkspace, removeAndUnregisterWorkspace } = await import('../../src/workspace/workspace.js')
+const { registerWorkspace, listWorkspaces } = await import('../../src/registry/registry.js')
 const { fakeAddWorktree } = await import('./fakeAddWorktree.js')
 
 let root: string
@@ -54,5 +55,28 @@ describe('removeWorkspace', () => {
 
     expect(removeWorktree).not.toHaveBeenCalled()
     expect(existsSync(dir)).toBe(true)
+  })
+})
+
+describe('removeAndUnregisterWorkspace', () => {
+  it('removes the workspace and drops its matching registry entry', async () => {
+    const registryPath = path.join(root, 'workspaces.json')
+    await registerWorkspace(registryPath, { name: 'demo', dir })
+
+    await removeAndUnregisterWorkspace(ctx, registryPath, dir)
+
+    expect(existsSync(dir)).toBe(false)
+    expect(await listWorkspaces(registryPath)).toEqual([])
+  })
+
+  it('does not try to unregister when nothing in the registry matches the resolved dir', async () => {
+    const registryPath = path.join(root, 'workspaces.json')
+    const unrelatedDir = path.join(root, 'elsewhere')
+    await createWorkspace(ctx, { name: 'unrelated', dir: unrelatedDir })
+    await registerWorkspace(registryPath, { name: 'unrelated', dir: unrelatedDir })
+
+    await removeAndUnregisterWorkspace(ctx, registryPath, dir)
+
+    expect(await listWorkspaces(registryPath)).toEqual([{ name: 'unrelated', dir: unrelatedDir }])
   })
 })

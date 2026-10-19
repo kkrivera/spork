@@ -143,8 +143,22 @@ for the design this package implements.
   - `workspace.ts` — orchestration: `createWorkspace`, `addRepo`, `removeRepo`,
     `removeWorkspace`, `getWorkspaceStatus`, and `reconcileWorkspace` (pruning
     stale git worktree metadata and dropping manifest entries for folders
-    deleted by hand — called before every other operation here). This is
-    where the shared-branch-per-workspace and per-repo-locking pieces from
+    deleted by hand — called before every other operation here). Also
+    `createAndRegisterWorkspace`/`removeAndUnregisterWorkspace`: each pairs a
+    workspace op with its matching registry bookkeeping (create+register,
+    remove+unregister) in one call — every frontend that creates or removes a
+    workspace at all needs both halves done together (an unregistered
+    workspace is orphaned from `list`/`open`/etc.; a registration with no
+    workspace behind it is corrupt state), so this is the one place that
+    pairing lives rather than `@spork/cli` and `@spork/mcp` each
+    re-implementing it. `createAndRegisterWorkspace` checks for a name
+    collision against the registry *before* creating anything on disk (so a
+    duplicate name fails without leaving an orphaned directory behind);
+    `registerWorkspace` itself also rejects a collision atomically inside its
+    own lock, as a backstop against the race between that check and the
+    registration, not as the primary guard.
+
+    `addRepo`/`removeRepo` are where the shared-branch-per-workspace and per-repo-locking pieces from
     `git`/`repo` actually get used together: `addRepo` gives every repo in a
     workspace the identical branch (the workspace's own name, verbatim —
     see the design doc), rejects adding the same repo twice upfront, and

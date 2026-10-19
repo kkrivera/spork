@@ -101,6 +101,17 @@ global-then-raw regardless of where a new alias would be written. Don't
 conflate the two: reading an alias and deciding where a *new* one gets
 written are different decisions with different defaults.
 
+A frontend (`@spork/cli`, `@spork/mcp`) that creates or removes a
+workspace needs the registry bookkeeping done in the same step every
+time — an unregistered workspace is orphaned from `list`/`open`/etc., and
+a registration with no workspace behind it is corrupt state. Don't let a
+second frontend re-implement that pairing by hand; it belongs here as
+`createAndRegisterWorkspace`/`removeAndUnregisterWorkspace`, which both
+`@spork/cli` and `@spork/mcp` call. If you add a third frontend (or a new
+`@spork/cli` command) that creates/removes a workspace, it should call
+these too rather than hand-rolling the create-then-register or
+remove-then-unregister sequence again.
+
 ## Tests
 
 Unit tests only for now — mock `execGit` (or `node:child_process` for

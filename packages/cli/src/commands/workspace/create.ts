@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { codeWorkspaceFilePath, createWorkspace, listWorkspaces, registerWorkspace, SporkError, type WorkspaceHandle } from '@spork/core'
+import { codeWorkspaceFilePath, createAndRegisterWorkspace, SporkError, type WorkspaceHandle } from '@spork/core'
 import { confirm, NotInteractiveError, select, type PromptOption } from '@spork/prompts'
 import type { Command } from 'commander'
 import { workspaceContext, type AppContext } from '../../context.js'
@@ -29,16 +29,8 @@ function collectRepo(value: string, previous: string[]): string[] {
  * even called.
  */
 export async function runCreate(ctx: AppContext, name: string, options: CreateOptions): Promise<WorkspaceHandle> {
-  const existing = await listWorkspaces(ctx.registryPath)
-  if (existing.some((workspace) => workspace.name === name)) {
-    throw new SporkError(`A workspace named "${name}" is already registered.`)
-  }
-
   const dir = path.resolve(options.dir ?? process.cwd(), name)
-  const handle = await createWorkspace(workspaceContext(ctx), { name, dir })
-  await registerWorkspace(ctx.registryPath, { name, dir })
-
-  return handle
+  return createAndRegisterWorkspace(workspaceContext(ctx), ctx.registryPath, { name, dir })
 }
 
 export interface CreateWithReposResult {

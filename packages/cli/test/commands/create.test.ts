@@ -4,9 +4,7 @@ import type { FunctionTask, TaskResult } from '@spork/task-runner'
 import type { Opener } from '../../src/opener.js'
 
 vi.mock('@spork/core', () => ({
-  createWorkspace: vi.fn(),
-  listWorkspaces: vi.fn(),
-  registerWorkspace: vi.fn(),
+  createAndRegisterWorkspace: vi.fn(),
   addRepo: vi.fn(),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
@@ -26,9 +24,7 @@ vi.mock('@spork/prompts', () => ({
 }))
 
 const {
-  createWorkspace,
-  listWorkspaces,
-  registerWorkspace,
+  createAndRegisterWorkspace,
   addRepo,
   resolveWorkspaceDir,
   findEnclosingWorkspaceDir,
@@ -67,11 +63,9 @@ async function fakeRunTasks(tasks: readonly FunctionTask[]): Promise<TaskResult[
 }
 
 beforeEach(() => {
-  vi.mocked(listWorkspaces).mockReset().mockResolvedValue([])
-  vi.mocked(createWorkspace)
+  vi.mocked(createAndRegisterWorkspace)
     .mockReset()
     .mockResolvedValue({ name: 'demo', dir: '/ws/demo', manifest: { name: 'demo', createdAt: '', worktrees: [] } })
-  vi.mocked(registerWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(resolveWorkspaceDir).mockReset().mockResolvedValue('/ws/demo')
   vi.mocked(addRepo).mockReset()
   vi.mocked(findEnclosingWorkspaceDir).mockReset().mockReturnValue(null)
@@ -90,8 +84,11 @@ describe('runCreate', () => {
 
     const handle = await runCreate(ctx, 'demo', {})
 
-    expect(createWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, { name: 'demo', dir: '/home/user/demo' })
-    expect(registerWorkspace).toHaveBeenCalledWith('/registry.json', { name: 'demo', dir: '/home/user/demo' })
+    expect(createAndRegisterWorkspace).toHaveBeenCalledWith(
+      { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
+      '/registry.json',
+      { name: 'demo', dir: '/home/user/demo' },
+    )
     expect(handle.name).toBe('demo')
     cwd.mockRestore()
   })
@@ -99,17 +96,17 @@ describe('runCreate', () => {
   it('treats --dir as a parent directory, landing at <dir>/<name>', async () => {
     await runCreate(ctx, 'demo', { dir: '/custom/path' })
 
-    expect(createWorkspace).toHaveBeenCalledWith(
+    expect(createAndRegisterWorkspace).toHaveBeenCalledWith(
       { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
+      '/registry.json',
       { name: 'demo', dir: '/custom/path/demo' },
     )
   })
 
-  it('refuses to create a workspace whose name is already registered', async () => {
-    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+  it('propagates a duplicate-name rejection from core rather than swallowing it', async () => {
+    vi.mocked(createAndRegisterWorkspace).mockRejectedValue(new SporkError('A workspace named "demo" is already registered.'))
 
     await expect(runCreate(ctx, 'demo', {})).rejects.toThrow(SporkError)
-    expect(createWorkspace).not.toHaveBeenCalled()
   })
 })
 
@@ -227,8 +224,9 @@ describe('registerCreateCommand', () => {
 
     await program.parseAsync(['node', 'test', 'create', 'demo', '--dir', '/custom'])
 
-    expect(createWorkspace).toHaveBeenCalledWith(
+    expect(createAndRegisterWorkspace).toHaveBeenCalledWith(
       { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
+      '/registry.json',
       { name: 'demo', dir: '/custom/demo' },
     )
     expect(logSpy.mock.calls.flat().join('\n')).toContain('Created workspace "demo"')

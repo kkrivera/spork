@@ -4,9 +4,8 @@ import type { FunctionTask, TaskResult } from '@spork/task-runner'
 
 vi.mock('@spork/core', () => ({
   listWorkspaces: vi.fn(),
-  removeWorkspace: vi.fn(),
+  removeAndUnregisterWorkspace: vi.fn(),
   resolveWorkspaceDir: vi.fn(),
-  unregisterWorkspace: vi.fn(),
   SporkError: class SporkError extends Error {},
 }))
 vi.mock('@spork/prompts', () => ({
@@ -18,7 +17,7 @@ vi.mock('@spork/task-runner', () => ({
   runTasks: vi.fn(),
 }))
 
-const { listWorkspaces, removeWorkspace, resolveWorkspaceDir, unregisterWorkspace, SporkError } = await import('@spork/core')
+const { listWorkspaces, removeAndUnregisterWorkspace, resolveWorkspaceDir, SporkError } = await import('@spork/core')
 const { select, confirm } = await import('@spork/prompts')
 const { runTasks } = await import('@spork/task-runner')
 const { runRemove, registerRemoveCommand } = await import('../../src/commands/workspace/remove.js')
@@ -43,9 +42,8 @@ async function fakeRunTasks(tasks: readonly FunctionTask[]): Promise<TaskResult[
 
 beforeEach(() => {
   vi.mocked(resolveWorkspaceDir).mockReset().mockResolvedValue('/ws/demo')
-  vi.mocked(removeWorkspace).mockReset().mockResolvedValue(undefined)
+  vi.mocked(removeAndUnregisterWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(listWorkspaces).mockReset().mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
-  vi.mocked(unregisterWorkspace).mockReset().mockResolvedValue(undefined)
   vi.mocked(select).mockReset()
   vi.mocked(confirm).mockReset().mockResolvedValue(true)
   vi.mocked(runTasks)
@@ -54,38 +52,31 @@ beforeEach(() => {
 })
 
 describe('runRemove', () => {
-  it('removes the workspace and unregisters its matching registry entry', async () => {
+  it('resolves the workspace and delegates removal to core', async () => {
     const outcomes = await runRemove(ctx, ['demo'], { yes: true })
 
-    expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/ws/demo', { keepFiles: undefined })
-    expect(unregisterWorkspace).toHaveBeenCalledWith('/registry.json', 'demo')
+    expect(resolveWorkspaceDir).toHaveBeenCalledWith('/registry.json', 'demo')
+    expect(removeAndUnregisterWorkspace).toHaveBeenCalledWith(
+      { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
+      '/registry.json',
+      '/ws/demo',
+      { keepFiles: undefined },
+    )
     expect(outcomes).toEqual([{ name: 'demo', removed: true, reason: undefined }])
   })
 
   it('forwards keepFiles', async () => {
     await runRemove(ctx, ['demo'], { keepFiles: true, yes: true })
 
-    expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/ws/demo', { keepFiles: true })
-  })
-
-  it('does not try to unregister when nothing in the registry matches the resolved dir', async () => {
-    vi.mocked(listWorkspaces).mockResolvedValue([])
-
-    await runRemove(ctx, ['/ws/demo'], { yes: true })
-
-    expect(unregisterWorkspace).not.toHaveBeenCalled()
+    expect(removeAndUnregisterWorkspace).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), { keepFiles: true })
   })
 
   it('removes every workspace given, concurrently', async () => {
     vi.mocked(resolveWorkspaceDir).mockImplementation((_registry, name) => Promise.resolve(`/ws/${name}`))
-    vi.mocked(listWorkspaces).mockResolvedValue([
-      { name: 'a', dir: '/ws/a' },
-      { name: 'b', dir: '/ws/b' },
-    ])
 
     const outcomes = await runRemove(ctx, ['a', 'b'], { yes: true })
 
-    expect(removeWorkspace).toHaveBeenCalledTimes(2)
+    expect(removeAndUnregisterWorkspace).toHaveBeenCalledTimes(2)
     expect(outcomes).toEqual([
       { name: 'a', removed: true, reason: undefined },
       { name: 'b', removed: true, reason: undefined },
@@ -94,11 +85,7 @@ describe('runRemove', () => {
 
   it('reports one failure without losing the others (best-effort, not fail-fast)', async () => {
     vi.mocked(resolveWorkspaceDir).mockImplementation((_registry, name) => Promise.resolve(`/ws/${name}`))
-    vi.mocked(listWorkspaces).mockResolvedValue([
-      { name: 'a', dir: '/ws/a' },
-      { name: 'b', dir: '/ws/b' },
-    ])
-    vi.mocked(removeWorkspace).mockImplementation((_ctx, dir) =>
+    vi.mocked(removeAndUnregisterWorkspace).mockImplementation((_ctx, _registryPath, dir) =>
       dir === '/ws/a' ? Promise.reject(new Error('disk full')) : Promise.resolve(undefined),
     )
 
@@ -116,7 +103,7 @@ describe('runRemove — destructive confirmation', () => {
     await runRemove(ctx, ['demo'], {})
 
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('demo') }))
-    expect(removeWorkspace).toHaveBeenCalled()
+    expect(removeAndUnregisterWorkspace).toHaveBeenCalled()
   })
 
   it('skips the confirmation entirely when --yes is passed', async () => {
@@ -129,7 +116,7 @@ describe('runRemove — destructive confirmation', () => {
     vi.mocked(confirm).mockResolvedValue(false)
 
     await expect(runRemove(ctx, ['demo'], {})).rejects.toThrow(SporkError)
-    expect(removeWorkspace).not.toHaveBeenCalled()
+    expect(removeAndUnregisterWorkspace).not.toHaveBeenCalled()
   })
 })
 
@@ -164,18 +151,19 @@ describe('registerRemoveCommand', () => {
 
     await program.parseAsync(['node', 'test', 'remove', 'demo', '--keep-files', '--yes'])
 
-    expect(removeWorkspace).toHaveBeenCalledWith({ reposRoot: '/repos', repoRegistryPath: '/repos.json' }, '/ws/demo', { keepFiles: true })
+    expect(removeAndUnregisterWorkspace).toHaveBeenCalledWith(
+      { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
+      '/registry.json',
+      '/ws/demo',
+      { keepFiles: true },
+    )
     expect(logSpy.mock.calls.flat().join('\n')).toContain('Removed workspace "demo"')
     logSpy.mockRestore()
   })
 
   it('prints each failure and throws afterward, keeping the exit code non-zero', async () => {
     vi.mocked(resolveWorkspaceDir).mockImplementation((_registry, name) => Promise.resolve(`/ws/${name}`))
-    vi.mocked(listWorkspaces).mockResolvedValue([
-      { name: 'a', dir: '/ws/a' },
-      { name: 'b', dir: '/ws/b' },
-    ])
-    vi.mocked(removeWorkspace).mockImplementation((_ctx, dir) =>
+    vi.mocked(removeAndUnregisterWorkspace).mockImplementation((_ctx, _registryPath, dir) =>
       dir === '/ws/a' ? Promise.reject(new Error('disk full')) : Promise.resolve(undefined),
     )
     const program = new Command()

@@ -18,9 +18,11 @@ export type {
 } from './workspace/workspace.js'
 export {
   createWorkspace,
+  createAndRegisterWorkspace,
   addRepo,
   removeRepo,
   removeWorkspace,
+  removeAndUnregisterWorkspace,
   reconcileWorkspace,
   getWorkspaceStatus,
 } from './workspace/workspace.js'

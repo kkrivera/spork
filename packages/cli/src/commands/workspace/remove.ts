@@ -1,4 +1,4 @@
-import { listWorkspaces, removeWorkspace, resolveWorkspaceDir, SporkError, unregisterWorkspace } from '@spork/core'
+import { removeAndUnregisterWorkspace, resolveWorkspaceDir, SporkError } from '@spork/core'
 import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
@@ -29,11 +29,7 @@ function describeConsequence(names: readonly string[], keepFiles: boolean | unde
 
 async function removeOne(ctx: AppContext, name: string, options: RemoveOptions): Promise<void> {
   const dir = await resolveWorkspaceDir(ctx.registryPath, name)
-  await removeWorkspace(workspaceContext(ctx), dir, { keepFiles: options.keepFiles })
-
-  const registered = await listWorkspaces(ctx.registryPath)
-  const match = registered.find((entry) => entry.dir === dir)
-  if (match) await unregisterWorkspace(ctx.registryPath, match.name)
+  await removeAndUnregisterWorkspace(workspaceContext(ctx), ctx.registryPath, dir, { keepFiles: options.keepFiles })
 }
 
 /**

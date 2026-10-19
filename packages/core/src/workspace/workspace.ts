@@ -8,6 +8,7 @@ import { resolveRepoCache } from '../repo/cache.js'
 import { withRepoLock } from '../repo/lock.js'
 import { addRepoSource } from '../repo/repos.js'
 import { localRepoRegistryPath, resolveScopedRepoAlias } from '../registry/repoRegistry.js'
+import { listWorkspaces, registerWorkspace, unregisterWorkspace } from '../registry/registry.js'
 import { slugify } from '../util/slug.js'
 import { repoShortName } from '../util/repoName.js'
 import { withFileLock } from '../util/fileLock.js'
@@ -49,6 +50,35 @@ export async function createWorkspace(
   await writeManifest(options.dir, manifest)
   await writeCodeWorkspace(options.dir, manifest)
   return { name: options.name, dir: options.dir, manifest }
+}
+
+/**
+ * Creates a workspace and registers it in one step — every caller that
+ * creates a workspace at all needs both halves done together (an
+ * unregistered workspace is orphaned from `spork workspace list`/`open`/
+ * etc.; a registration with no actual workspace behind it is corrupt
+ * state), so this is the one place that pairing lives rather than each
+ * frontend (`@spork/cli`, `@spork/mcp`) re-implementing it. Checks for a
+ * name collision against the registry *before* creating anything on disk,
+ * so a duplicate name fails without leaving an orphaned directory behind
+ * — `registerWorkspace` itself also rejects a collision, atomically inside
+ * its own lock, as a backstop against the race between that check and the
+ * registration (two concurrent creates of the same name), not as the
+ * primary guard.
+ */
+export async function createAndRegisterWorkspace(
+  ctx: WorkspaceContext,
+  registryPath: string,
+  options: CreateWorkspaceOptions,
+): Promise<WorkspaceHandle> {
+  const existing = await listWorkspaces(registryPath)
+  if (existing.some((workspace) => workspace.name === options.name)) {
+    throw new SporkError(`A workspace named "${options.name}" is already registered.`)
+  }
+
+  const handle = await createWorkspace(ctx, options)
+  await registerWorkspace(registryPath, { name: options.name, dir: options.dir })
+  return handle
 }
 
 export interface ReconcileResult {
@@ -303,6 +333,29 @@ export async function removeWorkspace(
     await removeRepo(ctx, workspaceDir, entry.folder)
   }
   await rm(workspaceDir, { recursive: true, force: true })
+}
+
+/**
+ * Removes a workspace and drops its registry entry in one step — the same
+ * "every caller needs both halves done together" reasoning as
+ * `createAndRegisterWorkspace`: a workspace removed but still registered
+ * would show up in `spork workspace list`/`open` pointing at nothing.
+ * Looks up the registry entry by `workspaceDir` *after* removal (rather
+ * than requiring the caller to already know the matching name) since a
+ * caller typically only has the resolved directory at this point, not
+ * necessarily the exact registered name it came from.
+ */
+export async function removeAndUnregisterWorkspace(
+  ctx: WorkspaceContext,
+  registryPath: string,
+  workspaceDir: string,
+  options: RemoveWorkspaceOptions = {},
+): Promise<void> {
+  await removeWorkspace(ctx, workspaceDir, options)
+
+  const registered = await listWorkspaces(registryPath)
+  const match = registered.find((workspace) => workspace.dir === workspaceDir)
+  if (match) await unregisterWorkspace(registryPath, match.name)
 }
 
 export interface WorktreeStatusEntry extends WorktreeEntry {
