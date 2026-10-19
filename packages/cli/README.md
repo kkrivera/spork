@@ -111,17 +111,22 @@ logic lives here.
   cache is already lock-protected), so there's nothing requiring one-at-a-
   time ordering, and a plain sequential loop would otherwise buffer every
   result until the whole batch finished instead of showing progress as
-  each one completes. `remove-repo` goes a step further and makes *both* of
-  its positionals (`[workspace] [folder]`) optional — a folder, once the
-  workspace is known, is picked from that workspace's own worktrees.
-  `add-repo` takes its workspace as a `--workspace`/`-w <name>` flag rather
-  than a positional — `[source]` is its only positional, so there's no
-  two-positional ambiguity to resolve (a bare `[workspace] [source]` pair
-  can't tell "a lone argument is the workspace" from "a lone argument is
-  the source" apart; moving `workspace` to a flag sidesteps that rather
-  than guessing). Omitting `[source]` lists every already-registered repo
-  (the same merged local+global view `repo list` shows) and offers a
-  multi-select instead of requiring a raw source string — the common case
+  each one completes. `remove-repo` and `add-repo` both take their
+  workspace as a `--workspace`/`-w <name>` flag rather than a positional,
+  for the same reason: a bare `[workspace] [folder-or-source]` pair can't
+  tell "a lone argument is the workspace" from "a lone argument is the
+  other thing" apart without guessing, and moving `workspace` to a flag
+  sidesteps that rather than trying to resolve it more cleverly.
+  `remove-repo` takes its folders as a variadic `[folders...]` and, when
+  none are given, offers a multi-select of the resolved workspace's own
+  worktrees (mirroring `remove`'s own variadic/multi-select-when-omitted
+  shape) — and, once confirmed, removes them through `runConcurrently`
+  too, same reasoning as `remove`'s own batch removal (each folder's
+  removal only touches its own worktree and the manifest, which
+  `@spork/core`'s `removeRepo` already locks). For `add-repo`, omitting
+  `[source]` lists every already-registered repo (the same merged
+  local+global view `repo list` shows) and offers a multi-select instead
+  of requiring a raw source string — the common case
   is adding something already scanned/registered elsewhere, not cloning
   something brand new; `--branch`/`--as` only make sense for one explicit
   source (which ref, what folder name), so passing either without

@@ -551,9 +551,13 @@ its workspaces as a variadic `[workspaces...]` and offers a *multi*-select
 when none are given — unlike every other command here, removing several
 workspaces in one pass is a real, common case (cleaning up a batch of
 finished branches), not just an omitted single argument. `remove-repo`
-makes both of its positionals optional (`[workspace] [folder]`): a folder,
+made both of its positionals optional (`[workspace] [folder]`): a folder,
 once the workspace is known, is picked from that workspace's own worktrees
-rather than requiring it up front.
+rather than requiring it up front. (`remove-repo` later moved `workspace`
+to a `--workspace` flag and `folder` to a variadic, multi-select
+`[folders...]`, matching `add-repo` and `remove` respectively — see
+"`remove-repo` gets the same `--workspace` flag and batch treatment as
+`remove`" further below.)
 
 `add-repo`'s two positionals couldn't use the same plain "declare both
 optional, let commander fill left-to-right" approach `remove-repo` uses,
@@ -672,6 +676,38 @@ ignored.
 Adding a genuinely new, unregistered repo is still fully supported — pass
 it as an explicit `[source]`, same as before; nothing about that path
 changed.
+
+### `remove-repo` gets the same `--workspace` flag and batch treatment as `remove`
+
+`remove-repo` previously took two optional positionals, `[workspace]
+[folder]` — safe from the two-positional ambiguity `add-repo` hit (a lone
+argument unambiguously meant `workspace`, since `folder` is picked from
+*within* a resolved workspace, not independently guessable). But it still
+only removed one folder per invocation, with `workspace` as a positional
+rather than the `--workspace`/`-w` flag `add-repo` now uses — inconsistent
+with both its sibling commands for no real reason once `add-repo` had
+already moved.
+
+Now `remove-repo` matches `remove`'s own shape: `[folders...]` (variadic)
+plus `--workspace`/`-w <name>`. Omitting `[folders...]` offers a
+multi-select of the resolved workspace's own worktrees (same
+`reconcileWorkspace`-backed listing `pickFolders` used before, just
+`mode: 'multi'` instead of `'single'`) instead of one at a time. Workspace
+resolution is unchanged in spirit — still `pickWorkspaceName`, so it gets
+the cwd auto-detect for free — just moved off a positional onto the flag,
+matching `add-repo` for the same reason (consistency, not because
+`remove-repo` ever had the ambiguity problem itself).
+
+The removals themselves now run through `runConcurrently` rather than a
+single `removeRepo` call, same reasoning as `remove`'s own batch-removal
+fix: each folder's removal only touches its own worktree and the
+workspace manifest, and `@spork/core`'s `removeRepo` already protects the
+manifest with its own locking (the same "re-read fresh inside the lock"
+pattern `addRepo` uses), so there's nothing here that actually requires
+one-at-a-time ordering. Best-effort, not fail-fast, same as every other
+batch command in this CLI: every folder is attempted regardless of a
+sibling's failure, and `registerRemoveRepoCommand` throws only after
+printing every outcome.
 
 ## Explicitly deferred
 

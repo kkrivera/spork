@@ -75,7 +75,8 @@ new business logic belongs in `@spork/core`, imported only from its
   `runConcurrently`/`concurrentTasks.ts` and get live per-item progress for
   free, including its non-TTY streamed-line fallback — don't reach for a
   bespoke progress mechanism when this one already exists and is already
-  the established pattern (`create --repo`, `repo scan`, now `remove`). If
+  the established pattern (`create --repo`, `repo scan`, `remove`, now
+  `remove-repo` too). If
   a future command's items genuinely cannot run out of order (a real
   dependency between them, not just "it happens to be simpler to write"),
   `run<Verb>` still must not go silent for the whole loop — give it a
@@ -96,9 +97,7 @@ new business logic belongs in `@spork/core`, imported only from its
   optional one behind its own named flag instead (`add-repo`'s
   `[source]` positional plus `--workspace`/`-w <name>` is the pattern):
   the one positional left is then always unambiguous, and the flag is
-  either given or it isn't, no count-based guessing required. This only
-  matters when a lone argument would otherwise be genuinely ambiguous
-  between two different meanings — `remove-repo`'s `[workspace] [folder]`
-  doesn't have that problem (a lone argument unambiguously means
-  `workspace`, the outer context `folder` is picked from), so it keeps two
-  plain positionals.
+  either given or it isn't, no count-based guessing required.
+  `remove-repo` follows the same pattern as `add-repo`: `[folders...]`
+  (variadic — it can remove several at once) plus `--workspace`/`-w`,
+  rather than a `[workspace] [folder]` positional pair.
