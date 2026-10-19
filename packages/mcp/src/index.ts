@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { createMcpContext } from './context.js'
+import { registerTools } from './tools/index.js'
 
 export function createServer(): McpServer {
-  return new McpServer({ name: 'spork', version: '0.1.0' })
+  const server = new McpServer({ name: 'spork', version: '0.1.0' })
+  registerTools(server, createMcpContext())
+  return server
 }
 
 export async function main(): Promise<void> {
