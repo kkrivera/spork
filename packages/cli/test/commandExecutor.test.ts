@@ -16,10 +16,12 @@ class FakeChild extends EventEmitter {
 }
 
 let fakeChild: FakeChild
+const originalShell = process.env.SHELL
 
 beforeEach(() => {
   fakeChild = new FakeChild()
   spawnMock.mockReset().mockReturnValue(fakeChild as never)
+  process.env.SHELL = '/bin/zsh'
 })
 
 afterEach(() => {
@@ -27,10 +29,19 @@ afterEach(() => {
   // listener into every test that runs after it.
   for (const signal of FORWARDED_SIGNALS) process.removeAllListeners(signal)
   vi.useRealTimers()
+  process.env.SHELL = originalShell
 })
 
 describe('createShellExecutor', () => {
-  it('spawns the command through a real shell with inherited stdio, at the given cwd', () => {
+  it('spawns the command through the user\'s own $SHELL, with inherited stdio, at the given cwd', () => {
+    createShellExecutor().run('npm run dev', '/ws/demo')
+
+    expect(spawnMock).toHaveBeenCalledWith('npm run dev', { cwd: '/ws/demo', shell: '/bin/zsh', stdio: 'inherit' })
+  })
+
+  it('falls back to Node\'s own default shell when $SHELL is not set', () => {
+    delete process.env.SHELL
+
     createShellExecutor().run('npm run dev', '/ws/demo')
 
     expect(spawnMock).toHaveBeenCalledWith('npm run dev', { cwd: '/ws/demo', shell: true, stdio: 'inherit' })

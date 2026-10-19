@@ -33,7 +33,13 @@ logic lives here.
   terminal directly (raw output, working Ctrl+C, no capturing/buffering),
   rather than being routed through `@spork/task-runner`'s live dashboard,
   which is built for several short tasks that settle and summarize, not
-  one long-running or interactive foreground process. A real terminal's
+  one long-running or interactive foreground process. The shell itself is
+  `$SHELL` (falling back to Node's own default, `/bin/sh` on POSIX, if
+  it's unset), not hardcoded — macOS's `/bin/sh` is a restricted,
+  POSIX-strict build of bash that rejects syntax real bash/zsh accept
+  (confirmed directly: a hyphenated function name in a sourced
+  `.bashrc` is valid bash but a parse error under it), so hardcoding it
+  would break real dotfiles the moment `command` sources one. A real terminal's
   Ctrl+C already reaches the child for free (the child isn't `detached`,
   so it shares spork's own process group, and the terminal signals the
   whole group at once) — on top of that, spork also forwards

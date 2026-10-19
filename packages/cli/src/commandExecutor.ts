@@ -16,6 +16,21 @@ const FORWARDED_SIGNALS: readonly NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGH
 const FORCE_KILL_GRACE_MS = 2000
 
 /**
+ * Which shell binary runs `command`. Node's `shell: true` defaults to
+ * `/bin/sh` on POSIX regardless of the user's actual shell — on macOS
+ * that's a restricted, POSIX-strict build of bash that rejects syntax
+ * real bash/zsh accept (e.g. a hyphenated function name in a sourced
+ * `.bashrc`/`.zshrc` — confirmed directly against a real one). Using
+ * `$SHELL` instead means `command` (and anything it sources) is
+ * interpreted by the same shell the user actually writes their dotfiles
+ * for. Falls back to Node's own default if `$SHELL` isn't set at all
+ * (rare, but possible in a stripped-down environment).
+ */
+function resolveShell(): string | true {
+  return process.env.SHELL || true
+}
+
+/**
  * Runs `command` through a real shell with `stdio: 'inherit'` — the child
  * gets the parent's actual stdin/stdout/stderr directly, not captured or
  * buffered, so an interactive or long-running process (a dev server, a
@@ -55,7 +70,7 @@ export function createShellExecutor(): CommandExecutor {
   return {
     run(command: string, cwd: string): Promise<ExecResult> {
       return new Promise((resolve, reject) => {
-        const child = spawn(command, { cwd, shell: true, stdio: 'inherit' })
+        const child = spawn(command, { cwd, shell: resolveShell(), stdio: 'inherit' })
         let forwarded = false
         let killTimer: NodeJS.Timeout | undefined
 

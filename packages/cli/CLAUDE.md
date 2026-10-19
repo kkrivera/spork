@@ -123,3 +123,10 @@ new business logic belongs in `@spork/core`, imported only from its
   the child for free via process-group inheritance, but something
   signaling spork's own PID directly (a supervisor, a script) wouldn't,
   without this, and the child would be orphaned rather than stopped.
+  `createShellExecutor` also resolves the shell to run `command` through
+  as `$SHELL`, not Node's `shell: true` default — don't change that back
+  to a bare `true`/hardcoded `/bin/sh`: on macOS that's a restricted,
+  POSIX-strict bash that rejects syntax real bash/zsh accept (confirmed
+  directly — a hyphenated function name in a real `.bashrc` is valid
+  bash but a parse error under it), so the moment `command` sources a
+  real dotfile, a hardcoded `/bin/sh` breaks it.

@@ -822,6 +822,42 @@ itself around as a wrapper to sequence the steps — forwarding still
 reaches that wrapper, but whether it cascades further depends on that
 shell's own signal handling, not spork's.
 
+### `exec` runs `command` through `$SHELL`, not Node's hardcoded `/bin/sh` default
+
+`createShellExecutor` originally used `shell: true`, which — regardless of
+the discussion above about *whether* a command's own dotfiles get sourced
+— has a sharper problem underneath it: Node's `shell: true` always means
+`/bin/sh` on POSIX, never the user's actual shell, even though `$SHELL` is
+almost always `bash` or `zsh`. On macOS specifically, `/bin/sh` isn't just
+"a plainer shell" — it's a restricted, POSIX-strict build of bash that
+rejects syntax real, interactive bash/zsh freely accepts. Confirmed
+directly, not assumed: a user's own real `.bashrc` defined a function
+named with a hyphen (`start-all() { ... }`, ordinary and valid in real
+bash) and sourcing it inside spork's `exec` failed with `` `start-all':
+not a valid identifier `` — a parse error specific to POSIX's stricter
+function-naming rule, which real bash relaxes but `/bin/sh` enforces.
+This had nothing to do with *whether* a dotfile got sourced (the user had
+already worked around that separately by sourcing it explicitly in their
+`command` string) — the shell interpreting the sourced content simply
+wasn't the shell that file was written for, so legitimate syntax in it
+broke.
+
+The fix: resolve the shell to run `command` through as `process.env.SHELL`
+instead, falling back to Node's own default (`true`, i.e. `/bin/sh`) only
+if `$SHELL` isn't set at all. This means `command` — and anything it goes
+on to `source` — is interpreted by the exact shell binary the user's own
+dotfiles are written for, not a stricter, differently-behaved substitute.
+This is a narrower, more fundamental fix than the earlier interactive-vs-
+non-interactive question (whether `.zshrc`/`.bashrc` get sourced
+automatically at all, still unresolved and still the user's own choice to
+solve per-command via an explicit `source` — see the options discussed
+with the user: spawn the real shell non-interactively, as done here;
+spawn it with `-i` so rc files load automatically at the cost of startup
+latency and interactive-mode side effects; or leave `exec` as-is and have
+the command itself `source` whatever it needs). Using the right shell
+binary is a prerequisite for all three of those options, not an
+alternative to them.
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of
