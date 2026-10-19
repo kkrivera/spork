@@ -4,6 +4,7 @@
     { "path": "packages/core" },
     { "path": "packages/cli" },
     { "path": "packages/task-runner" },
-    { "path": "packages/prompts" }
+    { "path": "packages/prompts" },
+    { "path": "packages/mcp" }
   ]
 }

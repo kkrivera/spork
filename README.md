@@ -83,6 +83,8 @@ spork repo list
   add-repo`/`create --repo`, and `workspace status`).
 - [packages/prompts](packages/prompts) — interactive terminal prompts: the
   fuzzy select and the yes/no confirm `workspace create` uses above.
+- [packages/mcp](packages/mcp) — an MCP server exposing `core`'s operations as
+  tools, so an agent can drive spork directly instead of through the CLI.
 - [tools/readme-sync](tools/readme-sync) — the CI check that keeps module READMEs honest.
 - [docs/plans](docs/plans) — durable design docs, reviewed like code.
 - [.claude/skills](.claude/skills) — Claude Code skills used to maintain this repo.
