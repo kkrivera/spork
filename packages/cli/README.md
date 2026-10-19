@@ -27,6 +27,13 @@ logic lives here.
 - `src/opener.ts` — `createCodeOpener`, an injectable abstraction around
   shelling out to the `code` CLI (used by `workspace open`), so it's mockable
   in tests and doesn't fail silently if `code` isn't installed.
+- `src/commandExecutor.ts` — `createShellExecutor`, an injectable
+  abstraction around running an arbitrary command through a real shell
+  with `stdio: 'inherit'` (used by `workspace exec`) — the child gets the
+  terminal directly (raw output, working Ctrl+C, no capturing/buffering),
+  rather than being routed through `@spork/task-runner`'s live dashboard,
+  which is built for several short tasks that settle and summarize, not
+  one long-running or interactive foreground process.
 - `src/confirmDestructive.ts` — `confirmDestructive(message, yes)`: the
   shared yes/no gate every destructive `workspace` command (`remove`,
   `remove-repo`) runs through before acting, even when its target was given
@@ -94,11 +101,12 @@ logic lives here.
   only lives in one place.
 - `src/commands/workspace/` — one file per `spork workspace <verb>`
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
-  `status`, `open`), each exporting a plain `run<Verb>` function (the
-  testable logic) and a `register<Verb>Command` that wires it to commander
-  and prints the result. Every subcommand except `create` and `list` takes
-  its workspace by name but can omit it — `add-repo`, `remove-repo`,
-  `remove`, `status`, and `open` all fall back to `pickWorkspace.ts`'s
+  `status`, `open`, `exec`), each exporting a plain `run<Verb>` function
+  (the testable logic) and a `register<Verb>Command` that wires it to
+  commander and prints the result. Every subcommand except `create` and
+  `list` takes its workspace by name but can omit it — `add-repo`,
+  `remove-repo`, `remove`, `status`, `open`, and `exec` all fall back to
+  `pickWorkspace.ts`'s
   picker rather than requiring the name up front; `create`'s `name` is the
   *new* workspace being created (nothing to pick from) and `list` takes no
   workspace at all, so neither needed this. `remove` takes its workspaces
@@ -181,7 +189,26 @@ logic lives here.
   status read as a single `runConcurrently` item too, for a live spinner
   instead of a silent wait, rather than exporting a second per-worktree
   core function just for this. `open [workspace]`'s name is optional too,
-  same `pickWorkspace.ts` picker as the rest. `index.ts` in this folder registers them
+  same `pickWorkspace.ts` picker as the rest. `exec <command> --workspace
+  <name>` runs an arbitrary command at the root of a workspace (not any
+  one repo's own worktree — the directory the `.code-workspace` file
+  lives in), for things that span the whole workspace rather than one
+  repo (a root-level `docker-compose up`, a script that starts every
+  service). `command` is a single shell string (supports `&&`/pipes/env
+  expansion), run through `commandExecutor.ts`'s injectable
+  `CommandExecutor` with inherited stdio rather than
+  `runConcurrently`'s dashboard — unlike every other command here, this
+  one is typically long-running or interactive, so it gets the real
+  terminal directly instead of being tailed into a pane. `--workspace` is
+  optional, same `pickWorkspace.ts` picker as every other command (cwd
+  auto-detect, then a single-select); `runExec` takes an `onResolved`
+  callback fired once the workspace is known but *before* the command
+  starts, which `registerExecCommand` uses to print which workspace got
+  picked — otherwise there'd be no feedback at all until the command's own
+  output appeared. The child's exit code (or `1` if it was killed by a
+  signal instead of exiting normally) becomes spork's own exit code, so
+  `spork workspace exec "npm test" --workspace x` composes correctly in
+  scripts/CI. `index.ts` in this folder registers them
   all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
   for the command surface and its rationale.

@@ -2,6 +2,7 @@ import type { Command } from 'commander'
 import type { AppContext } from '../../context.js'
 import { registerAddRepoCommand } from './addRepo.js'
 import { registerCreateCommand } from './create.js'
+import { registerExecCommand } from './exec.js'
 import { registerListCommand } from './list.js'
 import { registerOpenCommand } from './open.js'
 import { registerRemoveCommand } from './remove.js'
@@ -18,4 +19,5 @@ export function registerWorkspaceCommands(program: Command, ctx: AppContext): vo
   registerListCommand(workspace, ctx)
   registerStatusCommand(workspace, ctx)
   registerOpenCommand(workspace, ctx)
+  registerExecCommand(workspace, ctx)
 }

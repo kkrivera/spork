@@ -20,14 +20,22 @@ A workspace is:
 
 ```sh
 spork workspace create demo
-spork workspace add-repo demo git@github.com:acme/widgets.git --branch main
-spork workspace add-repo demo git@github.com:acme/gadgets.git
+spork workspace add-repo git@github.com:acme/widgets.git --workspace demo --branch main
+spork workspace add-repo git@github.com:acme/gadgets.git --workspace demo
 spork workspace status demo
 spork workspace open demo
 spork workspace list
-spork workspace remove-repo demo gadgets
+spork workspace exec "npm run dev" --workspace demo
+spork workspace remove-repo gadgets --workspace demo
 spork workspace remove demo
 ```
+
+`--workspace`/`-w` (and the matching positional on `status`/`open`/
+`remove`) is optional everywhere above — omit it and spork uses the
+workspace you're already `cd`'d into, or offers a picker if you're not
+inside one. `add-repo`/`remove-repo` go a step further: omit the repo
+entirely and pick from a list instead (registered repos to add, or the
+workspace's current repos to remove).
 
 Every repo you add is cached once (`~/.spork/repos/`) and given a short
 alias, so the next workspace that needs the same repo doesn't need the full
@@ -53,8 +61,8 @@ opt-in** — so two different workspaces can give the same short name to two
 different repos without colliding:
 
 ```sh
-spork workspace add-repo demo git@github.com:acme/widgets.git         # alias "widgets", local to demo
-spork workspace add-repo demo git@github.com:acme/widgets.git --global # same, but shared across every workspace
+spork workspace add-repo git@github.com:acme/widgets.git --workspace demo           # alias "widgets", local to demo
+spork workspace add-repo git@github.com:acme/widgets.git --workspace demo --global  # same, but shared across every workspace
 
 spork repo add git@github.com:acme/gadgets.git            # standalone: local if run inside a workspace, else global
 spork repo add git@github.com:acme/gadgets.git --local     # force local (must be inside a workspace)

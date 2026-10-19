@@ -83,10 +83,13 @@ new business logic belongs in `@spork/core`, imported only from its
   per-item callback (invoked right after each item settles) that
   `register<Verb>Command` uses to print immediately, the same way
   `runConcurrently`'s `TaskReporter.log()` lets a concurrent item's `call`
-  report progress without `run<Verb>` itself calling `console.log`. Don't
-  build this callback plumbing speculatively, though — there's no command
-  today that actually needs forced sequential ordering; add it when one
-  does.
+  report progress without `run<Verb>` itself calling `console.log`. No
+  command needs this for a *batch* yet, so don't build it speculatively
+  for that case — but `exec`'s `onResolved` callback is the same shape
+  applied to a single long-running action: `run<Verb>` still can't print,
+  yet something needs to tell the user which workspace got auto-picked
+  *before* the (possibly interactive, possibly slow) command takes over
+  the terminal, not after it returns.
 - When a command has one positional argument that must stay required
   (can't be prompted away) alongside a second one becoming optional, don't
   reach for a second positional and disambiguate by argument count — it's
@@ -101,3 +104,15 @@ new business logic belongs in `@spork/core`, imported only from its
   `remove-repo` follows the same pattern as `add-repo`: `[folders...]`
   (variadic — it can remove several at once) plus `--workspace`/`-w`,
   rather than a `[workspace] [folder]` positional pair.
+- `workspace exec` is the one command whose underlying work is a single,
+  typically long-running or interactive foreground process (a dev
+  server, a watcher) rather than a short task or batch of them — don't
+  route it through `runConcurrently`/`@spork/task-runner`'s live
+  dashboard the way every other multi-item command here does. That
+  dashboard is built around tasks that settle and get tailed into a
+  pane; a real dev server wants the actual terminal (raw stdout, working
+  Ctrl+C, no buffering), which is exactly what `commandExecutor.ts`'s
+  `stdio: 'inherit'` gives it. If a future command's job is similarly "run
+  one interactive/long-lived foreground process," follow `exec`'s
+  pattern (an injectable `CommandExecutor`-shaped abstraction), not
+  `runConcurrently`'s.

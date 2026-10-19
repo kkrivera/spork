@@ -709,6 +709,61 @@ batch command in this CLI: every folder is attempted regardless of a
 sibling's failure, and `registerRemoveRepoCommand` throws only after
 printing every outcome.
 
+### `workspace exec`: running arbitrary commands at a workspace's root
+
+A workspace spans several independent repos, each its own git worktree —
+but starting the thing a workspace is actually *for* (a few services
+running together, a dev environment) is rarely a single repo's concern.
+`workspace exec <command> --workspace <name>` runs an arbitrary shell
+command at the workspace's root directory (not inside any one repo's
+worktree — the directory the `.code-workspace` file lives in), leaving it
+entirely to the user's own tooling (a root-level `docker-compose.yml`, a
+Makefile, a script that starts several processes) to do the actual
+orchestration. Spork doesn't try to model "a workspace's servers" as a
+first-class concept — that would mean inventing a config format and a
+process-supervision story this doesn't need, when the user's own existing
+tooling (whatever it already is) already solves it.
+
+`--workspace` resolves exactly like every other optional-workspace
+command (`pickWorkspace.ts`'s `pickWorkspaceName`: cwd auto-detect, then a
+single-select), making `exec` usable as `cd <workspace-dir> && spork
+workspace exec "npm run dev"` with zero extra typing once you're already
+there.
+
+The one thing genuinely new here, compared to every other command in this
+CLI: the work being run is typically a *long-running or interactive*
+foreground process (a dev server, a file watcher), not a short task that
+settles and gets summarized. Every other multi-item command in this CLI
+(`create --repo`, `repo scan`, `remove`, `remove-repo`) routes its work
+through `runConcurrently`/`@spork/task-runner`'s live dashboard — deliberately
+*not* appropriate here, since that dashboard tails captured output into a
+fixed-height pane and expects its tasks to finish. A dev server doesn't
+"finish" in the way a clone or a worktree removal does, and the user
+needs the real terminal — raw ANSI output, a working Ctrl+C, maybe stdin —
+not a pane tailing a buffer. So `exec` uses its own minimal, injectable
+abstraction instead (`commandExecutor.ts`'s `CommandExecutor`, mirroring
+`opener.ts`'s existing injectable-subprocess-wrapper pattern): `command`
+is run through a real shell (`spawn(command, { shell: true, stdio:
+'inherit' })`), so `&&`/pipes/env-variable expansion in the quoted string
+work the way they would if typed directly into that terminal, and the
+child's exit code (or `1`, if it was killed by a signal instead of
+exiting normally) becomes spork's own exit code — so `spork workspace
+exec "npm test" --workspace x` composes correctly in a script or CI
+pipeline.
+
+Printing which workspace `exec` resolved to is slightly awkward given the
+usual `run<Verb>`-never-prints convention: the print needs to happen
+*before* the (possibly long-running) command starts, not after `runExec`
+returns, since by then the command has already finished and the
+information would be far too late to be useful. `runExec` takes an
+optional `onResolved` callback, fired once the workspace is known but
+before the command runs, which `registerExecCommand` uses to print —
+`run<Verb>` itself still never calls `console.log` directly, the
+callback just gives the caller a hook at the right moment. This is the
+same shape `packages/cli/CLAUDE.md` describes for a hypothetical forced-
+sequential batch command's per-item progress callback, just applied to a
+single action instead of several.
+
 ## Explicitly deferred
 
 Not designed in depth here — the architecture above doesn't foreclose any of
