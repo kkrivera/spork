@@ -110,4 +110,16 @@ yarn lint
 yarn test           # vitest, ≥80% coverage enforced
 ```
 
+`vitest.workspace.ts` lists the actual test projects (`packages/*`, `tools/*`);
+`vitest.config.ts` alongside it holds the coverage settings that govern the one
+merged report `yarn test` produces across all of them — each project's own
+`vitest.config.ts` still governs its *own* standalone run (`cd packages/core &&
+yarn test`), but only the root config's `include`/`exclude` apply once everything
+is combined, so that's the one to touch if the merged report ever needs
+adjusting.
+
+A top-level `workspaces/` directory, if you have one, is a personal scratch
+space for `spork workspace create`'s own output — fully ignored by git, ESLint,
+and Vitest (including its coverage report), regardless of what ends up in it.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.

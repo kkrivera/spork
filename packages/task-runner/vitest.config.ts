@@ -1,10 +1,16 @@
-import { defineConfig } from 'vitest/config'
+import { coverageConfigDefaults, defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  server: {
+    watch: {
+      ignored: ['**/workspaces/**'],
+    },
+  },
   test: {
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
+      exclude: [...coverageConfigDefaults.exclude, '**/workspaces/**'],
       thresholds: {
         lines: 80,
         functions: 80,
