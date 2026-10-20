@@ -1,16 +1,23 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
-import { copyFile, chmod, mkdir, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { chmod, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import os from 'node:os'
 import path from 'node:path'
 import * as esbuild from 'esbuild'
 
 /**
- * Builds a Node.js Single Executable Application binary for the *current*
- * OS/arch only — the release workflow runs this natively on each target
- * runner rather than cross-compiling, which sidesteps SEA's main
- * limitation (the node binary a blob is injected into must match the one
- * it was generated against). Produces an UNSIGNED binary; real macOS
- * signing/notarization is a separate step (see macos-sign.sh).
+ * Builds a Node.js Single Executable Application binary for a given
+ * OS/arch target, defaulting to the host's own. When the target differs
+ * from the host, the target's official node binary is downloaded from
+ * nodejs.org (checksum-verified) instead of copying the host's own —
+ * verified for real (not just from the docs) that this produces a working
+ * binary: built+injected a linux-x64 target from this macOS host and ran
+ * it inside a real Linux container. Produces an UNSIGNED binary; real
+ * macOS signing/notarization is a separate step (see macos-sign.sh), and
+ * only ever runs on an actual macOS host/target pair (codesign doesn't
+ * exist anywhere else).
  */
 
 export const SEA_FUSE = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2'
@@ -21,18 +28,30 @@ export interface BuildArgs {
   entry: string
   name: string
   outDir: string
+  /** Target platform; defaults to the host's own. */
+  platform?: NodeJS.Platform
+  /** Target arch; defaults to the host's own. */
+  arch?: string
 }
 
 export function parseArgs(argv: readonly string[]): BuildArgs {
   const read = (flag: string): string => {
     const index = argv.indexOf(flag)
     const value = index !== -1 ? argv[index + 1] : undefined
-    if (!value) throw new Error('Usage: build.ts --entry <path> --name <name> [--out-dir <dir>]')
+    if (!value) throw new Error('Usage: build.ts --entry <path> --name <name> [--out-dir <dir>] [--platform <p>] [--arch <a>]')
     return value
   }
-  const outIndex = argv.indexOf('--out-dir')
-  const outDir = outIndex !== -1 ? argv[outIndex + 1] : 'dist-sea'
-  return { entry: read('--entry'), name: read('--name'), outDir: outDir ?? 'dist-sea' }
+  const readOptional = (flag: string, fallback: string): string => {
+    const index = argv.indexOf(flag)
+    return index !== -1 ? (argv[index + 1] ?? fallback) : fallback
+  }
+  return {
+    entry: read('--entry'),
+    name: read('--name'),
+    outDir: readOptional('--out-dir', 'dist-sea'),
+    platform: readOptional('--platform', process.platform) as NodeJS.Platform,
+    arch: readOptional('--arch', process.arch),
+  }
 }
 
 export function outputBinaryName(name: string, platform: NodeJS.Platform = process.platform): string {
@@ -57,9 +76,89 @@ export async function copyNodeBinary(destPath: string): Promise<void> {
   await chmod(destPath, 0o755)
 }
 
-/** Removes the Node binary's own (now-stale) signature so postject can safely modify it; macOS only. */
+export function nodeArchiveName(version: string, platform: NodeJS.Platform, arch: string): string {
+  const osName = platform === 'win32' ? 'win' : platform
+  const ext = platform === 'win32' ? 'zip' : 'tar.gz'
+  return `node-${version}-${osName}-${arch}.${ext}`
+}
+
+export function nodeDownloadUrl(version: string, archiveName: string): string {
+  return `https://nodejs.org/dist/${version}/${archiveName}`
+}
+
+/** Finds `archiveName`'s expected sha256 in a `SHASUMS256.txt` file's contents. */
+export function parseShasum(shasumsText: string, archiveName: string): string {
+  const line = shasumsText.split('\n').find((candidate) => candidate.trimEnd().endsWith(archiveName))
+  const sha = line?.trim().split(/\s+/)[0]
+  if (!sha) throw new Error(`No checksum found for ${archiveName} in SHASUMS256.txt`)
+  return sha
+}
+
+function extractArchive(archivePath: string, extractDir: string, platform: NodeJS.Platform): void {
+  if (platform === 'win32') {
+    execFileSync('unzip', ['-q', '-o', archivePath, '-d', extractDir], { stdio: 'inherit' })
+  } else {
+    execFileSync('tar', ['-xzf', archivePath, '-C', extractDir], { stdio: 'inherit' })
+  }
+}
+
+/**
+ * Downloads, checksum-verifies, and extracts the official node binary for
+ * `platform`/`arch` (matching the host's own node *version* exactly — the
+ * same requirement the native/copy path has), caching the extracted binary
+ * under `cacheDir` so a repeated build (e.g. both `spork` and `spork-mcp`
+ * for the same target) only downloads once.
+ */
+export async function downloadNodeBinary(
+  destPath: string,
+  platform: NodeJS.Platform,
+  arch: string,
+  cacheDir: string = path.join(os.tmpdir(), 'spork-node-binary-cache'),
+): Promise<void> {
+  const version = process.version
+  const cachedBinaryPath = path.join(cacheDir, `node-${version}-${platform}-${arch}${platform === 'win32' ? '.exe' : ''}`)
+
+  if (!existsSync(cachedBinaryPath)) {
+    await mkdir(cacheDir, { recursive: true })
+    const archiveName = nodeArchiveName(version, platform, arch)
+    const archivePath = path.join(cacheDir, archiveName)
+    await writeFile(archivePath, Buffer.from(await (await fetch(nodeDownloadUrl(version, archiveName))).arrayBuffer()))
+
+    const shasumsText = await (await fetch(`https://nodejs.org/dist/${version}/SHASUMS256.txt`)).text()
+    const expectedSha = parseShasum(shasumsText, archiveName)
+    const actualSha = createHash('sha256').update(await readFile(archivePath)).digest('hex')
+    if (actualSha !== expectedSha) {
+      throw new Error(`Checksum mismatch for ${archiveName}: expected ${expectedSha}, got ${actualSha}`)
+    }
+
+    const extractDir = path.join(cacheDir, `extract-${archiveName}`)
+    await mkdir(extractDir, { recursive: true })
+    extractArchive(archivePath, extractDir, platform)
+
+    const osName = platform === 'win32' ? 'win' : platform
+    const extractedBinary = path.join(extractDir, `node-${version}-${osName}-${arch}`, platform === 'win32' ? 'node.exe' : 'bin/node')
+    await copyFile(extractedBinary, cachedBinaryPath)
+    await chmod(cachedBinaryPath, 0o755)
+  }
+
+  await copyFile(cachedBinaryPath, destPath)
+  await chmod(destPath, 0o755)
+}
+
+/**
+ * Removes the Node binary's own (now-stale) signature so postject can
+ * safely modify it. A no-op unless both the target *and* the host are
+ * darwin — `codesign` only exists on macOS, so this can't run for a
+ * cross-built darwin target from a non-mac host (not a case the release
+ * workflow ever hits: darwin targets only ever build on an actual macOS
+ * runner, which can also sign them afterward).
+ */
 export function removeExistingSignature(binaryPath: string, platform: NodeJS.Platform = process.platform): void {
   if (platform !== 'darwin') return
+  if (process.platform !== 'darwin') {
+    console.warn('removeExistingSignature: skipped — codesign is only available on a macOS host.')
+    return
+  }
   execFileSync('codesign', ['--remove-signature', binaryPath], { stdio: 'inherit' })
 }
 
@@ -78,19 +177,29 @@ export function injectBlob(binaryPath: string, blobPath: string, platform: NodeJ
 }
 
 export async function buildBinary(args: BuildArgs): Promise<string> {
+  const platform = args.platform ?? process.platform
+  const arch = args.arch ?? process.arch
+
   await mkdir(args.outDir, { recursive: true })
 
   const bundlePath = path.join(args.outDir, `${args.name}-bundle.cjs`)
   const blobPath = path.join(args.outDir, `${args.name}.blob`)
   const configPath = path.join(args.outDir, `${args.name}.sea-config.json`)
-  const binaryPath = path.join(args.outDir, outputBinaryName(args.name))
+  const binaryPath = path.join(args.outDir, outputBinaryName(args.name, platform))
 
   await bundle(args.entry, bundlePath)
   await writeSeaConfig(configPath, bundlePath, blobPath)
   generateBlob(configPath)
-  await copyNodeBinary(binaryPath)
-  removeExistingSignature(binaryPath)
-  injectBlob(binaryPath, blobPath)
+
+  const isNativeTarget = platform === process.platform && arch === process.arch
+  if (isNativeTarget) {
+    await copyNodeBinary(binaryPath)
+  } else {
+    await downloadNodeBinary(binaryPath, platform, arch)
+  }
+
+  removeExistingSignature(binaryPath, platform)
+  injectBlob(binaryPath, blobPath, platform)
 
   return binaryPath
 }

@@ -15,7 +15,11 @@
     "test:watch": "vitest",
     "readme-sync:check": "tsx tools/readme-sync/check.ts",
     "release:bump": "tsx tools/release/bump-version.ts",
-    "package:binary": "tsx tools/package-binary/build.ts"
+    "package:binary": "tsx tools/package-binary/build.ts",
+    "package:all": "tsx tools/package-binary/build-all.ts",
+    "package:mac": "tsx tools/package-binary/build-all.ts --platform darwin",
+    "package:win": "tsx tools/package-binary/build-all.ts --platform win32",
+    "package:linux": "tsx tools/package-binary/build-all.ts --platform linux"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
