@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
-    "readme-sync:check": "tsx tools/readme-sync/check.ts"
+    "readme-sync:check": "tsx tools/readme-sync/check.ts",
+    "release:bump": "tsx tools/release/bump-version.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
