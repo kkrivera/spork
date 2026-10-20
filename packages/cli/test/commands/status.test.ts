@@ -23,7 +23,7 @@ const { select } = await import('@spork/prompts')
 const { runStatus, registerStatusCommand } = await import('../../src/commands/workspace/status.js')
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 
 /** Drives the single FunctionTask runConcurrently builds, the way the real runFunctionTask would. */
 async function fakeRunTasks(tasks: readonly FunctionTask[]): Promise<TaskResult[]> {

@@ -6,6 +6,7 @@ import {
   type RepoContext,
   type WorkspaceContext,
 } from '@spork/core'
+import { readSporkEnv, type SporkEnv } from './env.js'
 import { createUi, type Ui, type UiOptions } from './output/color.js'
 
 export interface CoreContext {
@@ -18,14 +19,16 @@ export interface CoreContext {
 
 export interface AppContext extends CoreContext {
   ui: Ui
+  env: SporkEnv
 }
 
-export function createAppContext(uiOptions?: UiOptions): AppContext {
+export function createAppContext(uiOptions?: UiOptions, env: NodeJS.ProcessEnv = process.env): AppContext {
   return {
     reposRoot: REPOS_ROOT,
     registryPath: REGISTRY_PATH,
     repoRegistryPath: REPO_REGISTRY_PATH,
     ui: createUi(uiOptions),
+    env: readSporkEnv(env),
   }
 }
 

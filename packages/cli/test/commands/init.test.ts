@@ -27,7 +27,7 @@ const { select, NotInteractiveError } = await import('@spork/prompts')
 const { runInit, registerInitCommand } = await import('../../src/commands/workspace/init.js')
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 
 function fakeAdoptedEntry(folder: string) {
   return { kind: 'adopted' as const, folder, source: `/home/user/demo/${folder}`, addedAt: '' }

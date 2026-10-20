@@ -23,12 +23,19 @@ logic lives here.
   output directly.
 - `src/output/format.ts` — `formatTable`, a plain space-padded table
   renderer (no box drawing) so output stays clean piped or in CI.
+- `src/env.ts` — `readSporkEnv(env = process.env)`: the single, extensible
+  place every `SPORK_*` environment variable gets read (currently just
+  `SPORK_WORKSPACE_DIR`, `workspace create`'s `--dir` fallback below) — add
+  a field here rather than reading `process.env.SPORK_*` directly from a
+  command. Takes `env` as a parameter, same injectable convention
+  `output/color.ts`'s `resolveColorEnabled` already uses, so it stays
+  testable without mocking the real process environment.
 - `src/context.ts` — `createAppContext`, building the `{ reposRoot,
-  registryPath, repoRegistryPath, ui }` every command needs from
-  `@spork/core`'s path constants and the output layer, plus narrowing
-  helpers (`workspaceContext`, `repoContext`, `removeRepoSourceContext`)
-  that pick out exactly the fields a given `@spork/core` function's context
-  parameter needs.
+  registryPath, repoRegistryPath, ui, env }` every command needs from
+  `@spork/core`'s path constants, the output layer, and `env.ts`'s
+  `readSporkEnv`, plus narrowing helpers (`workspaceContext`, `repoContext`,
+  `removeRepoSourceContext`) that pick out exactly the fields a given
+  `@spork/core` function's context parameter needs.
 - `src/opener.ts` — `createCodeOpener`, an injectable abstraction around
   shelling out to the `code` CLI (used by `workspace open`), so it's mockable
   in tests and doesn't fail silently if `code` isn't installed.
@@ -231,7 +238,11 @@ logic lives here.
   scripts/CI. `index.ts` in this folder registers them
   all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
-  for the command surface and its rationale. `init <name>` is the other
+  for the command surface and its rationale. `create`'s `--dir` (a
+  *parent* directory — the workspace always lands at `<dir>/<name>`)
+  defaults to `env.ts`'s `SPORK_WORKSPACE_DIR` when omitted, falling back
+  to cwd if that's unset too — an explicit `--dir` always wins over
+  either. `init <name>` is the other
   way to start a workspace, alongside `create`: it always targets `cwd`
   (never a `--dir`, unlike `create`) and refuses up front if `cwd` is
   already a spork workspace. It scans one level deep for git repos

@@ -61,6 +61,11 @@ spork workspace status some-project
 spork workspace remove some-project   # drops spork.workspace.json + .code-workspace only
 ```
 
+Set `SPORK_WORKSPACE_DIR` to change `workspace create`'s default parent
+directory (otherwise cwd) — an explicit `--dir` always overrides it. This
+is the first of spork's `SPORK_*` environment variables; more may be added
+over time.
+
 `--workspace`/`-w` (and the matching positional on `status`/`open`/
 `remove`) is optional everywhere above — omit it and spork uses the
 workspace you're already `cd`'d into, or offers a picker if you're not

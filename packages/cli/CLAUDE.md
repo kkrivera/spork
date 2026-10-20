@@ -7,6 +7,15 @@ new business logic belongs in `@spork/core`, imported only from its
 - All user-facing text goes through `output/color.ts`'s `Ui` — don't call
   `picocolors` directly in a command, and don't `console.log` raw ANSI codes.
   A command must read correctly with color off (CI, `--no-color`, non-TTY).
+- Every `SPORK_*` environment variable is read in exactly one place —
+  `env.ts`'s `readSporkEnv`, attached to `AppContext` as `ctx.env` by
+  `createAppContext`. Don't read `process.env.SPORK_*` directly from a
+  command; add a field to `SporkEnv`/`readSporkEnv` instead, so there's one
+  place that documents (and tests) the whole set. Precedence when a flag
+  has an env-var fallback is always explicit flag, then the env var, then
+  whatever hardcoded default existed before (`workspace create`'s `--dir`
+  → `SPORK_WORKSPACE_DIR` → cwd is the first one) — don't let the env var
+  outrank an explicit flag.
 - An interactive prompt (via `@spork/prompts`) is allowed, but only as an
   *addition* to an explicit-flag path that still works unattended in CI —
   never make a prompt the only way to drive a command. `@spork/prompts`'s

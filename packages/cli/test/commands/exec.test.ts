@@ -18,7 +18,7 @@ const { select } = await import('@spork/prompts')
 const { runExec, registerExecCommand } = await import('../../src/commands/workspace/exec.js')
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 
 function fakeExecutor(result: ExecResult): CommandExecutor {
   return { run: vi.fn().mockResolvedValue(result) }

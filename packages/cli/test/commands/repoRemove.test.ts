@@ -13,7 +13,7 @@ const { removeRepoSource, removeLocalRepoAlias, findEnclosingWorkspaceDir } = aw
 const { runRemove, registerRemoveCommand } = await import('../../src/commands/repo/remove.js')
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/workspaces.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/workspaces.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 
 beforeEach(() => {
   vi.mocked(removeRepoSource).mockReset().mockResolvedValue(undefined)

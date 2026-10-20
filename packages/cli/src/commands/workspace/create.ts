@@ -21,15 +21,15 @@ function collectRepo(value: string, previous: string[]): string[] {
 
 /**
  * `--dir` names a *parent* directory, not the exact target — the workspace
- * always lands at `<parent>/<name>` (parent defaults to cwd), never at
- * `--dir` verbatim. This guarantees the folder's basename always matches
- * `name`, which is also every worktree's branch name verbatim (shared by
- * every repo in the workspace — see `addRepo`) — letting them diverge
- * would mean a workspace whose folder and branch disagree about what it's
- * even called.
+ * always lands at `<parent>/<name>` (parent defaults to `$SPORK_WORKSPACE_DIR`,
+ * then cwd), never at `--dir` verbatim. This guarantees the folder's
+ * basename always matches `name`, which is also every worktree's branch
+ * name verbatim (shared by every repo in the workspace — see `addRepo`) —
+ * letting them diverge would mean a workspace whose folder and branch
+ * disagree about what it's even called.
  */
 export async function runCreate(ctx: AppContext, name: string, options: CreateOptions): Promise<WorkspaceHandle> {
-  const dir = path.resolve(options.dir ?? process.cwd(), name)
+  const dir = path.resolve(options.dir ?? ctx.env.workspaceDir ?? process.cwd(), name)
   return createAndRegisterWorkspace(workspaceContext(ctx), ctx.registryPath, { name, dir })
 }
 
@@ -134,7 +134,7 @@ export function registerCreateCommand(program: Command, ctx: AppContext, opener:
   program
     .command('create <name>')
     .description('Create a new workspace')
-    .option('--dir <path>', 'parent directory to create the workspace in, as <path>/<name> (default: cwd)')
+    .option('--dir <path>', 'parent directory to create the workspace in, as <path>/<name> (default: $SPORK_WORKSPACE_DIR, or cwd)')
     .option('--repo <source>', 'repo to add (repeatable)', collectRepo, [] as string[])
     .option('--global', "register each --repo's alias globally instead of locally to this workspace")
     .action(async (name: string, options: CreateOptions) => {

@@ -21,7 +21,7 @@ const { select, NotInteractiveError } = await import('@spork/prompts')
 const { runOpen, registerOpenCommand } = await import('../../src/commands/workspace/open.js')
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 
 function fakeOpener(outcome: Awaited<ReturnType<Opener['open']>>): Opener {
   return { open: vi.fn().mockResolvedValue(outcome) }

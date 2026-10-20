@@ -30,7 +30,7 @@ const { runAddRepo, runAddRepoFromRegistry, printAddRepoResult, registerAddRepoC
 )
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 
 const widgetsEntry = {
   folder: 'widgets',

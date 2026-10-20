@@ -18,7 +18,7 @@ const { runTasks } = await import('@spork/task-runner')
 const { runScan, registerScanCommand } = await import('../../src/commands/repo/scan.js')
 const { createUi } = await import('../../src/output/color.js')
 
-const ctx = { reposRoot: '/repos', registryPath: '/workspaces.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }) }
+const ctx = { reposRoot: '/repos', registryPath: '/workspaces.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 const WIDGETS_SOURCE = 'git@github.com:acme/widgets.git'
 
 /** Drives every FunctionTask to completion the way the real runFunctionTask would, for a test's purposes. */

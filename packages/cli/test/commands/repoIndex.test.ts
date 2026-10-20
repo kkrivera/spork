@@ -11,6 +11,7 @@ describe('registerRepoCommands', () => {
       registryPath: '/workspaces.json',
       repoRegistryPath: '/repos.json',
       ui: createUi({ argv: ['--no-color'] }),
+      env: {},
     }
 
     registerRepoCommands(program, ctx)

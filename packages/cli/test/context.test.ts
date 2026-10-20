@@ -10,6 +10,12 @@ describe('createAppContext', () => {
     expect(ctx.repoRegistryPath).toContain('.spork')
     expect(ctx.ui.isColorEnabled).toBe(false)
   })
+
+  it('reads SPORK_* env vars from the given env, defaulting to process.env', () => {
+    const ctx = createAppContext({ argv: ['--no-color'] }, { SPORK_WORKSPACE_DIR: '/custom/dir' })
+
+    expect(ctx.env).toEqual({ workspaceDir: '/custom/dir' })
+  })
 })
 
 const ctx = { reposRoot: '/repos', registryPath: '/workspaces.json', repoRegistryPath: '/repos.json' }
