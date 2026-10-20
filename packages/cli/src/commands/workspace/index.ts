@@ -3,6 +3,7 @@ import type { AppContext } from '../../context.js'
 import { registerAddRepoCommand } from './addRepo.js'
 import { registerCreateCommand } from './create.js'
 import { registerExecCommand } from './exec.js'
+import { registerInitCommand } from './init.js'
 import { registerListCommand } from './list.js'
 import { registerOpenCommand } from './open.js'
 import { registerRemoveCommand } from './remove.js'
@@ -13,6 +14,7 @@ export function registerWorkspaceCommands(program: Command, ctx: AppContext): vo
   const workspace = program.command('workspace').description('Manage git-worktree workspaces')
 
   registerCreateCommand(workspace, ctx)
+  registerInitCommand(workspace, ctx)
   registerAddRepoCommand(workspace, ctx)
   registerRemoveRepoCommand(workspace, ctx)
   registerRemoveCommand(workspace, ctx)

@@ -15,7 +15,7 @@ describe('registerWorkspaceCommands', () => {
 
     const subcommandNames = workspace?.commands.map((cmd) => cmd.name())
     expect(subcommandNames).toEqual(
-      expect.arrayContaining(['create', 'add-repo', 'remove-repo', 'remove', 'list', 'status', 'open', 'exec']),
+      expect.arrayContaining(['create', 'init', 'add-repo', 'remove-repo', 'remove', 'list', 'status', 'open', 'exec']),
     )
   })
 })
