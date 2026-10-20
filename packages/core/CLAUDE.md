@@ -112,6 +112,22 @@ second frontend re-implement that pairing by hand; it belongs here as
 these too rather than hand-rolling the create-then-register or
 remove-then-unregister sequence again.
 
+`workspace init`'s "adopt an existing folder in place, never touch
+branches" requirement needed a real data-model distinction, not a
+CLI-level check — see
+[docs/plans/0003-workspace-init.md](../../docs/plans/0003-workspace-init.md).
+A manifest entry's `kind` (`'worktree'` default, or `'adopted'`) and a
+workspace's own `origin` (`'created'` default, or `'initialized'`) are
+**independent** — don't collapse them into one flag. `kind` is what
+`removeRepo` checks before doing a real `git worktree remove`; `origin` is
+what `removeWorkspace` checks before treating the workspace directory
+itself as deletable at all. They have to stay independent because nothing
+stops `add-repo` from adding a real worktree-backed repo into an
+`initialized` workspace later — that entry should still be removed the
+normal way even though the directory it lives in is still never deleted.
+If you add a third way to populate a workspace, give it its own `kind`
+rather than overloading `'adopted'`/`'worktree'` to mean something new.
+
 ## Tests
 
 Unit tests only for now — mock `execGit` (or `node:child_process` for

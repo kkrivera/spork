@@ -104,6 +104,18 @@ new business logic belongs in `@spork/core`, imported only from its
   `remove-repo` follows the same pattern as `add-repo`: `[folders...]`
   (variadic — it can remove several at once) plus `--workspace`/`-w`,
   rather than a `[workspace] [folder]` positional pair.
+- `workspace init <name>` is the one command that always targets `cwd`
+  directly (never a `--dir`, unlike `create`, whose `--dir` is a *parent*
+  directory) — it turns an already-existing folder into a workspace in
+  place rather than creating a new one, so there's no "where should this
+  go" decision to make the way `create`'s does. It's also the one command
+  whose underlying `@spork/core` calls (`initAndRegisterWorkspace`,
+  `adoptRepoIntoWorkspace`) are guaranteed to never create a git worktree
+  or touch a branch, for anything they adopt — don't add a code path here
+  that could call `addRepo`/`addWorktree` for an adopted folder, even as
+  an optimization or a "fix" for something that looks inconsistent; that
+  guarantee is the entire point of the command (see
+  [docs/plans/0003-workspace-init.md](../../docs/plans/0003-workspace-init.md)).
 - `workspace exec` is the one command whose underlying work is a single,
   typically long-running or interactive foreground process (a dev
   server, a watcher) rather than a short task or batch of them — don't

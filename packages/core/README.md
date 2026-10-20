@@ -3,7 +3,9 @@
 Domain logic for spork: everything the `spork` CLI needs to manage git-worktree
 workspaces, with no CLI concerns (parsing, colored output) in it. See
 [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
-for the design this package implements.
+for the design this package implements, and
+[docs/plans/0003-workspace-init.md](../../docs/plans/0003-workspace-init.md)
+for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
 
 ## Structure
 
@@ -134,6 +136,17 @@ for the design this package implements.
   domain failures (a naming collision, a missing entry) as opposed to bugs.
 - `src/workspace/` — the workspace lifecycle built on top of `git`/`repo`.
   - `manifest.ts` — the `spork.workspace.json` schema and its read/write.
+    An entry is one of two kinds: `WorktreeEntry` (`kind?: 'worktree'`,
+    the default — a real git worktree spork created, with `requestedRef`/
+    `localBranch`) or `AdoptedEntry` (`kind: 'adopted'` — a folder
+    `workspace init` adopted exactly as it already sat on disk, no ref/
+    branch fields at all, since spork never asked git to check out
+    anything for it). `WorkspaceManifest.origin` is `'created'` (the
+    default) or `'initialized'`, independent of any entry's `kind` — it's
+    what `removeWorkspace` checks to decide whether the workspace
+    directory itself is ever a candidate for deletion (see below). Both
+    fields are optional so no manifest written before they existed needs
+    migrating.
   - `codeWorkspace.ts` — generates the workspace's `.code-workspace` file from
     its manifest. `codeWorkspaceFilePath(workspaceDir, name)` names the file
     after only `name`'s last path segment (`path.basename`), since `name`
@@ -157,6 +170,35 @@ for the design this package implements.
     `registerWorkspace` itself also rejects a collision atomically inside its
     own lock, as a backstop against the race between that check and the
     registration, not as the primary guard.
+
+    `initWorkspace`/`initAndRegisterWorkspace` are `createWorkspace`/
+    `createAndRegisterWorkspace`'s counterpart for `workspace init`: same
+    duplicate-name-checked-before-anything-touches-disk shape, but no
+    `mkdir` (the folder already exists with real content) and
+    `origin: 'initialized'` instead of `'created'`. Adopting a folder into
+    the workspace is a deliberately separate step, `adoptRepoIntoWorkspace`
+    — it adopts `<workspaceDir>/<folder>` into the repo cache (unchanged
+    `repo/scan.ts`'s `adoptLocalRepo`, registered local-to-the-workspace)
+    and appends an `AdoptedEntry`, through the same re-read-fresh-inside-
+    the-lock pattern `addRepo`'s tail uses. It is *not* looped over by
+    `initWorkspace` itself — same split as `createWorkspace`/`addRepo`, so
+    a caller (the CLI's `workspace init`) can run one call per selected
+    folder concurrently (`runConcurrently`, the same live-dashboard
+    pattern `--repo a --repo b ...` already uses) rather than this module
+    doing its own batching.
+
+    `removeRepo` skips the git-worktree-removal step entirely for a
+    `kind: 'adopted'` entry — there's no worktree relationship to the
+    folder to clean up, it's just dropped from the manifest/
+    `.code-workspace` like any other entry. `removeWorkspace` checks
+    `manifest.origin` after removing every entry: for `'initialized'`, it
+    deletes only the two bookkeeping files it created
+    (`spork.workspace.json`, the `.code-workspace` file) and returns —
+    never the directory, never anything inside it, since that directory
+    is the user's own pre-existing folder, not something spork created.
+    `RemoveWorkspaceOptions.keepFiles` is unaffected by any of this — it's
+    still an outer, unconditional "touch nothing at all" check that short-
+    circuits before either path runs.
 
     `addRepo`/`removeRepo` are where the shared-branch-per-workspace and per-repo-locking pieces from
     `git`/`repo` actually get used together: `addRepo` gives every repo in a

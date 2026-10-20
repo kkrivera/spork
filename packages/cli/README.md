@@ -231,7 +231,29 @@ logic lives here.
   scripts/CI. `index.ts` in this folder registers them
   all under the `workspace` parent command. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md)
-  for the command surface and its rationale.
+  for the command surface and its rationale. `init <name>` is the other
+  way to start a workspace, alongside `create`: it always targets `cwd`
+  (never a `--dir`, unlike `create`) and refuses up front if `cwd` is
+  already a spork workspace. It scans one level deep for git repos
+  (`@spork/core`'s `findGitRepoDirs`, the same scan `repo scan` uses) and
+  resolves which join via a private `resolveFolders` helper — a
+  multi-select with a real terminal (`minSelected: 1`: `init` must adopt
+  at least one), or every folder found when the terminal can't support a
+  prompt (mirroring `repo scan`'s own "adopt everything" bulk philosophy
+  for a non-interactive context — unlike `create --repo`'s "nothing picked
+  = empty workspace," there's no useful empty `init`). It then calls
+  `@spork/core`'s `initAndRegisterWorkspace` and runs one
+  `adoptRepoIntoWorkspace` call per selected folder through
+  `runConcurrently` (the same live-dashboard pattern `create --repo`/
+  `add-repo` use), not atomic/not fail-fast — every folder is still
+  attempted regardless of a sibling's failure, and
+  `registerInitCommand` prints every outcome and throws afterward if any
+  failed, same print-then-throw convention as `create`'s own `--repo`
+  batch. Critically, `init` never creates a git worktree and never
+  touches a branch for any folder it adopts — see
+  [docs/plans/0003-workspace-init.md](../../docs/plans/0003-workspace-init.md)
+  for why that needed a real data-model change in `@spork/core`, not just
+  a CLI-level check.
 - `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`,
   `scan`), same `run<Verb>`/`register<Verb>Command` split. Decoupled from
   any workspace: `repo add <source>` clones/registers an alias directly;

@@ -44,6 +44,23 @@ spork workspace remove-repo gadgets --workspace demo
 spork workspace remove demo
 ```
 
+Already have a folder of repos cloned yourself (not spork worktrees) and
+just want spork to treat it as a workspace, as-is? `cd` into it and run
+`workspace init` instead of `create` — it scans one level deep for git
+repos, lets you pick which join, and wires them in exactly as they
+already sit on disk. Unlike every other way of populating a workspace,
+`init` **never creates a worktree and never touches a branch** — your
+existing checkouts (and whatever they're currently on) are left
+completely alone, and `workspace remove` on one of these only ever
+deletes spork's own bookkeeping files, never your folders:
+
+```sh
+cd ~/code/some-project   # already has api/, web/, infra/ cloned inside it
+spork workspace init some-project   # pick which of api/web/infra join
+spork workspace status some-project
+spork workspace remove some-project   # drops spork.workspace.json + .code-workspace only
+```
+
 `--workspace`/`-w` (and the matching positional on `status`/`open`/
 `remove`) is optional everywhere above — omit it and spork uses the
 workspace you're already `cd`'d into, or offers a picker if you're not
