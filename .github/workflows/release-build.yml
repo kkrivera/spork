@@ -8,19 +8,13 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # macos-13 is x64 (Intel); GitHub has been retiring hosted x64
-          # macOS runners, so this leg may need dropping if it's no longer
-          # schedulable — see docs/RELEASING.md.
-          - { os: macos-14, platform: darwin, arch: arm64 }
-          - { os: macos-13, platform: darwin, arch: x64 }
-          - { os: windows-latest, platform: win32, arch: x64 }
-          - { os: ubuntu-latest, platform: linux, arch: x64 }
-    runs-on: ${{ matrix.os }}
+  # Builds both macOS targets (arm64 natively, x64 by downloading and
+  # injecting the official darwin-x64 node build — verified for real that
+  # an ad-hoc-signed cross-arch binary runs fine via Rosetta) on one
+  # Apple-Silicon runner, then signs all four. No x64 Mac runner needed at
+  # all anymore — see docs/plans/0002-binary-releases.md.
+  build-mac:
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -34,14 +28,9 @@ jobs:
 
       - run: yarn build
 
-      - name: Package spork (cli)
-        run: yarn package:binary --entry packages/cli/src/sea-entry.ts --name spork --out-dir dist-sea
-
-      - name: Package spork-mcp
-        run: yarn package:binary --entry packages/mcp/src/sea-entry.ts --name spork-mcp --out-dir dist-sea
+      - run: yarn package:mac
 
       - name: Sign macOS binaries
-        if: runner.os == 'macOS'
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
@@ -49,34 +38,63 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
-          ./tools/package-binary/macos-sign.sh dist-sea/spork
-          ./tools/package-binary/macos-sign.sh dist-sea/spork-mcp
+          for arch_dir in darwin-arm64 darwin-x64; do
+            ./tools/package-binary/macos-sign.sh "dist-sea/$arch_dir/spork"
+            ./tools/package-binary/macos-sign.sh "dist-sea/$arch_dir/spork-mcp"
+          done
 
-      - name: Archive (unix)
-        if: runner.os != 'Windows'
+      - name: Archive
         run: |
           version="${GITHUB_REF_NAME#v}"
-          tar -C dist-sea -czf "spork-${version}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" spork
-          tar -C dist-sea -czf "spork-mcp-${version}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" spork-mcp
-
-      - name: Archive (windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $version = "${{ github.ref_name }}" -replace '^v',''
-          Compress-Archive -Path dist-sea/spork.exe -DestinationPath "spork-$version-win32-${{ matrix.arch }}.zip"
-          Compress-Archive -Path dist-sea/spork-mcp.exe -DestinationPath "spork-mcp-$version-win32-${{ matrix.arch }}.zip"
+          tar -C dist-sea/darwin-arm64 -czf "spork-${version}-darwin-arm64.tar.gz" spork
+          tar -C dist-sea/darwin-arm64 -czf "spork-mcp-${version}-darwin-arm64.tar.gz" spork-mcp
+          tar -C dist-sea/darwin-x64 -czf "spork-${version}-darwin-x64.tar.gz" spork
+          tar -C dist-sea/darwin-x64 -czf "spork-mcp-${version}-darwin-x64.tar.gz" spork-mcp
 
       - uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.platform }}-${{ matrix.arch }}
+          name: binaries-darwin
+          path: '*.tar.gz'
+
+  # Builds both linux-x64 (native) and win32-x64 (downloaded + injected,
+  # structurally verified — not executed, no Windows/Wine available where
+  # this was tested) on one runner. No signing: neither target needs it.
+  build-other:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: corepack enable
+
+      - run: yarn install --immutable
+
+      - run: yarn build
+
+      - run: yarn package:linux
+
+      - run: yarn package:win
+
+      - name: Archive
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tar -C dist-sea/linux-x64 -czf "spork-${version}-linux-x64.tar.gz" spork
+          tar -C dist-sea/linux-x64 -czf "spork-mcp-${version}-linux-x64.tar.gz" spork-mcp
+          (cd dist-sea/win32-x64 && zip -q "$OLDPWD/spork-${version}-win32-x64.zip" spork.exe)
+          (cd dist-sea/win32-x64 && zip -q "$OLDPWD/spork-mcp-${version}-win32-x64.zip" spork-mcp.exe)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-other
           path: |
             *.tar.gz
             *.zip
-          if-no-files-found: ignore
 
   release:
-    needs: build
+    needs: [build-mac, build-other]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
