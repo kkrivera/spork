@@ -18,6 +18,20 @@ A workspace is:
 > [docs/plans/0001-worktree-workspace-architecture.md](docs/plans/0001-worktree-workspace-architecture.md)
 > for the design.
 
+## Installing a prebuilt binary
+
+Every tagged release publishes standalone `spork` and `spork-mcp` binaries
+for macOS (arm64 + x64), Windows (x64), and Linux (x64) — no Node.js
+required — to that release's
+[GitHub Releases](../../releases) page. Download the archive for your
+platform, extract it, and put `spork` (or `spork-mcp`) on your `PATH`.
+
+> **macOS note**: until a Developer ID certificate is in place (see
+> [docs/RELEASING.md](docs/RELEASING.md)), these binaries are only ad-hoc
+> signed. The first time you run one, macOS Gatekeeper will block it —
+> right-click the binary → **Open** → confirm, or run
+> `xattr -d com.apple.quarantine <path-to-binary>`.
+
 ```sh
 spork workspace create demo
 spork workspace add-repo git@github.com:acme/widgets.git --workspace demo --branch main
@@ -94,6 +108,10 @@ spork repo list
 - [packages/mcp](packages/mcp) — an MCP server exposing `core`'s operations as
   tools, so an agent can drive spork directly instead of through the CLI.
 - [tools/readme-sync](tools/readme-sync) — the CI check that keeps module READMEs honest.
+- [tools/release](tools/release) — bumps every package's version in lockstep;
+  run as a GitHub Action (see [docs/RELEASING.md](docs/RELEASING.md)).
+- [tools/package-binary](tools/package-binary) — builds/signs the standalone
+  binaries described above; also run as a GitHub Action.
 - [docs/plans](docs/plans) — durable design docs, reviewed like code.
 - [.claude/skills](.claude/skills) — Claude Code skills used to maintain this repo.
 

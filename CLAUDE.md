@@ -16,6 +16,12 @@ for the full design and its rationale — read that before changing anything und
   formatting (color/no-color aware). Business logic belongs in `core`, not here.
 - `tools/readme-sync` — CI script; does not generate README content, only checks
   that a module's README.md changed alongside its source.
+- `tools/release` — version-bump script, run via the `release-bump.yml` GitHub
+  Action, never by hand against `main` directly.
+- `tools/package-binary` — builds/signs the standalone `spork`/`spork-mcp`
+  binaries, run via the `release-build.yml` GitHub Action. See
+  [docs/plans/0002-binary-releases.md](docs/plans/0002-binary-releases.md)
+  and [docs/RELEASING.md](docs/RELEASING.md).
 - `docs/plans` — durable, reviewed design docs. Write one before a non-trivial
   architectural change; update it if the change reshapes the design.
 - `.claude/skills` — skills for maintaining this repo (see below).

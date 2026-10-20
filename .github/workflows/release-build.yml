@@ -1,0 +1,89 @@
+name: Release — build binaries
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-13 is x64 (Intel); GitHub has been retiring hosted x64
+          # macOS runners, so this leg may need dropping if it's no longer
+          # schedulable — see docs/RELEASING.md.
+          - { os: macos-14, platform: darwin, arch: arm64 }
+          - { os: macos-13, platform: darwin, arch: x64 }
+          - { os: windows-latest, platform: win32, arch: x64 }
+          - { os: ubuntu-latest, platform: linux, arch: x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: corepack enable
+
+      - run: yarn install --immutable
+
+      - run: yarn build
+
+      - name: Package spork (cli)
+        run: yarn package:binary --entry packages/cli/src/sea-entry.ts --name spork --out-dir dist-sea
+
+      - name: Package spork-mcp
+        run: yarn package:binary --entry packages/mcp/src/sea-entry.ts --name spork-mcp --out-dir dist-sea
+
+      - name: Sign macOS binaries
+        if: runner.os == 'macOS'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          ./tools/package-binary/macos-sign.sh dist-sea/spork
+          ./tools/package-binary/macos-sign.sh dist-sea/spork-mcp
+
+      - name: Archive (unix)
+        if: runner.os != 'Windows'
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tar -C dist-sea -czf "spork-${version}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" spork
+          tar -C dist-sea -czf "spork-mcp-${version}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" spork-mcp
+
+      - name: Archive (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v',''
+          Compress-Archive -Path dist-sea/spork.exe -DestinationPath "spork-$version-win32-${{ matrix.arch }}.zip"
+          Compress-Archive -Path dist-sea/spork-mcp.exe -DestinationPath "spork-mcp-$version-win32-${{ matrix.arch }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            *.tar.gz
+            *.zip
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - run: gh release create "${{ github.ref_name }}" artifacts/* --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
