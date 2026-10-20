@@ -10,6 +10,11 @@ instead of shelling out to the `spork` CLI.
   `"spork"`) and registers every tool against it (`registerTools`);
   `main()` connects it over stdio. Guarded so importing this module (as
   tests do) doesn't itself start the server.
+- `src/sea-entry.ts` — the entry point `tools/package-binary` bundles into
+  the packaged `spork-mcp` binary instead of `index.ts`: a Single Executable
+  Application has no separate "script path", so `index.ts`'s import-meta
+  guard above always evaluates to false there. This file just calls `main`
+  unconditionally.
 - `src/context.ts` — `createMcpContext()` builds the `{ reposRoot,
   registryPath, repoRegistryPath }` every tool needs from `@spork/core`'s
   path constants (no `ui`/color concerns, unlike `@spork/cli`'s context —

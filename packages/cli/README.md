@@ -10,6 +10,11 @@ logic lives here.
   commander program (name/description/version, the `--color`/`--no-color`
   flags); `main()` parses argv and runs it. Guarded so importing this module
   (as tests do) doesn't itself run the CLI.
+- `src/sea-entry.ts` — the entry point `tools/package-binary` bundles into
+  the packaged `spork` binary instead of `index.ts`: a Single Executable
+  Application has no separate "script path", so `index.ts`'s import-meta
+  guard above always evaluates to false there. This file just calls `main`
+  unconditionally.
 - `src/output/color.ts` — `createUi`/`resolveColorEnabled`: decides whether
   color is on, in order, from an explicit `--no-color`/`--color` flag, the
   `NO_COLOR` env var, `CI`, then whether stdout is a TTY — and hands back
