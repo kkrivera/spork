@@ -39,26 +39,77 @@ a tiny dedicated `src/sea-entry.ts` that calls the already-tested `main`
 the packaged binary's bundle actually treats as its entry point — `index.ts`
 and its npm-run behavior are untouched.
 
-### Build natively per OS, never cross-compile
+### Cross-compiling: one or two runners build every target
 
-`tools/package-binary/build.ts` builds the SEA binary for the *current*
-OS/arch only. The release workflow's job matrix runs this script natively on
-a macOS, Windows, and Linux runner rather than cross-compiling from one —
-this sidesteps SEA's core limitation (the `node` binary a blob is injected
-into must be the same build it was generated against). Per binary, it:
+`tools/package-binary/build.ts` builds the SEA binary for a given
+OS/arch, defaulting to the host's own. When the target differs from the
+host, it downloads that target's *official* node binary from
+`nodejs.org/dist` (checksum-verified against the published
+`SHASUMS256.txt`) and injects into that instead of the host's own
+`process.execPath` — `downloadNodeBinary`. Per binary, the full sequence:
 
 1. Bundles the entry (`esbuild`, `--bundle --platform=node --format=cjs`) —
    SEA requires a single CommonJS file.
-2. Writes a `sea-config.json` and runs `node --experimental-sea-config`.
-3. Copies the running `node` binary, strips its existing (now-stale)
-   signature on macOS, and injects the blob via `postject`
-   (`NODE_SEA_BLOB`/`NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`,
-   `--macho-segment-name NODE_SEA` on macOS only — exact values straight
-   from Node's own SEA docs).
+2. Writes a `sea-config.json` (`useCodeCache`/`useSnapshot` both `false` —
+   required for a cross-platform build per Node's own docs, since code
+   cache/snapshots are only loadable on the platform that compiled them;
+   this config also works fine for a native build, so there's no
+   native/cross branch here) and runs `node --experimental-sea-config`.
+3. Copies the target's node binary (native: `process.execPath`; foreign:
+   `downloadNodeBinary`), strips its existing (now-stale) signature if
+   both the *target* and the *host* are darwin (`codesign` only exists on
+   macOS, so this can't run for any other target/host pair — not a
+   problem in practice, see the job layout below), and injects the blob
+   via `postject` (`NODE_SEA_BLOB`/
+   `NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`, `--macho-segment-name
+   NODE_SEA` on a darwin target only — exact values straight from Node's
+   own SEA docs).
 
-This produces an **unsigned** binary on every OS — real signing is a
+This produces an **unsigned** binary either way — real signing is a
 separate, OS-specific concern layered on top (see below), not something
 `build.ts` itself knows about.
+
+**This is a real, verified capability, not just something the docs
+mention.** Node's SEA docs do describe cross-platform builds (forcing
+`useCodeCache`/`useSnapshot` off), but rather than trust that alone, this
+was tested for real: downloaded the official `linux-x64` and `win-x64`
+node binaries (exact version match required) onto a macOS machine,
+built+injected both through the actual `build.ts`/`build-all.ts` code (not
+just an ad-hoc shell spike), and **ran the resulting Linux binary inside a
+real Debian container** — `--help`, `--version`, a real `workspace list`,
+and the MCP server's `initialize` handshake all worked identically to a
+native build. The Windows binary is structurally verified (valid PE32+,
+the SEA sentinel fuse byte correctly flipped `0`→`1`, same mechanism that
+worked for Linux) but not executed — no Windows/Wine available where this
+was tested. A `darwin-x64` build was also verified: cross-*arch* (not
+cross-OS) from a darwin-arm64 host, ad-hoc `codesign` succeeds on it (code
+signing never requires executing the binary, so arch doesn't matter
+there), and it actually **ran via Rosetta** on the arm64 host.
+
+### Job layout: one macOS runner, one Linux runner
+
+Given the above, every target can be *built* from two runners instead of
+four — only macOS **signing** (`codesign`/`notarytool`) genuinely requires
+a real Mac:
+
+- **`build-mac`** (`macos-14`, Apple Silicon): builds both `darwin-arm64`
+  (native) and `darwin-x64` (downloaded) via `yarn package:mac`, then
+  signs all four resulting binaries (`spork`/`spork-mcp` × both arches) —
+  codesign works cross-arch on the same host OS, so no new tooling is
+  needed for the `x64` leg.
+- **`build-other`** (`ubuntu-latest`): builds both `linux-x64` (native)
+  and `win32-x64` (downloaded) via `yarn package:linux` + `yarn
+  package:win` — no signing, same as before.
+
+This removes the Intel-Mac-runner dependency entirely (not a workaround —
+no x64 Mac runner is used anywhere in the pipeline anymore).
+
+Root `package.json` also exposes this directly for local use:
+`package:mac`/`package:win`/`package:linux` each build *every* relevant
+arch for that platform regardless of which OS you run them on, and
+`package:all` builds the full set of four targets × two binaries in one
+call — all via `tools/package-binary/build-all.ts`, a thin loop over
+`build.ts`'s `buildBinary`.
 
 Verified by actually running the pipeline end-to-end on this machine
 (macOS arm64): the unsigned binary straight out of `build.ts` is killed
@@ -114,15 +165,7 @@ and `@spork/mcp`'s `McpServer({ version })`. No changelog file — GitHub's
 
 `release-bump.yml` (`workflow_dispatch`) bumps, commits, and pushes a
 `vX.Y.Z` tag to `main`. That tag push is what triggers `release-build.yml`
-(`on: push: tags: ['v*']`) — no manual coupling between the two. The build
-job matrix is `{macos-14/arm64, macos-13/x64, windows-latest/x64,
-ubuntu-latest/x64}`; a release job downloads every matrix leg's artifacts
-and runs `gh release create --generate-notes`.
-
-## Known risk: GitHub-hosted Intel macOS runner availability
-
-GitHub has been retiring hosted x64 macOS runners in favor of Apple
-Silicon-only. Whether `macos-13` is still schedulable isn't something to
-assume from here — the first real run of `release-build.yml` confirms it
-one way or the other. If it's gone, drop that matrix leg and ship arm64-only
-Mac binaries, noted as a follow-up in `docs/RELEASING.md`.
+(`on: push: tags: ['v*']`) — no manual coupling between the two. The two
+build jobs (`build-mac`, `build-other` — see above) each upload their own
+artifact set; a `release` job downloads both and runs `gh release create
+--generate-notes`.

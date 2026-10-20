@@ -62,16 +62,11 @@ each of:
 | `APPLE_API_KEY_ID` | the Key ID from step 2 |
 | `APPLE_API_ISSUER_ID` | the Issuer ID from step 2 |
 
-That's it — the next tag push signs and notarizes both macOS legs
-automatically.
+That's it — the next tag push signs and notarizes all four macOS/arch
+binaries automatically.
 
 ## Known follow-ups
 
-- **`macos-13` (Intel) runner availability.** GitHub has been retiring
-  hosted x64 macOS runners. If `release-build.yml`'s `macos-13` leg starts
-  failing to schedule, remove it from the matrix in
-  `.github/workflows/release-build.yml` and ship arm64-only Mac binaries
-  until/unless a self-hosted Intel runner is added.
 - **No stapling.** A bare CLI binary can't be stapled (only `.app`/`.pkg`/
   `.dmg` can) — Gatekeeper checks notarization status online on first run
   instead, which needs network access once. Not an issue in practice, but
