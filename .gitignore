@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-sea/
 *.tsbuildinfo
 coverage/
 .yarn/install-state.gz
