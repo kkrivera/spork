@@ -1,9 +1,15 @@
 import path from 'node:path'
 import { codeWorkspaceFilePath, createAndRegisterWorkspace, SporkError, type WorkspaceHandle } from '@spork/core'
-import { confirm, NotInteractiveError, select, type PromptOption } from '@spork/prompts'
+import { NotInteractiveError, select, type PromptOption } from '@spork/prompts'
 import type { Command } from 'commander'
 import { workspaceContext, type AppContext } from '../../context.js'
-import { createCodeOpener, type Opener } from '../../opener.js'
+import {
+  defaultLaunchDeps,
+  launchWorkspace,
+  LAUNCH_TARGET_OPTIONS,
+  type LaunchDeps,
+  type LaunchTarget,
+} from '../../launchTarget.js'
 import { addReposToWorkspace, type AddRepoBatchFailure, type AddRepoBatchOutcome } from './addReposBatch.js'
 import { printAddRepoResult } from './addRepo.js'
 import { runList } from '../repo/list.js'
@@ -98,39 +104,49 @@ export async function runCreateWithRepos(
   return { handle, repoOutcomes }
 }
 
+type OfferChoice = LaunchTarget | 'skip'
+
+const OFFER_OPTIONS: PromptOption<OfferChoice>[] = [...LAUNCH_TARGET_OPTIONS, { label: 'Not now', value: 'skip' }]
+
 /**
- * Offers to open the freshly-created workspace in VS Code — the user is
- * likely creating one to start working in it right away. Skipped silently
- * (not an error) when `confirm` can't prompt (`NotInteractiveError`: CI, a
- * pipe, a script), same non-interactive-is-unaffected contract every other
- * prompt in this CLI follows. Declining just prints how to open it later,
- * mirroring the "Add a repo with: ..." hint already shown when no repos
- * were added.
+ * Offers to launch the freshly-created workspace — the user is likely
+ * creating one to start working in it right away. A 3-way pick (VS Code /
+ * Claude / not now) rather than a yes/no confirm, since there are now two
+ * real ways to open it. Skipped silently (not an error) both when `select`
+ * can't prompt (`NotInteractiveError`: CI, a pipe, a script) and when the
+ * user explicitly backs out (Esc) or picks "Not now" — this offer is
+ * optional by construction, unlike `open`'s own mandatory pick, so neither
+ * outcome is treated as a cancelled-prompt error the way other pickers do.
  */
-async function offerToOpenInVSCode(ctx: AppContext, handle: WorkspaceHandle, opener: Opener): Promise<void> {
-  let shouldOpen: boolean
+async function offerToLaunchWorkspace(ctx: AppContext, handle: WorkspaceHandle, deps: LaunchDeps): Promise<void> {
+  let chosen: OfferChoice[] | null
   try {
-    shouldOpen = await confirm({ message: `Open "${handle.name}" in VS Code now?`, defaultValue: true })
+    chosen = await select({ message: `Open "${handle.name}" now?`, options: OFFER_OPTIONS, mode: 'single' })
   } catch (error) {
     if (error instanceof NotInteractiveError) return
     throw error
   }
 
-  if (!shouldOpen) {
+  const target = chosen?.[0]
+  if (!target || target === 'skip') {
     console.log(`Open later with: spork workspace open ${handle.name}`)
     return
   }
 
   const filePath = codeWorkspaceFilePath(handle.dir, handle.name)
-  const outcome = await opener.open(filePath)
-  if (outcome.ok) {
-    console.log(ctx.ui.color.green(`Opened ${filePath}`))
-  } else {
-    console.log(`Couldn't launch the "code" CLI (${outcome.reason}). Open manually: ${filePath}`)
+  const outcome = await launchWorkspace(target, handle.dir, filePath, deps)
+  if (target === 'code') {
+    if (outcome.ok) {
+      console.log(ctx.ui.color.green(`Opened ${filePath}`))
+    } else {
+      console.log(`Couldn't launch the "code" CLI (${outcome.reason}). Open manually: ${filePath}`)
+    }
+  } else if (!outcome.ok) {
+    console.log(`Couldn't launch Claude (${outcome.reason}). Run it yourself: cd ${handle.dir} && claude`)
   }
 }
 
-export function registerCreateCommand(program: Command, ctx: AppContext, opener: Opener = createCodeOpener()): void {
+export function registerCreateCommand(program: Command, ctx: AppContext, deps: LaunchDeps = defaultLaunchDeps()): void {
   program
     .command('create <name>')
     .description('Create a new workspace')
@@ -155,7 +171,7 @@ export function registerCreateCommand(program: Command, ctx: AppContext, opener:
         }
       }
 
-      await offerToOpenInVSCode(ctx, handle, opener)
+      await offerToLaunchWorkspace(ctx, handle, deps)
 
       if (failures.length > 0) {
         throw new SporkError(`${failures.length} of ${repoOutcomes.length} --repo adds did not succeed: ${failures.map((f) => f.source).join(', ')}`)

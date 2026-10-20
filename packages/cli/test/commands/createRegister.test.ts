@@ -1,7 +1,7 @@
 import { Command } from 'commander'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FunctionTask, TaskResult } from '@spork/task-runner'
-import type { Opener } from '../../src/opener.js'
+import type { LaunchDeps } from '../../src/launchTarget.js'
 
 vi.mock('@spork/core', () => ({
   createAndRegisterWorkspace: vi.fn(),
@@ -19,19 +19,21 @@ vi.mock('@spork/task-runner', () => ({
 }))
 vi.mock('@spork/prompts', () => ({
   select: vi.fn(),
-  confirm: vi.fn(),
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 
 const { createAndRegisterWorkspace, addRepo, resolveWorkspaceDir, findEnclosingWorkspaceDir, listRepoAliases, codeWorkspaceFilePath } =
   await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
-const { select, confirm, NotInteractiveError } = await import('@spork/prompts')
+const { select, NotInteractiveError } = await import('@spork/prompts')
 const { registerCreateCommand } = await import('../../src/commands/workspace/create.js')
 const { createUi } = await import('../../src/output/color.js')
 
-function fakeOpener(outcome: Awaited<ReturnType<Opener['open']>>): Opener {
-  return { open: vi.fn().mockResolvedValue(outcome) }
+function fakeDeps(openOutcome: { ok: boolean; reason?: string }, claudeImpl?: () => Promise<unknown>): LaunchDeps {
+  return {
+    opener: { open: vi.fn().mockResolvedValue(openOutcome) },
+    executor: { run: vi.fn().mockImplementation(claudeImpl ?? (async () => ({ exitCode: 0, signal: null }))) },
+  }
 }
 
 const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
@@ -68,8 +70,7 @@ beforeEach(() => {
   vi.mocked(findEnclosingWorkspaceDir).mockReset().mockReturnValue(null)
   vi.mocked(listRepoAliases).mockReset().mockResolvedValue([])
   vi.mocked(codeWorkspaceFilePath).mockReset().mockReturnValue('/ws/demo/demo.code-workspace')
-  vi.mocked(select).mockReset()
-  vi.mocked(confirm).mockReset().mockResolvedValue(false)
+  vi.mocked(select).mockReset().mockResolvedValue(['skip'])
   vi.mocked(runTasks)
     .mockReset()
     .mockImplementation((tasks) => fakeRunTasks(tasks as FunctionTask[]))
@@ -129,26 +130,40 @@ describe('registerCreateCommand', () => {
   })
 })
 
-describe('registerCreateCommand — offer to open in VS Code', () => {
-  it('opens the workspace when confirmed, after everything else has printed', async () => {
-    vi.mocked(confirm).mockResolvedValue(true)
-    const opener = fakeOpener({ ok: true })
+describe('registerCreateCommand — offer to launch', () => {
+  it('opens the workspace in VS Code when chosen, after everything else has printed', async () => {
+    vi.mocked(select).mockResolvedValue(['code'])
+    const deps = fakeDeps({ ok: true })
     const program = new Command()
-    registerCreateCommand(program, ctx, opener)
+    registerCreateCommand(program, ctx, deps)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await program.parseAsync(['node', 'test', 'create', 'demo'])
 
-    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('demo') }))
-    expect(opener.open).toHaveBeenCalledWith('/ws/demo/demo.code-workspace')
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('demo') }))
+    expect(deps.opener.open).toHaveBeenCalledWith('/ws/demo/demo.code-workspace')
     expect(logSpy.mock.calls.flat().join('\n')).toContain('Opened /ws/demo/demo.code-workspace')
     logSpy.mockRestore()
   })
 
-  it('prints a manual fallback when the opener fails', async () => {
-    vi.mocked(confirm).mockResolvedValue(true)
+  it('launches claude, cwd’d into the workspace, when chosen', async () => {
+    vi.mocked(select).mockResolvedValue(['claude'])
+    const deps = fakeDeps({ ok: true })
     const program = new Command()
-    registerCreateCommand(program, ctx, fakeOpener({ ok: false, reason: 'not found' }))
+    registerCreateCommand(program, ctx, deps)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await program.parseAsync(['node', 'test', 'create', 'demo'])
+
+    expect(deps.executor.run).toHaveBeenCalledWith('claude', '/ws/demo')
+    expect(deps.opener.open).not.toHaveBeenCalled()
+    logSpy.mockRestore()
+  })
+
+  it('prints a manual fallback when the VS Code opener fails', async () => {
+    vi.mocked(select).mockResolvedValue(['code'])
+    const program = new Command()
+    registerCreateCommand(program, ctx, fakeDeps({ ok: false, reason: 'not found' }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await program.parseAsync(['node', 'test', 'create', 'demo'])
@@ -159,41 +174,63 @@ describe('registerCreateCommand — offer to open in VS Code', () => {
     logSpy.mockRestore()
   })
 
-  it('prints how to open it later when declined, without opening it', async () => {
-    vi.mocked(confirm).mockResolvedValue(false)
-    const opener = fakeOpener({ ok: true })
+})
+
+describe('registerCreateCommand — offer to launch, failures', () => {
+  it('prints a manual fallback when claude fails to launch', async () => {
+    vi.mocked(select).mockResolvedValue(['claude'])
+    const deps = fakeDeps({ ok: true }, async () => {
+      throw new Error('boom')
+    })
     const program = new Command()
-    registerCreateCommand(program, ctx, opener)
+    registerCreateCommand(program, ctx, deps)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await program.parseAsync(['node', 'test', 'create', 'demo'])
 
-    expect(opener.open).not.toHaveBeenCalled()
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('boom')
+    expect(output).toContain('cd /ws/demo && claude')
+    logSpy.mockRestore()
+  })
+
+  it('prints how to open it later when "Not now" is chosen, without launching anything', async () => {
+    vi.mocked(select).mockResolvedValue(['skip'])
+    const deps = fakeDeps({ ok: true })
+    const program = new Command()
+    registerCreateCommand(program, ctx, deps)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await program.parseAsync(['node', 'test', 'create', 'demo'])
+
+    expect(deps.opener.open).not.toHaveBeenCalled()
+    expect(deps.executor.run).not.toHaveBeenCalled()
     expect(logSpy.mock.calls.flat().join('\n')).toContain('Open later with: spork workspace open demo')
     logSpy.mockRestore()
   })
 })
 
-describe('registerCreateCommand — offer to open in VS Code, edge cases', () => {
-  it('skips silently, without printing or opening anything, when the terminal cannot prompt', async () => {
-    vi.mocked(confirm).mockRejectedValue(new NotInteractiveError())
-    const opener = fakeOpener({ ok: true })
+describe('registerCreateCommand — offer to launch, edge cases', () => {
+  it('skips silently, without printing or launching anything, when the terminal cannot prompt', async () => {
+    vi.mocked(select).mockRejectedValue(new NotInteractiveError())
+    const deps = fakeDeps({ ok: true })
     const program = new Command()
-    registerCreateCommand(program, ctx, opener)
+    registerCreateCommand(program, ctx, deps)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await program.parseAsync(['node', 'test', 'create', 'demo'])
 
-    expect(opener.open).not.toHaveBeenCalled()
+    expect(deps.opener.open).not.toHaveBeenCalled()
+    expect(deps.executor.run).not.toHaveBeenCalled()
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).not.toContain('Open')
     logSpy.mockRestore()
   })
 
-  it('re-throws a real confirm failure rather than swallowing it', async () => {
-    vi.mocked(confirm).mockRejectedValue(new Error('terminal exploded'))
+  it('re-throws a real picker failure rather than swallowing it', async () => {
+    vi.mocked(select).mockRejectedValue(new Error('terminal exploded'))
     const program = new Command()
-    registerCreateCommand(program, ctx, fakeOpener({ ok: true }))
+    registerCreateCommand(program, ctx, fakeDeps({ ok: true }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const run = program.parseAsync(['node', 'test', 'create', 'demo'])
@@ -202,18 +239,18 @@ describe('registerCreateCommand — offer to open in VS Code, edge cases', () =>
     logSpy.mockRestore()
   })
 
-  it('still offers to open even when no repos were added', async () => {
-    vi.mocked(confirm).mockResolvedValue(true)
-    const opener = fakeOpener({ ok: true })
+  it('still offers to launch even when no repos were added', async () => {
+    vi.mocked(select).mockResolvedValue(['code'])
+    const deps = fakeDeps({ ok: true })
     const program = new Command()
-    registerCreateCommand(program, ctx, opener)
+    registerCreateCommand(program, ctx, deps)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await program.parseAsync(['node', 'test', 'create', 'demo'])
 
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('Add a repo with')
-    expect(opener.open).toHaveBeenCalled()
+    expect(deps.opener.open).toHaveBeenCalled()
     logSpy.mockRestore()
   })
 })
