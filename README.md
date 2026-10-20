@@ -88,9 +88,18 @@ Leave off `--repo` entirely in a real terminal and `workspace create` offers
 a fuzzy-searchable multi-select of every repo you already know about instead
 of starting empty — type to narrow, space to toggle, Ctrl+A to select/
 deselect everything filtered, Enter to confirm. It then asks whether to open
-the new workspace in VS Code right away. In CI or a script (no TTY), both
+the new workspace right away, and with what — VS Code, or Claude (launched
+right at the workspace directory). In CI or a script (no TTY), both
 prompts are skipped — it falls back to creating an empty workspace and
 leaves opening it to you, exactly like today.
+
+`spork workspace open` offers the same choice whenever `--with <code|claude>`
+is omitted:
+
+```sh
+spork workspace open demo               # pick VS Code or Claude interactively
+spork workspace open demo --with claude # skip the prompt
+```
 
 Aliases are two-tier — **local to a workspace by default, global as an
 opt-in** — so two different workspaces can give the same short name to two

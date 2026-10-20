@@ -61,6 +61,21 @@ logic lives here.
   left orphaned. A child that outlives a grace period after the forwarded
   signal — or gets a second, impatient one of the same kind — is escalated
   straight to `SIGKILL`.
+- `src/launchTarget.ts` — `launchWorkspace(target, dir, codeWorkspaceFilePath,
+  deps)`: the one place `create`/`open` dispatch "open this workspace" to
+  either tool a `LaunchTarget` (`'code' | 'claude'`) names. For `'code'` it
+  delegates to the injectable `Opener` above, unchanged. For `'claude'` it
+  runs `claude` through the injectable `CommandExecutor` above, cwd'd into
+  the workspace directory — Claude is itself an interactive terminal app,
+  not something launchable in the background the way VS Code is, so this
+  takes over the current terminal until the user exits it, the same
+  foreground/inherited-stdio shape `workspace exec` already uses. A
+  Claude session's own exit code/signal is deliberately not treated as
+  launch success/failure (the user was present throughout it) — only a
+  genuine failure to even spawn it is. `LaunchDeps` (`{ opener, executor
+  }`, built by `defaultLaunchDeps()`) is what both commands take as their
+  injectable dependency now, and `LAUNCH_TARGET_OPTIONS` is the shared
+  VS-Code/Claude `PromptOption` pair each command's own picker builds on.
 - `src/confirmDestructive.ts` — `confirmDestructive(message, yes)`: the
   shared yes/no gate every destructive `workspace` command (`remove`,
   `remove-repo`) runs through before acting, even when its target was given
@@ -202,21 +217,32 @@ logic lives here.
   today's non-interactive behavior (empty workspace), while a real cancel
   (`select()` resolving `null`) becomes a thrown `SporkError`, same as
   every other cancelled-prompt path here. After everything else prints
-  (repo outcomes or the "no repos" hint), `create` also offers to open the
-  new workspace in VS Code via `@spork/prompts`' `confirm()` — the user is
-  probably about to start working in it. Same `NotInteractiveError`
-  handling as the repo picker (skipped silently, no behavior change, when
-  it can't prompt); declining just prints how to open it later
-  (`spork workspace open <name>`); confirming reuses the same injectable
-  `Opener` (`opener.ts`) `workspace open` uses, so `registerCreateCommand`
-  takes one too (`opener: Opener = createCodeOpener()`), for the same
-  reason — mockable in tests, no silent failure if `code` isn't installed.
+  (repo outcomes or the "no repos" hint), `create` also offers to launch the
+  new workspace — the user is probably about to start working in it — via
+  a 3-way `@spork/prompts`' `select()` (VS Code / Claude / "Not now"), not
+  a yes/no `confirm()`, since `launchTarget.ts` now gives it two real ways
+  to open. `NotInteractiveError` (skipped silently, no behavior change,
+  when it can't prompt), picking "Not now", and a real cancel (Esc) are
+  all treated as declining — this offer is optional by construction, unlike
+  `open`'s own mandatory pick below — printing how to open it later
+  (`spork workspace open <name>`); picking either tool dispatches through
+  `launchTarget.ts`'s `launchWorkspace`, so `registerCreateCommand` takes
+  a `LaunchDeps` now (`deps: LaunchDeps = defaultLaunchDeps()`) instead of
+  just an `Opener` — mockable in tests, no silent failure if `code`/`claude`
+  isn't installed.
   `status` wraps its (already internally concurrent —
   `getWorkspaceStatus` reads every worktree via its own `Promise.all`)
   status read as a single `runConcurrently` item too, for a live spinner
   instead of a silent wait, rather than exporting a second per-worktree
   core function just for this. `open [workspace]`'s name is optional too,
-  same `pickWorkspace.ts` picker as the rest. `exec <command> --workspace
+  same `pickWorkspace.ts` picker as the rest. Which tool it opens with is a
+  separate choice: `--with <code|claude>` skips the prompt outright,
+  otherwise it's a mandatory single-select (VS Code / Claude, no "Not now"
+  — the command was invoked specifically to open something) — a
+  `NotInteractiveError` here becomes a clear `SporkError` demanding
+  `--with` rather than skipping, and a real cancel still becomes
+  `SporkError('Cancelled.')`, unlike `create`'s own optional offer above.
+  `exec <command> --workspace
   <name>` runs an arbitrary command at the root of a workspace (not any
   one repo's own worktree — the directory the `.code-workspace` file
   lives in), for things that span the whole workspace rather than one

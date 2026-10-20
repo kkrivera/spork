@@ -151,3 +151,17 @@ new business logic belongs in `@spork/core`, imported only from its
   directly — a hyphenated function name in a real `.bashrc` is valid
   bash but a parse error under it), so the moment `command` sources a
   real dotfile, a hardcoded `/bin/sh` breaks it.
+- `create`'s "open it now?" offer and `open` itself both dispatch through
+  `launchTarget.ts`'s `launchWorkspace`/`LaunchDeps` rather than each
+  hand-rolling "VS Code vs Claude" — that's the one shared place deciding
+  which tool to launch, built on the same `Opener` (`opener.ts`) and
+  `CommandExecutor` (`commandExecutor.ts`) abstractions those two already
+  are. If a third tool ever needs to be launchable here, add it to
+  `LaunchTarget`/`LAUNCH_TARGET_OPTIONS`/`launchWorkspace` rather than
+  letting `create.ts`/`open.ts` grow their own copies of the dispatch.
+  Claude is launched through the same foreground/inherited-stdio
+  `CommandExecutor` `exec` uses (it's an interactive terminal app, not a
+  background-launchable GUI one like VS Code) — don't try to make it
+  behave like the `Opener` path by, say, detaching it or capturing its
+  output; that would break the whole point of handing the user their own
+  terminal back.
