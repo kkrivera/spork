@@ -28,6 +28,14 @@ describe('createManifest', () => {
     expect(manifest.worktrees).toEqual([])
     expect(new Date(manifest.createdAt).toString()).not.toBe('Invalid Date')
   })
+
+  it('defaults origin to "created"', () => {
+    expect(createManifest('demo').origin).toBe('created')
+  })
+
+  it('accepts an explicit origin', () => {
+    expect(createManifest('demo', 'initialized').origin).toBe('initialized')
+  })
 })
 
 describe('manifestPath', () => {

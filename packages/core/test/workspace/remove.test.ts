@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,7 +18,11 @@ vi.mock('../../src/git/worktree.js', async () => {
 
 const { addWorktree, removeWorktree } = await import('../../src/git/worktree.js')
 const { ensureRepoCache } = await import('../../src/repo/cache.js')
-const { createWorkspace, addRepo, removeWorkspace, removeAndUnregisterWorkspace } = await import('../../src/workspace/workspace.js')
+const { createWorkspace, initWorkspace, addRepo, removeWorkspace, removeAndUnregisterWorkspace } = await import(
+  '../../src/workspace/workspace.js'
+)
+const { manifestPath, readManifest, writeManifest } = await import('../../src/workspace/manifest.js')
+const { codeWorkspaceFilePath } = await import('../../src/workspace/codeWorkspace.js')
 const { registerWorkspace, listWorkspaces } = await import('../../src/registry/registry.js')
 const { fakeAddWorktree } = await import('./fakeAddWorktree.js')
 
@@ -55,6 +59,27 @@ describe('removeWorkspace', () => {
 
     expect(removeWorktree).not.toHaveBeenCalled()
     expect(existsSync(dir)).toBe(true)
+  })
+})
+
+describe('removeWorkspace — an initialized (workspace init) workspace', () => {
+  it('deletes only the manifest + .code-workspace files, never the directory or any folder inside it, even a mix of adopted and real worktree entries', async () => {
+    const initDir = path.join(root, 'in-place')
+    await mkdir(path.join(initDir, 'adopted-repo'), { recursive: true })
+    await initWorkspace(ctx, { name: 'in-place', dir: initDir })
+    await addRepo(ctx, initDir, { source: 'git@github.com:acme/gadgets.git' })
+    const manifest = await readManifest(initDir)
+    manifest.worktrees.push({ kind: 'adopted', folder: 'adopted-repo', source: '/local/adopted-repo', addedAt: '' })
+    await writeManifest(initDir, manifest)
+    vi.mocked(removeWorktree).mockClear()
+
+    await removeWorkspace(ctx, initDir)
+
+    expect(removeWorktree).toHaveBeenCalledTimes(1) // only the real worktree entry
+    expect(existsSync(initDir)).toBe(true)
+    expect(existsSync(path.join(initDir, 'adopted-repo'))).toBe(true)
+    expect(existsSync(manifestPath(initDir))).toBe(false)
+    expect(existsSync(codeWorkspaceFilePath(initDir, 'in-place'))).toBe(false)
   })
 })
 

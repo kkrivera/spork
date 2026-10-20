@@ -7,18 +7,21 @@ import { hasSubmodules, initSubmodules } from '../git/submodule.js'
 import { resolveRepoCache } from '../repo/cache.js'
 import { withRepoLock } from '../repo/lock.js'
 import { addRepoSource } from '../repo/repos.js'
+import { adoptLocalRepo } from '../repo/scan.js'
 import { localRepoRegistryPath, resolveScopedRepoAlias } from '../registry/repoRegistry.js'
 import { listWorkspaces, registerWorkspace, unregisterWorkspace } from '../registry/registry.js'
 import { slugify } from '../util/slug.js'
 import { repoShortName } from '../util/repoName.js'
 import { withFileLock } from '../util/fileLock.js'
 import { SporkError } from '../errors.js'
-import { writeCodeWorkspace } from './codeWorkspace.js'
+import { codeWorkspaceFilePath, writeCodeWorkspace } from './codeWorkspace.js'
 import {
   createManifest,
   manifestPath,
   readManifest,
   writeManifest,
+  type AdoptedEntry,
+  type ManifestEntry,
   type WorkspaceManifest,
   type WorktreeEntry,
 } from './manifest.js'
@@ -77,6 +80,48 @@ export async function createAndRegisterWorkspace(
   }
 
   const handle = await createWorkspace(ctx, options)
+  await registerWorkspace(registryPath, { name: options.name, dir: options.dir })
+  return handle
+}
+
+export interface InitWorkspaceOptions {
+  name: string
+  /** The existing folder to turn into a workspace root, in place — unlike `CreateWorkspaceOptions.dir`, never created. */
+  dir: string
+}
+
+/**
+ * Turns an already-existing folder of plain git clones into a spork
+ * workspace, in place — no `mkdir` (the folder is already there with real
+ * content), and `origin: 'initialized'` rather than `'created'`, so
+ * `removeWorkspace` below knows never to delete this directory. Doesn't
+ * touch any repo itself — see `adoptRepoIntoWorkspace`, the separate,
+ * per-folder step a caller runs afterward for each folder it wants in the
+ * workspace (mirroring `createWorkspace`/`addRepo`'s own split).
+ */
+export async function initWorkspace(ctx: WorkspaceContext, options: InitWorkspaceOptions): Promise<WorkspaceHandle> {
+  if (existsSync(manifestPath(options.dir))) {
+    throw new SporkError(`"${options.dir}" is already a spork workspace.`)
+  }
+
+  const manifest = createManifest(options.name, 'initialized')
+  await writeManifest(options.dir, manifest)
+  await writeCodeWorkspace(options.dir, manifest)
+  return { name: options.name, dir: options.dir, manifest }
+}
+
+/** `initWorkspace`, but also registered — see `createAndRegisterWorkspace`'s doc comment for why both halves always go together. */
+export async function initAndRegisterWorkspace(
+  ctx: WorkspaceContext,
+  registryPath: string,
+  options: InitWorkspaceOptions,
+): Promise<WorkspaceHandle> {
+  const existing = await listWorkspaces(registryPath)
+  if (existing.some((workspace) => workspace.name === options.name)) {
+    throw new SporkError(`A workspace named "${options.name}" is already registered.`)
+  }
+
+  const handle = await initWorkspace(ctx, options)
   await registerWorkspace(registryPath, { name: options.name, dir: options.dir })
   return handle
 }
@@ -290,6 +335,37 @@ export async function addRepo(
   }
 }
 
+/**
+ * Adopts the git repo already sitting at `<workspaceDir>/<folder>` into
+ * spork's shared cache (if it isn't already known there) and records it in
+ * the manifest as an `AdoptedEntry` — never a worktree, never a branch
+ * change, no matter what. The building block `workspace init`'s CLI command
+ * loops over (one call per selected folder, via `runConcurrently`), the same
+ * way `addReposBatch.ts` loops `addRepo` — not something this module itself
+ * loops over, so it stays independently callable/concurrency-safe.
+ */
+export async function adoptRepoIntoWorkspace(
+  ctx: WorkspaceContext,
+  workspaceDir: string,
+  folder: string,
+): Promise<AdoptedEntry> {
+  const repoCtx = { reposRoot: ctx.reposRoot, repoRegistryPath: localRepoRegistryPath(workspaceDir) }
+  const { source } = await adoptLocalRepo(repoCtx, path.join(workspaceDir, folder))
+  const entry: AdoptedEntry = { kind: 'adopted', folder, source, addedAt: new Date().toISOString() }
+
+  // Same re-read-fresh-inside-the-lock pattern as `addRepo`'s tail — several
+  // of these run concurrently (one per selected folder), so a stale
+  // in-memory manifest here would silently clobber a sibling's entry.
+  await withFileLock(manifestPath(workspaceDir), async () => {
+    const fresh = await readManifest(workspaceDir)
+    fresh.worktrees.push(entry)
+    await writeManifest(workspaceDir, fresh)
+    await writeCodeWorkspace(workspaceDir, fresh)
+  })
+
+  return entry
+}
+
 export async function removeRepo(ctx: WorkspaceContext, workspaceDir: string, folder: string): Promise<void> {
   const { manifest } = await reconcileWorkspace(ctx, workspaceDir)
 
@@ -298,12 +374,17 @@ export async function removeRepo(ctx: WorkspaceContext, workspaceDir: string, fo
     throw new SporkError(`No worktree named "${folder}" in workspace "${manifest.name}".`)
   }
 
-  const cache = resolveRepoCache(ctx.reposRoot, entry.source)
-  const worktreePath = path.join(workspaceDir, folder)
+  // An adopted entry was never a git worktree — it's just dropped from the
+  // manifest below, same as every other kind, but with no cache/worktree to
+  // touch first. See `AdoptedEntry`'s doc comment for why.
+  if (entry.kind !== 'adopted') {
+    const cache = resolveRepoCache(ctx.reposRoot, entry.source)
+    const worktreePath = path.join(workspaceDir, folder)
 
-  await withRepoLock(cache.lockPath, async () => {
-    await removeWorktree(cache.path, worktreePath, { force: true })
-  })
+    await withRepoLock(cache.lockPath, async () => {
+      await removeWorktree(cache.path, worktreePath, { force: true })
+    })
+  }
 
   // Same re-read-fresh-inside-the-lock reasoning as `addRepo` — not
   // currently called concurrently by any wired command, but kept
@@ -332,6 +413,17 @@ export async function removeWorkspace(
   for (const entry of manifest.worktrees) {
     await removeRepo(ctx, workspaceDir, entry.folder)
   }
+
+  // An initialized workspace's directory is the user's own pre-existing
+  // folder, not something spork created — removal only ever drops spork's
+  // own bookkeeping files, never the directory (or anything inside it;
+  // every entry's own removal above already left its folder alone too).
+  if (manifest.origin === 'initialized') {
+    await rm(manifestPath(workspaceDir), { force: true })
+    await rm(codeWorkspaceFilePath(workspaceDir, manifest.name), { force: true })
+    return
+  }
+
   await rm(workspaceDir, { recursive: true, force: true })
 }
 
@@ -358,9 +450,7 @@ export async function removeAndUnregisterWorkspace(
   if (match) await unregisterWorkspace(registryPath, match.name)
 }
 
-export interface WorktreeStatusEntry extends WorktreeEntry {
-  status: WorktreeStatus
-}
+export type WorktreeStatusEntry = ManifestEntry & { status: WorktreeStatus }
 
 export async function getWorkspaceStatus(
   ctx: WorkspaceContext,

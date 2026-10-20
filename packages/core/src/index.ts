@@ -1,6 +1,6 @@
 export { SporkError } from './errors.js'
 
-export type { WorkspaceManifest, WorktreeEntry } from './workspace/manifest.js'
+export type { WorkspaceManifest, WorktreeEntry, AdoptedEntry, ManifestEntry } from './workspace/manifest.js'
 export { MANIFEST_FILENAME, manifestPath, findEnclosingWorkspaceDir } from './workspace/manifest.js'
 
 export type { CodeWorkspaceFile, CodeWorkspaceFolder } from './workspace/codeWorkspace.js'
@@ -10,6 +10,7 @@ export type {
   WorkspaceContext,
   WorkspaceHandle,
   CreateWorkspaceOptions,
+  InitWorkspaceOptions,
   AddRepoOptions,
   AddRepoResult,
   RemoveWorkspaceOptions,
@@ -19,7 +20,10 @@ export type {
 export {
   createWorkspace,
   createAndRegisterWorkspace,
+  initWorkspace,
+  initAndRegisterWorkspace,
   addRepo,
+  adoptRepoIntoWorkspace,
   removeRepo,
   removeWorkspace,
   removeAndUnregisterWorkspace,

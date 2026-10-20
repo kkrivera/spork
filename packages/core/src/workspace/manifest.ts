@@ -5,6 +5,8 @@ import path from 'node:path'
 export const MANIFEST_FILENAME = 'spork.workspace.json'
 
 export interface WorktreeEntry {
+  /** Absent on any manifest written before `kind` existed — treat as `'worktree'`. */
+  kind?: 'worktree'
   /** Folder name relative to the workspace root — the worktree checkout lives at `<workspaceDir>/<folder>`. */
   folder: string
   /** The repo source (remote URL or local path) this worktree was cloned from. */
@@ -16,18 +18,36 @@ export interface WorktreeEntry {
   addedAt: string
 }
 
+/**
+ * A folder `workspace init` adopted exactly as it already sat on disk —
+ * never a git worktree of spork's shared cache, so no `requestedRef`/
+ * `localBranch`: spork never asked git to check out anything here, and
+ * never will (see `workspace init`'s own doc comment for why).
+ */
+export interface AdoptedEntry {
+  kind: 'adopted'
+  folder: string
+  /** The repo source (remote URL or local path) this folder was adopted *from* — spork's cache clone, not this folder itself. */
+  source: string
+  addedAt: string
+}
+
+export type ManifestEntry = WorktreeEntry | AdoptedEntry
+
 export interface WorkspaceManifest {
   name: string
   createdAt: string
-  worktrees: WorktreeEntry[]
+  /** Absent on any manifest written before `origin` existed — treat as `'created'`. */
+  origin?: 'created' | 'initialized'
+  worktrees: ManifestEntry[]
 }
 
 export function manifestPath(workspaceDir: string): string {
   return path.join(workspaceDir, MANIFEST_FILENAME)
 }
 
-export function createManifest(name: string): WorkspaceManifest {
-  return { name, createdAt: new Date().toISOString(), worktrees: [] }
+export function createManifest(name: string, origin: WorkspaceManifest['origin'] = 'created'): WorkspaceManifest {
+  return { name, createdAt: new Date().toISOString(), origin, worktrees: [] }
 }
 
 export async function readManifest(workspaceDir: string): Promise<WorkspaceManifest> {

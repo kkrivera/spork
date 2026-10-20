@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,7 +18,7 @@ vi.mock('../../src/git/worktree.js', async () => {
 const { addWorktree, removeWorktree } = await import('../../src/git/worktree.js')
 const { ensureRepoCache, resolveRepoCache } = await import('../../src/repo/cache.js')
 const { createWorkspace, addRepo, removeRepo } = await import('../../src/workspace/workspace.js')
-const { readManifest } = await import('../../src/workspace/manifest.js')
+const { readManifest, writeManifest } = await import('../../src/workspace/manifest.js')
 const { SporkError } = await import('../../src/errors.js')
 const { fakeAddWorktree } = await import('./fakeAddWorktree.js')
 
@@ -61,5 +61,20 @@ describe('removeRepo', () => {
   it('rejects removing a folder that is not in the workspace', async () => {
     await expect(removeRepo(ctx, dir, 'does-not-exist')).rejects.toThrow(SporkError)
     expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('removeRepo — adopted entries', () => {
+  it('drops the manifest entry without ever calling removeWorktree, leaving the folder untouched', async () => {
+    await mkdir(path.join(dir, 'adopted-repo'), { recursive: true })
+    const manifest = await readManifest(dir)
+    manifest.worktrees.push({ kind: 'adopted', folder: 'adopted-repo', source: '/local/adopted-repo', addedAt: '' })
+    await writeManifest(dir, manifest)
+    removeWorktreeMock.mockClear()
+
+    await removeRepo(ctx, dir, 'adopted-repo')
+
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect((await readManifest(dir)).worktrees.map((wt) => wt.folder)).toEqual(['widgets'])
   })
 })
