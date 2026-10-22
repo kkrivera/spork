@@ -10,6 +10,15 @@ surface; nothing in this repo should import from `src/*` paths directly.
   other function in `src/git` (and everything built on top of it later) must
   call through it rather than importing `node:child_process` itself — that's
   what keeps the rest of the codebase mockable in unit tests.
+- `execGit` runs git with prompts **off** unless a caller passes
+  `allowPrompts: true` (see `git/auth.ts`). Only thread `allowPrompts`
+  through for a caller with a person at a real terminal *and* nothing else
+  drawing over it — today that's just `@spork/cli`'s single `repo add`.
+  Never turn it on for the MCP server, a batch/live-dashboard command, or
+  anything that runs concurrently: several git processes prompting at once
+  can't work, and a hidden prompt hangs forever. Auth failures surface as
+  `GitAuthError` with next steps; add a new stderr pattern to
+  `isAuthFailure` rather than catching auth errors ad hoc elsewhere.
 - Worktrees are created on **one local branch per workspace** — the
   workspace's own name, verbatim, shared by every repo added to it — never
   by checking out the requested ref directly, and never slugified (it may

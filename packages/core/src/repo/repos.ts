@@ -44,6 +44,13 @@ export interface AddRepoSourceOptions {
    */
   correctOriginTo?: string
   /**
+   * Let the clone/fetch prompt on the terminal (SSH passphrase, HTTPS
+   * password) — only for a caller with a person at a real terminal and
+   * nothing drawing over it (`spork repo add`, single source). Off by
+   * default; see `git/exec.ts`'s `ExecOptions.allowPrompts`.
+   */
+  allowPrompts?: boolean
+  /**
    * Once a fresh clone finishes, repoint the cache's own HEAD at this
    * branch. Needed for the same reason as `correctOriginTo`: a local
    * `git clone`'s HEAD defaults to whichever branch was checked out in the
@@ -66,7 +73,7 @@ export async function addRepoSource(
   const cache = resolveRepoCache(ctx.reposRoot, source)
   const isFreshClone = !repoCacheExists(ctx.reposRoot, source)
   await withRepoLock(cache.lockPath, () =>
-    options.cloneFrom ? ensureRepoCache(ctx.reposRoot, source, { cloneFrom: options.cloneFrom }) : ensureRepoCache(ctx.reposRoot, source),
+    ensureRepoCache(ctx.reposRoot, source, { cloneFrom: options.cloneFrom, allowPrompts: options.allowPrompts }),
   )
 
   if (isFreshClone && options.correctOriginTo) {

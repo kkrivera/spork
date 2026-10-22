@@ -66,6 +66,8 @@ export interface EnsureRepoCacheOptions {
    * cache already exists, since that branch fetches, not clones.
    */
   cloneFrom?: string
+  /** Let the clone/fetch prompt on the terminal — see `git/exec.ts`'s `ExecOptions.allowPrompts`. */
+  allowPrompts?: boolean
 }
 
 /**
@@ -84,9 +86,9 @@ export async function ensureRepoCache(
   await mkdir(reposRoot, { recursive: true })
 
   if (isCloned(cache.path)) {
-    await fetchAll(cache.path)
+    await fetchAll(cache.path, { allowPrompts: options.allowPrompts })
   } else {
-    await cloneBare(options.cloneFrom ?? source, cache.path)
+    await cloneBare(options.cloneFrom ?? source, cache.path, { allowPrompts: options.allowPrompts })
   }
 
   return cache

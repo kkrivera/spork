@@ -40,7 +40,7 @@ describe('withRepoLock + ensureRepoCache, wired the way workspace.ts wires them'
       await ensureRepoCache(reposRoot, 'git@github.com:acme/widgets.git')
     })
 
-    expect(cloneBareMock).toHaveBeenCalledWith('git@github.com:acme/widgets.git', cache.path)
+    expect(cloneBareMock).toHaveBeenCalledWith('git@github.com:acme/widgets.git', cache.path, {})
     expect(fetchAllMock).not.toHaveBeenCalled()
   })
 })

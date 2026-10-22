@@ -73,7 +73,7 @@ describe('ensureRepoCache', () => {
 
     expect(mkdirMock).toHaveBeenCalledWith('/repos', { recursive: true })
     expect(existsSyncMock).toHaveBeenCalledWith(path.join(cache.path, 'HEAD'))
-    expect(cloneBareMock).toHaveBeenCalledWith('git@github.com:acme/widgets.git', cache.path)
+    expect(cloneBareMock).toHaveBeenCalledWith('git@github.com:acme/widgets.git', cache.path, {})
     expect(fetchAllMock).not.toHaveBeenCalled()
   })
 
@@ -82,7 +82,7 @@ describe('ensureRepoCache', () => {
 
     const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git')
 
-    expect(fetchAllMock).toHaveBeenCalledWith(cache.path)
+    expect(fetchAllMock).toHaveBeenCalledWith(cache.path, {})
     expect(cloneBareMock).not.toHaveBeenCalled()
   })
 
@@ -93,7 +93,7 @@ describe('ensureRepoCache', () => {
       cloneFrom: '/home/user/code/widgets',
     })
 
-    expect(cloneBareMock).toHaveBeenCalledWith('/home/user/code/widgets', cache.path)
+    expect(cloneBareMock).toHaveBeenCalledWith('/home/user/code/widgets', cache.path, {})
   })
 
   it('ignores cloneFrom once the cache already exists (fetch, not clone)', async () => {
@@ -103,8 +103,26 @@ describe('ensureRepoCache', () => {
       cloneFrom: '/home/user/code/widgets',
     })
 
-    expect(fetchAllMock).toHaveBeenCalledWith(cache.path)
+    expect(fetchAllMock).toHaveBeenCalledWith(cache.path, {})
     expect(cloneBareMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('ensureRepoCache — allowPrompts', () => {
+  it('forwards allowPrompts to the clone', async () => {
+    existsSyncMock.mockReturnValue(false)
+
+    const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git', { allowPrompts: true })
+
+    expect(cloneBareMock).toHaveBeenCalledWith('git@github.com:acme/widgets.git', cache.path, { allowPrompts: true })
+  })
+
+  it('forwards allowPrompts to the fetch', async () => {
+    existsSyncMock.mockReturnValue(true)
+
+    const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git', { allowPrompts: true })
+
+    expect(fetchAllMock).toHaveBeenCalledWith(cache.path, { allowPrompts: true })
   })
 })
 

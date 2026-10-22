@@ -19,7 +19,15 @@ describe('cloneBare', () => {
 
     await cloneBare('git@example.com:foo/bar.git', '/cache/foo-bar')
 
-    expect(execGitMock).toHaveBeenCalledWith(['clone', '--bare', 'git@example.com:foo/bar.git', '/cache/foo-bar'])
+    expect(execGitMock).toHaveBeenCalledWith(['clone', '--bare', 'git@example.com:foo/bar.git', '/cache/foo-bar'], {})
+  })
+
+  it('forwards allowPrompts to execGit', async () => {
+    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await cloneBare('git@example.com:foo/bar.git', '/cache/foo-bar', { allowPrompts: true })
+
+    expect(execGitMock).toHaveBeenCalledWith(['clone', '--bare', 'git@example.com:foo/bar.git', '/cache/foo-bar'], { allowPrompts: true })
   })
 })
 
@@ -30,6 +38,15 @@ describe('fetchAll', () => {
     await fetchAll('/cache/foo-bar')
 
     expect(execGitMock).toHaveBeenCalledWith(['fetch', '--all', '--tags'], { cwd: '/cache/foo-bar' })
+  })
+
+  it('forwards allowPrompts to the fetch, not the local config write', async () => {
+    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await fetchAll('/cache/foo-bar', { allowPrompts: true })
+
+    expect(execGitMock).toHaveBeenCalledWith(['fetch', '--all', '--tags'], { cwd: '/cache/foo-bar', allowPrompts: true })
+    expect(execGitMock).toHaveBeenCalledWith(['config', 'remote.origin.fetch', '+refs/heads/*:refs/heads/*'], { cwd: '/cache/foo-bar' })
   })
 
   it('configures the fetch refspec before fetching, so refs/heads/* actually refreshes (git clone --bare sets none by default)', async () => {

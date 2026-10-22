@@ -73,7 +73,7 @@ describe('addRepo', () => {
     expect(submodulesInitialized).toBe(false)
     expect(reusedExistingBranch).toBe(false)
     expect(addWorktreeMock).toHaveBeenCalledWith(widgetsCachePath(), path.join(dir, 'widgets'), 'demo', 'HEAD')
-    expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE)
+    expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE, {})
     expect((await readManifest(dir)).worktrees).toEqual([entry])
   })
 

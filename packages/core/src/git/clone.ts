@@ -1,8 +1,8 @@
-import { execGit } from './exec.js'
+import { execGit, type PromptOptions } from './exec.js'
 
 /** Clones `remote` as a bare repo at `destination` — the shared cache for a repo source. */
-export async function cloneBare(remote: string, destination: string): Promise<void> {
-  await execGit(['clone', '--bare', remote, destination])
+export async function cloneBare(remote: string, destination: string, options: PromptOptions = {}): Promise<void> {
+  await execGit(['clone', '--bare', remote, destination], options)
 }
 
 /**
@@ -24,9 +24,9 @@ export async function cloneBare(remote: string, destination: string): Promise<vo
  * including every spork-owned workspace branch, since those are local-only
  * and never exist upstream.
  */
-export async function fetchAll(bareRepoPath: string): Promise<void> {
+export async function fetchAll(bareRepoPath: string, options: PromptOptions = {}): Promise<void> {
   await execGit(['config', 'remote.origin.fetch', '+refs/heads/*:refs/heads/*'], { cwd: bareRepoPath })
-  await execGit(['fetch', '--all', '--tags'], { cwd: bareRepoPath })
+  await execGit(['fetch', '--all', '--tags'], { cwd: bareRepoPath, ...options })
 }
 
 /** Resolves `ref` (branch, tag, or sha) to a commit sha within the bare cache. */

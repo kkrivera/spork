@@ -44,7 +44,7 @@ describe('addRepoSource', () => {
   it('ensures the cache and registers a default short alias on first use', async () => {
     const entry = await addRepoSource(ctx, WIDGETS_SOURCE)
 
-    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE)
+    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE, {})
     expect(entry.alias).toBe('widgets')
     expect(registerRepoAlias).toHaveBeenCalledWith('/registry.json', {
       alias: 'widgets',
@@ -107,6 +107,12 @@ describe('addRepoSource — cloneFrom / correctOriginTo', () => {
     await addRepoSource(ctx, WIDGETS_SOURCE, { cloneFrom: '/home/user/code/widgets' })
 
     expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE, { cloneFrom: '/home/user/code/widgets' })
+  })
+
+  it('passes allowPrompts through to ensureRepoCache', async () => {
+    await addRepoSource(ctx, WIDGETS_SOURCE, { allowPrompts: true })
+
+    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE, { allowPrompts: true })
   })
 
   it('corrects the origin remote after a fresh clone when correctOriginTo is set', async () => {
@@ -174,13 +180,13 @@ describe('addRepoSourceOrAlias', () => {
     const entry = await addRepoSourceOrAlias(ctx, 'widgets')
 
     expect(resolveRepoAlias).toHaveBeenCalledWith('/registry.json', '/repos', 'widgets')
-    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE)
+    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE, {})
     expect(entry.source).toBe(WIDGETS_SOURCE)
   })
 
   it('passes a raw source straight through unchanged', async () => {
     await addRepoSourceOrAlias(ctx, WIDGETS_SOURCE)
 
-    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE)
+    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE, {})
   })
 })

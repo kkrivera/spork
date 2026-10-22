@@ -12,7 +12,19 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
 - `src/git/` — a thin wrapper around invoking the `git` CLI.
   - `exec.ts` — the single spawn point (`execGit`); every other module here goes
     through it, and it's the seam unit tests mock instead of spawning real `git`
-    processes.
+    processes. Runs git with prompts **off** by default (`auth.ts`'s
+    `NO_PROMPT_ENV`), so an SSH passphrase, HTTPS password, or unknown host
+    key fails fast instead of hanging on a prompt nobody can see (the MCP
+    server, CI, or a live dashboard redrawing over it). `allowPrompts: true`
+    opts back in, for a caller with a person at a real terminal and nothing
+    drawing over it. An auth failure throws `GitAuthError` (a
+    `GitCommandError` subclass) whose message ends with what to do next.
+  - `auth.ts` — `NO_PROMPT_ENV`, `isAuthFailure(stderr)`, and
+    `authFailureGuidance(allowPrompts)`: the env that disables prompts
+    (`GIT_TERMINAL_PROMPT=0`, plus ssh forced onto an always-failing
+    askpass so a user's own `core.sshCommand` stays untouched), the stderr
+    patterns that mean "couldn't authenticate," and the next steps shown for
+    one (ssh-agent, accepting a host key, an HTTPS credential helper).
   - `clone.ts` — bare-clone creation, fetching, and ref resolution against a
     shared repo cache. `fetchAll` configures the cache's fetch refspec
     (`remote.origin.fetch = +refs/heads/*:refs/heads/*`) before every fetch,
@@ -62,7 +74,8 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     hash; a local path has no owner to extract, so it's just
     `widgets-<hash>`) and ensures a bare clone of it exists
     (`ensureRepoCache`), fetching to refresh refs if it's already cached
-    rather than re-cloning.
+    rather than re-cloning. Its `allowPrompts` option is forwarded to
+    `cloneBare`/`fetchAll` (and on to `execGit`).
   - `lock.ts` — `withRepoLock`, an exclusive lock (via `proper-lockfile`) around
     mutating a repo cache, since the cache is shared across workspaces and
     concurrent `spork` invocations are expected, not exceptional.
@@ -70,8 +83,9 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     below to tell whether a registered alias's cache is still actually there.
   - `repos.ts` — the service layer over the repo registry:
     - `addRepoSource(ctx, source, { alias?, cloneFrom?, correctOriginTo?,
-      correctHeadTo? })` — ensure cloned, then register/reuse an alias for
-      it. Expects a real source, not an alias. `cloneFrom` clones from a
+      correctHeadTo?, allowPrompts? })` — ensure cloned, then register/reuse an alias for
+      it. `allowPrompts` lets the clone/fetch prompt on the terminal (off by
+      default — see `git/exec.ts`). Expects a real source, not an alias. `cloneFrom` clones from a
       different (typically local) path than `source` on a fresh clone while
       keeping `source` as the cache's identity; when that produces a fresh
       clone, `correctOriginTo` rewrites its `origin` remote afterward (a
