@@ -210,11 +210,20 @@ describe('runCreateWithRepos — interactive repo picker (no --repo given)', () 
     expect(addRepo).not.toHaveBeenCalled()
   })
 
-  it('throws Cancelled when the user backs out of the picker', async () => {
+  it('throws Cancelled without creating the workspace when the user backs out of the picker', async () => {
     vi.mocked(listRepoAliases).mockResolvedValue([{ alias: 'widgets', source: 'widgets-source', addedAt: '' }])
     vi.mocked(select).mockResolvedValue(null)
 
     await expect(runCreateWithRepos(ctx, 'demo', {})).rejects.toThrow(SporkError)
+    expect(createAndRegisterWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('does not create the workspace when the picker itself fails', async () => {
+    vi.mocked(listRepoAliases).mockResolvedValue([{ alias: 'widgets', source: 'widgets-source', addedAt: '' }])
+    vi.mocked(select).mockRejectedValue(new Error('terminal exploded'))
+
+    await expect(runCreateWithRepos(ctx, 'demo', {})).rejects.toThrow('terminal exploded')
+    expect(createAndRegisterWorkspace).not.toHaveBeenCalled()
   })
 
   it('re-throws a real failure from the picker rather than swallowing it', async () => {

@@ -151,7 +151,9 @@ logic lives here.
   `pickWorkspace.ts`'s
   picker rather than requiring the name up front; `create`'s `name` is the
   *new* workspace being created (nothing to pick from) and `list` takes no
-  workspace at all, so neither needed this. `remove` takes its workspaces
+  workspace at all, so neither needed this. `create` does run its own
+  repo picker when no `--repo` is given, but *before* creating anything,
+  so backing out of it leaves no workspace behind. `remove` takes its workspaces
   as a variadic `[workspaces...]` and, when none are given, offers a
   *multi*-select instead of a single one, since removing several at once is
   a real use case — and, once confirmed (see below), removes them through

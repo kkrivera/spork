@@ -81,7 +81,11 @@ async function resolveRepoSources(ctx: AppContext, name: string, options: Create
 }
 
 /**
- * Creates the workspace, then adds every resolved repo source via
+ * Resolves repo sources *before* creating anything, so backing out of the
+ * picker leaves no half-made workspace behind — the picker only reads the
+ * cwd's local and the global alias registries, never the new workspace's
+ * own (which can't have any aliases yet). Then creates the workspace and
+ * adds every resolved repo source via
  * `addReposBatch.ts`'s `addReposToWorkspace` (see `resolveRepoSources` for
  * where those sources come from, `--repo` or an interactive pick) — shared
  * with `add-repo`'s own zero-argument, pick-from-the-registry flow, so the
@@ -97,8 +101,8 @@ export async function runCreateWithRepos(
   name: string,
   options: CreateOptions,
 ): Promise<CreateWithReposResult> {
-  const handle = await runCreate(ctx, name, options)
   const sources = await resolveRepoSources(ctx, name, options)
+  const handle = await runCreate(ctx, name, options)
   const repoOutcomes = await addReposToWorkspace(ctx, handle.dir, sources, { global: options.global })
 
   return { handle, repoOutcomes }
