@@ -18,6 +18,30 @@ for the design behind this. This doc is the operational runbook.
 
 Nothing else to do — steps 2–3 are fully automatic once step 1 is run.
 
+## One-time setup: release GitHub App
+
+Step 3 only fires because the bump workflow pushes its tag with a GitHub
+App token — pushes made with the default `GITHUB_TOKEN` never trigger
+other workflows, so with it the tag would land but no build would run.
+
+1. Create a GitHub App (Settings → Developer settings → GitHub Apps) with
+   webhooks disabled, **Repository permissions → Contents: Read and write**
+   and nothing else, installable **Only on this account**.
+2. Generate a private key for it, then install it with **Only select
+   repositories** → `spork`.
+3. In the repo's Settings → Secrets and variables → Actions, add:
+
+   | Name | Kind | Value |
+   | --- | --- | --- |
+   | `RELEASE_APP_ID` | Variable | the app's App ID |
+   | `RELEASE_APP_PRIVATE_KEY` | Secret | the full `.pem` private key |
+
+4. If `main` has branch protection or rulesets, add the app to its bypass
+   list — the bump workflow pushes straight to `main`.
+
+`release-bump.yml` additionally narrows the minted token to `contents:
+write` on this repo only, so even a broader installation can't widen it.
+
 ## macOS signing status
 
 **As of this writing, there is no Apple Developer account**, so macOS

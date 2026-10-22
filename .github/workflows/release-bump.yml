@@ -16,7 +16,20 @@ jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
+      # Pushes made with the default GITHUB_TOKEN never trigger other
+      # workflows, so the tag push below would silently skip
+      # release-build.yml. A GitHub App token doesn't have that limit — see
+      # docs/RELEASING.md for the app's one-time setup.
+      - id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
       - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-node@v4
         with:
