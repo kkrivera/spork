@@ -1,38 +1,38 @@
 class Spork < Formula
   desc "Manage git-worktree-based workspaces spanning multiple independent repos"
   homepage "https://github.com/kkrivera/spork"
-  version "1.0.0"
+  version "1.1.0"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/kkrivera/spork/releases/download/v1.0.0/spork-1.0.0-darwin-arm64.tar.gz"
-      sha256 "759a11b762b493d0c8a4ee24d0ac20fd7d34221c911d33421ea8aff68f7fa2be"
+      url "https://github.com/kkrivera/spork/releases/download/v1.1.0/spork-1.1.0-darwin-arm64.tar.gz"
+      sha256 "7a1eabac54c806dda467c7476bebd61e6326c3d9c1f6250537d73ce2ccbc9427"
 
       resource "spork-mcp" do
-        url "https://github.com/kkrivera/spork/releases/download/v1.0.0/spork-mcp-1.0.0-darwin-arm64.tar.gz"
-        sha256 "31f0de83ddc03c16987528fb4691fbddb18038c9c2c8d874628e72da5a079b30"
+        url "https://github.com/kkrivera/spork/releases/download/v1.1.0/spork-mcp-1.1.0-darwin-arm64.tar.gz"
+        sha256 "0ef0f7f9b217046268e0bc5440536f821f029741768abf2edd401e5dfeeffb16"
       end
     end
     on_intel do
-      url "https://github.com/kkrivera/spork/releases/download/v1.0.0/spork-1.0.0-darwin-x64.tar.gz"
-      sha256 "b5ebe9e5ca61d297dded4694d61e3d2d55704f5cade012f5b28714971f1f430a"
+      url "https://github.com/kkrivera/spork/releases/download/v1.1.0/spork-1.1.0-darwin-x64.tar.gz"
+      sha256 "4228c627ce4ed00eecb957a31b34c6cf02c64d9970ed76391f3647f1663e367a"
 
       resource "spork-mcp" do
-        url "https://github.com/kkrivera/spork/releases/download/v1.0.0/spork-mcp-1.0.0-darwin-x64.tar.gz"
-        sha256 "d9f96db89437276fd891afb3e63b563aab63533fe445d77932c640485680f797"
+        url "https://github.com/kkrivera/spork/releases/download/v1.1.0/spork-mcp-1.1.0-darwin-x64.tar.gz"
+        sha256 "072603ba738ae7e984971a15ac9119c1cdc1e152fc85c89c1ce4df57ecb06918"
       end
     end
   end
 
   on_linux do
     on_intel do
-      url "https://github.com/kkrivera/spork/releases/download/v1.0.0/spork-1.0.0-linux-x64.tar.gz"
-      sha256 "cced9f1320cd4554affe4d784f4f9ad20a550e889af2fecea4887bb41e92e4d8"
+      url "https://github.com/kkrivera/spork/releases/download/v1.1.0/spork-1.1.0-linux-x64.tar.gz"
+      sha256 "cb0b7bf01eb85402d404f9b33d65f7bebfb1e7f3307c390897e7f7687eeb071d"
 
       resource "spork-mcp" do
-        url "https://github.com/kkrivera/spork/releases/download/v1.0.0/spork-mcp-1.0.0-linux-x64.tar.gz"
-        sha256 "f554892fd14e18968e48710092d791dae176cb4254b7c755a89e203cb42757e3"
+        url "https://github.com/kkrivera/spork/releases/download/v1.1.0/spork-mcp-1.1.0-linux-x64.tar.gz"
+        sha256 "f36b6345d3f78524f14da0fc534b9e3bd160f28c9afd8894821bbd3a87fa29fa"
       end
     end
   end
