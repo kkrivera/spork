@@ -18,7 +18,21 @@ A workspace is:
 > [docs/plans/0001-worktree-workspace-architecture.md](docs/plans/0001-worktree-workspace-architecture.md)
 > for the design.
 
-## Installing a prebuilt binary
+## Installing
+
+On macOS or Linux, install `spork` via Homebrew (see
+[docs/plans/0003-homebrew-distribution.md](docs/plans/0003-homebrew-distribution.md)):
+
+```sh
+brew tap kkrivera/spork https://github.com/kkrivera/spork
+brew install spork
+```
+
+This only installs the `spork` CLI — `spork-mcp` has no formula (it's a
+backend an agent launches, not a tool you run by hand) and is only
+available as a prebuilt binary below.
+
+### Installing a prebuilt binary
 
 Every tagged release publishes standalone `spork` and `spork-mcp` binaries
 for macOS (arm64 + x64), Windows (x64), and Linux (x64) — no Node.js
@@ -30,7 +44,9 @@ platform, extract it, and put `spork` (or `spork-mcp`) on your `PATH`.
 > [docs/RELEASING.md](docs/RELEASING.md)), these binaries are only ad-hoc
 > signed. The first time you run one, macOS Gatekeeper will block it —
 > right-click the binary → **Open** → confirm, or run
-> `xattr -d com.apple.quarantine <path-to-binary>`.
+> `xattr -d com.apple.quarantine <path-to-binary>`. This doesn't apply to
+> the Homebrew install above — `brew`'s own download never triggers
+> Gatekeeper's quarantine check in the first place.
 
 ```sh
 spork workspace create demo
@@ -148,6 +164,11 @@ spork repo list
   run as a GitHub Action (see [docs/RELEASING.md](docs/RELEASING.md)).
 - [tools/package-binary](tools/package-binary) — builds/signs the standalone
   binaries described above; also run as a GitHub Action.
+- [tools/homebrew-formula](tools/homebrew-formula) — regenerates
+  [Formula/spork.rb](Formula/spork.rb) from each release; also run as a
+  GitHub Action.
+- [Formula](Formula) — the Homebrew formula installed above. Generated, not
+  hand-edited — see `tools/homebrew-formula`.
 - [docs/plans](docs/plans) — durable design docs, reviewed like code.
 - [.claude/skills](.claude/skills) — Claude Code skills used to maintain this repo.
 

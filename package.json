@@ -19,7 +19,8 @@
     "package:all": "tsx tools/package-binary/build-all.ts",
     "package:mac": "tsx tools/package-binary/build-all.ts --platform darwin",
     "package:win": "tsx tools/package-binary/build-all.ts --platform win32",
-    "package:linux": "tsx tools/package-binary/build-all.ts --platform linux"
+    "package:linux": "tsx tools/package-binary/build-all.ts --platform linux",
+    "homebrew:update-formula": "tsx tools/homebrew-formula/generate-formula.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",

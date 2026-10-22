@@ -97,6 +97,19 @@ jobs:
     needs: [build-mac, build-other]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: corepack enable
+
+      - run: yarn install --immutable
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -105,3 +118,21 @@ jobs:
       - run: gh release create "${{ github.ref_name }}" artifacts/* --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # Keeps Formula/spork.rb (see tools/homebrew-formula) pointed at this
+      # release's spork archives — never hand-edited, always regenerated.
+      - name: Update Homebrew formula
+        run: yarn homebrew:update-formula --version "${GITHUB_REF_NAME#v}" --artifacts-dir artifacts
+
+      - name: Commit updated formula
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add Formula/spork.rb
+          if git diff --cached --quiet; then
+            echo "Formula/spork.rb already up to date."
+          else
+            git commit -m "chore(homebrew): update formula to ${GITHUB_REF_NAME}"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi

@@ -1,0 +1,32 @@
+class Spork < Formula
+  desc "Manage git-worktree-based workspaces spanning multiple independent repos"
+  homepage "https://github.com/kkrivera/spork"
+  version "{{VERSION}}"
+  license "MIT"
+
+  on_macos do
+    on_arm do
+      url "https://github.com/kkrivera/spork/releases/download/v{{VERSION}}/spork-{{VERSION}}-darwin-arm64.tar.gz"
+      sha256 "{{DARWIN_ARM64_SHA256}}"
+    end
+    on_intel do
+      url "https://github.com/kkrivera/spork/releases/download/v{{VERSION}}/spork-{{VERSION}}-darwin-x64.tar.gz"
+      sha256 "{{DARWIN_X64_SHA256}}"
+    end
+  end
+
+  on_linux do
+    on_intel do
+      url "https://github.com/kkrivera/spork/releases/download/v{{VERSION}}/spork-{{VERSION}}-linux-x64.tar.gz"
+      sha256 "{{LINUX_X64_SHA256}}"
+    end
+  end
+
+  def install
+    bin.install "spork"
+  end
+
+  test do
+    assert_match "Manage git-worktree-based workspaces", shell_output("#{bin}/spork --help")
+  end
+end

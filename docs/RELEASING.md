@@ -1,7 +1,8 @@
 # Releasing spork
 
-See [docs/plans/0002-binary-releases.md](plans/0002-binary-releases.md) for
-the design behind this. This doc is the operational runbook.
+See [docs/plans/0002-binary-releases.md](plans/0002-binary-releases.md) and
+[docs/plans/0003-homebrew-distribution.md](plans/0003-homebrew-distribution.md)
+for the design behind this. This doc is the operational runbook.
 
 ## Cutting a release
 
@@ -11,8 +12,9 @@ the design behind this. This doc is the operational runbook.
    pushes a `vX.Y.Z` tag.
 3. The tag push automatically triggers **Release — build binaries**, which
    builds `spork` and `spork-mcp` for macOS (arm64 + x64), Windows (x64),
-   and Linux (x64), and publishes them as a GitHub Release with the tag's
-   name.
+   and Linux (x64), publishes them as a GitHub Release with the tag's name,
+   and regenerates `Formula/spork.rb` from the new release's archives
+   (committed straight to `main`).
 
 Nothing else to do — steps 2–3 are fully automatic once step 1 is run.
 
@@ -75,3 +77,7 @@ binaries automatically.
   "unknown publisher" prompt on first run; there's no equivalent blocker on
   Linux. Neither is currently in scope to fix — revisit if it becomes a
   real adoption blocker.
+- **No `linux-arm64` archive.** `brew install spork` on an arm64 Linuxbrew
+  host has no `url` to fall back to in `Formula/spork.rb` — add that
+  target to `release-build.yml`/`build-all.ts` first if that platform ever
+  needs support.
