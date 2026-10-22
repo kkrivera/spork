@@ -1,4 +1,6 @@
-# spork
+# spork 
+
+[![CI](https://github.com/kkrivera/spork/actions/workflows/ci.yml/badge.svg)](https://github.com/kkrivera/spork/actions/workflows/ci.yml)
 
 `spork` is a CLI that turns a set of independent, unrelated git repositories into a
 single local **workspace** built from isolated `git worktree` checkouts — a "mini
