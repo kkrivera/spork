@@ -193,6 +193,25 @@ export function injectBlob(binaryPath: string, blobPath: string, platform: NodeJ
   execFileSync('npx', args, { stdio: 'inherit' })
 }
 
+/**
+ * Ad-hoc signs (`codesign --sign -`) right after injection — on Apple
+ * Silicon, macOS kills an injected-but-unsigned binary outright (SIGKILL)
+ * before it ever reaches user code, so without this a plain local `yarn
+ * package:mac` produces a binary that can't even run. Same host-capability
+ * guard as `removeExistingSignature`, and harmless to do unconditionally:
+ * `release-build.yml`'s own `macos-sign.sh` step runs afterward and always
+ * re-signs with `--force`, overwriting this with a real identity when one
+ * is configured.
+ */
+export function adHocSign(binaryPath: string, platform: NodeJS.Platform = process.platform): void {
+  if (platform !== 'darwin') return
+  if (process.platform !== 'darwin') {
+    console.warn('adHocSign: skipped — codesign is only available on a macOS host.')
+    return
+  }
+  execFileSync('codesign', ['--sign', '-', '--force', binaryPath], { stdio: 'inherit' })
+}
+
 export async function buildBinary(args: BuildArgs): Promise<string> {
   const platform = args.platform ?? process.platform
   const arch = args.arch ?? process.arch
@@ -217,6 +236,7 @@ export async function buildBinary(args: BuildArgs): Promise<string> {
 
   removeExistingSignature(binaryPath, platform)
   injectBlob(binaryPath, blobPath, platform)
+  adHocSign(binaryPath, platform)
 
   return binaryPath
 }

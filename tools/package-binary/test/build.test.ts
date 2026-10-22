@@ -247,6 +247,30 @@ describe('removeExistingSignature', () => {
   })
 })
 
+describe('adHocSign', () => {
+  it('runs codesign --sign - --force when both the target and host are darwin', () => {
+    withHostPlatform('darwin', () => build.adHocSign('/out/spork', 'darwin'))
+
+    expect(execFileSync).toHaveBeenCalledWith('codesign', ['--sign', '-', '--force', '/out/spork'], { stdio: 'inherit' })
+  })
+
+  it('is a no-op on a non-darwin target', () => {
+    build.adHocSign('/out/spork', 'linux')
+
+    expect(execFileSync).not.toHaveBeenCalled()
+  })
+
+  it('skips with a warning for a darwin target on a non-darwin host (codesign does not exist there)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    withHostPlatform('linux', () => build.adHocSign('/out/spork', 'darwin'))
+
+    expect(execFileSync).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('codesign is only available on a macOS host'))
+    warnSpy.mockRestore()
+  })
+})
+
 describe('injectBlob', () => {
   it('adds --macho-segment-name only on darwin', () => {
     build.injectBlob('/out/spork', 'blob.blob', 'darwin')

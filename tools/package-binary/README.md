@@ -48,6 +48,14 @@ for a given OS/arch target (defaulting to the host's own):
    code controls, and already confirmed harmless above (the Linux binary
    ran fine in Docker despite them; we don't sign Windows binaries at
    all).
+6. `adHocSign` — ad-hoc `codesign`s (`--sign -`) a darwin target, same
+   host-capability guard as `removeExistingSignature`. Without this, an
+   injected-but-unsigned binary is killed outright by macOS on Apple
+   Silicon (`SIGKILL`, exit code 137) before it ever reaches user code —
+   confirmed by running the pipeline for real. Harmless to always do:
+   `release-build.yml`'s separate `macos-sign.sh` step (below) still runs
+   afterward and re-signs with `--force`, overwriting this with a real
+   identity whenever one is configured.
 
 **Cross-compiling is real and verified, not just documented by Node.**
 Built+injected official `linux-x64`/`win-x64` node binaries on a macOS
@@ -66,12 +74,10 @@ writing each into its own `dist-sea/<platform>-<arch>/` subfolder. This is
 what backs the root `package.json` scripts below, and what
 `release-build.yml` calls.
 
-`macos-sign.sh <path-to-binary>` signs the binary produced above — **not
-optional on Apple Silicon**: confirmed by running the pipeline for real that
-an injected-but-unsigned binary is killed outright by the OS (`SIGKILL`,
-exit code 137) before it ever reaches user code, even locally. Ad-hoc
-signing alone is enough to make it runnable again; a real Developer ID
-signature only adds Gatekeeper-on-other-machines/notarization on top. With a
+`macos-sign.sh <path-to-binary>` is a separate, optional upgrade from the
+ad-hoc signature `buildBinary` already applies above — a real Developer ID
+signature only adds Gatekeeper-on-other-machines/notarization on top of
+what's needed to simply run the binary locally. With a
 `MACOS_CERTIFICATE` secret set, it imports a Developer ID Application
 certificate into a temporary keychain, signs with the hardened runtime and
 `entitlements.plist`, and — if notarization credentials
