@@ -16,12 +16,6 @@ brew tap kkrivera/spork https://github.com/kkrivera/spork
 brew install spork
 ```
 
-Check it worked:
-
-```sh
-spork --version
-```
-
 To update later, just run:
 
 ```sh
