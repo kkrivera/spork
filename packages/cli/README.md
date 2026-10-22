@@ -296,6 +296,13 @@ logic lives here.
 - `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`,
   `scan`), same `run<Verb>`/`register<Verb>Command` split. Decoupled from
   any workspace: `repo add <source>` clones/registers an alias directly.
+  In an interactive terminal (stdin and stdout both TTYs), `repo add`
+  skips the live dashboard and calls `@spork/core` with `allowPrompts:
+  true`, so git/ssh can ask for an SSH passphrase, HTTPS password, or
+  host-key confirmation; the dashboard's redraws would otherwise erase
+  that prompt the moment it appeared, leaving what looks like a hang.
+  Everywhere else (CI, a pipe, and every batch command) prompts stay off,
+  and an auth failure errors immediately with what to do next.
   `repo remove [aliases...]` is deliberately **global-only** — no
   `--global`/`--local` flags at all, unlike `add`/`list`/`scan` below —
   since a workspace's own *local* alias (and, for a real worktree, the

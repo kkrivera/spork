@@ -15,7 +15,7 @@ vi.mock('@spork/task-runner', () => ({
 
 const { addRepoSourceOrAlias, findEnclosingWorkspaceDir } = await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
-const { runAdd, registerAddCommand } = await import('../../src/commands/repo/add.js')
+const { isInteractiveTerminal, runAdd, registerAddCommand } = await import('../../src/commands/repo/add.js')
 const { createUi } = await import('../../src/output/color.js')
 
 const ctx = { reposRoot: '/repos', registryPath: '/workspaces.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
@@ -104,15 +104,73 @@ describe('runAdd', () => {
   })
 })
 
+describe('runAdd — interactive terminal', () => {
+  it('calls core directly with prompts allowed, skipping the live dashboard', async () => {
+    const result = await runAdd(ctx, WIDGETS_SOURCE, { as: 'w' }, true)
+
+    expect(runTasks).not.toHaveBeenCalled()
+    expect(addRepoSourceOrAlias).toHaveBeenCalledWith(
+      { reposRoot: '/repos', repoRegistryPath: '/repos.json' },
+      WIDGETS_SOURCE,
+      { alias: 'w', allowPrompts: true },
+    )
+    expect(result.entry.alias).toBe('widgets')
+    expect(result.scopeLabel).toBe('global')
+  })
+
+  it('re-throws the real error when the add fails', async () => {
+    vi.mocked(addRepoSourceOrAlias).mockRejectedValue(new Error('Permission denied (publickey)'))
+
+    await expect(runAdd(ctx, WIDGETS_SOURCE, {}, true)).rejects.toThrow('Permission denied (publickey)')
+  })
+
+  it('leaves prompts off when not interactive', async () => {
+    await runAdd(ctx, WIDGETS_SOURCE, {})
+
+    expect(runTasks).toHaveBeenCalled()
+    expect(addRepoSourceOrAlias).toHaveBeenCalledWith(expect.anything(), WIDGETS_SOURCE, { alias: undefined })
+  })
+})
+
+describe('isInteractiveTerminal', () => {
+  it('needs both stdin and stdout to be a TTY', () => {
+    const stdin = process.stdin.isTTY
+    const stdout = process.stdout.isTTY
+    try {
+      Object.assign(process.stdin, { isTTY: true })
+      Object.assign(process.stdout, { isTTY: true })
+      expect(isInteractiveTerminal()).toBe(true)
+      Object.assign(process.stdout, { isTTY: undefined })
+      expect(isInteractiveTerminal()).toBe(false)
+    } finally {
+      Object.assign(process.stdin, { isTTY: stdin })
+      Object.assign(process.stdout, { isTTY: stdout })
+    }
+  })
+})
+
 describe('registerAddCommand', () => {
   it('wires the add command and prints the resulting alias with its scope', async () => {
     const program = new Command()
-    registerAddCommand(program, ctx)
+    registerAddCommand(program, ctx, () => false)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await program.parseAsync(['node', 'test', 'add', WIDGETS_SOURCE])
 
     expect(logSpy.mock.calls.flat().join('\n')).toContain(`"widgets" -> ${WIDGETS_SOURCE} (global)`)
+    logSpy.mockRestore()
+  })
+
+  it('in an interactive terminal, says git may prompt and lets it', async () => {
+    const program = new Command()
+    registerAddCommand(program, ctx, () => true)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await program.parseAsync(['node', 'test', 'add', WIDGETS_SOURCE])
+
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('git may ask for your SSH passphrase or password')
+    expect(runTasks).not.toHaveBeenCalled()
+    expect(addRepoSourceOrAlias).toHaveBeenCalledWith(expect.anything(), WIDGETS_SOURCE, expect.objectContaining({ allowPrompts: true }))
     logSpy.mockRestore()
   })
 })
