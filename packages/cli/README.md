@@ -145,7 +145,10 @@ logic lives here.
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
   `status`, `open`, `exec`), each exporting a plain `run<Verb>` function
   (the testable logic) and a `register<Verb>Command` that wires it to
-  commander and prints the result. Every subcommand except `create` and
+  commander and prints the result. `create` and `init` take
+  `--no-agent-files`, passed to `@spork/core` as `agentInstructions:
+  false`, to skip the generated root `AGENTS.md`/`CLAUDE.md` for that
+  workspace (see `@spork/core`'s `workspaceFiles.ts`). Every subcommand except `create` and
   `list` takes its workspace by name but can omit it — `add-repo`,
   `remove-repo`, `remove`, `status`, `open`, and `exec` all fall back to
   `pickWorkspace.ts`'s

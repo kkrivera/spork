@@ -19,6 +19,8 @@ export interface CreateOptions {
   repo?: string[]
   /** Register each --repo's alias globally instead of locally to the new workspace (the default). */
   global?: boolean
+  /** `false` from `--no-agent-files`: skip the generated root AGENTS.md/CLAUDE.md for this workspace. */
+  agentFiles?: boolean
 }
 
 function collectRepo(value: string, previous: string[]): string[] {
@@ -36,7 +38,8 @@ function collectRepo(value: string, previous: string[]): string[] {
  */
 export async function runCreate(ctx: AppContext, name: string, options: CreateOptions): Promise<WorkspaceHandle> {
   const dir = path.resolve(options.dir ?? ctx.env.workspaceDir ?? process.cwd(), name)
-  return createAndRegisterWorkspace(workspaceContext(ctx), ctx.registryPath, { name, dir })
+  const agentInstructions = options.agentFiles === false ? { agentInstructions: false } : {}
+  return createAndRegisterWorkspace(workspaceContext(ctx), ctx.registryPath, { name, dir, ...agentInstructions })
 }
 
 export interface CreateWithReposResult {
@@ -157,6 +160,7 @@ export function registerCreateCommand(program: Command, ctx: AppContext, deps: L
     .option('--dir <path>', 'parent directory to create the workspace in, as <path>/<name> (default: $SPORK_WORKSPACE_DIR, or cwd)')
     .option('--repo <source>', 'repo to add (repeatable)', collectRepo, [] as string[])
     .option('--global', "register each --repo's alias globally instead of locally to this workspace")
+    .option('--no-agent-files', "don't generate AGENTS.md/CLAUDE.md at the workspace root")
     .action(async (name: string, options: CreateOptions) => {
       const { handle, repoOutcomes } = await runCreateWithRepos(ctx, name, options)
       console.log(ctx.ui.color.green(`Created workspace "${handle.name}" at ${handle.dir}`))

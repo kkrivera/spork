@@ -220,8 +220,23 @@ these workspaces deletes only spork's own files, never your folders:
 cd ~/code/some-project              # already has api/, web/, infra/ inside it
 spork workspace init some-project   # pick which of api/web/infra to include
 spork workspace status some-project
-spork workspace remove some-project # deletes spork.workspace.json and the .code-workspace file only
+spork workspace remove some-project # deletes only spork's own files and generated sections
 ```
+
+### Instructions for AI coding agents
+
+Every workspace gets an `AGENTS.md` and a `CLAUDE.md` at its root, so an
+agent like Claude Code started there knows each folder is its own repo with
+its own rules. They list the repos and the ground rules (run git and tests
+inside each repo, commit per repo, follow each repo's own instructions).
+`CLAUDE.md` also points out any repo whose Claude Code hooks, permissions,
+or subagents only apply in a session started inside that repo.
+
+spork updates both files whenever you add or remove a repo. It only ever
+rewrites its own marked section, so anything you add to these files
+yourself is kept, including an existing `CLAUDE.md` in a folder you
+`init`. Pass `--no-agent-files` to `workspace create` or `workspace init`
+to skip them for that workspace.
 
 ## Repository layout
 

@@ -254,3 +254,20 @@ describe('registerCreateCommand — offer to launch, edge cases', () => {
     logSpy.mockRestore()
   })
 })
+
+describe('registerCreateCommand — --no-agent-files', () => {
+  it('parses --no-agent-files into agentInstructions: false', async () => {
+    const program = new Command()
+    registerCreateCommand(program, ctx)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await program.parseAsync(['node', 'test', 'create', 'demo', '--dir', '/custom', '--no-agent-files'])
+
+    expect(createAndRegisterWorkspace).toHaveBeenCalledWith(expect.anything(), '/registry.json', {
+      name: 'demo',
+      dir: '/custom/demo',
+      agentInstructions: false,
+    })
+    logSpy.mockRestore()
+  })
+})

@@ -73,7 +73,12 @@ async function resolveFolders(dir: string, found: readonly string[]): Promise<st
  * as `create --repo`/`add-repo`'s batch add — `registerInitCommand` prints
  * every outcome and throws afterward if any failed.
  */
-export async function runInit(ctx: AppContext, name: string): Promise<InitResult> {
+export interface InitOptions {
+  /** `false` from `--no-agent-files`: skip the generated root AGENTS.md/CLAUDE.md for this workspace. */
+  agentFiles?: boolean
+}
+
+export async function runInit(ctx: AppContext, name: string, options: InitOptions = {}): Promise<InitResult> {
   const dir = process.cwd()
   if (existsSync(manifestPath(dir))) {
     throw new SporkError(`"${dir}" is already a spork workspace.`)
@@ -82,7 +87,8 @@ export async function runInit(ctx: AppContext, name: string): Promise<InitResult
   const found = await findGitRepoDirs(dir)
   const folders = await resolveFolders(dir, found)
 
-  const handle = await initAndRegisterWorkspace(workspaceContext(ctx), ctx.registryPath, { name, dir })
+  const agentInstructions = options.agentFiles === false ? { agentInstructions: false } : {}
+  const handle = await initAndRegisterWorkspace(workspaceContext(ctx), ctx.registryPath, { name, dir, ...agentInstructions })
 
   const outcomes = await runConcurrently(
     folders.map((folder) => ({
@@ -117,8 +123,9 @@ export function registerInitCommand(program: Command, ctx: AppContext): void {
     .description(
       'Turn the current directory into a workspace in place, adopting its existing git folders (no worktrees, no branch changes)',
     )
-    .action(async (name: string) => {
-      const { handle, outcomes } = await runInit(ctx, name)
+    .option('--no-agent-files', "don't generate AGENTS.md/CLAUDE.md at the workspace root")
+    .action(async (name: string, options: InitOptions) => {
+      const { handle, outcomes } = await runInit(ctx, name, options)
       console.log(ctx.ui.color.green(`Initialized workspace "${handle.name}" at ${handle.dir}`))
 
       const failures: AdoptBatchFailure[] = []

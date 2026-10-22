@@ -233,3 +233,15 @@ describe('runCreateWithRepos — interactive repo picker (no --repo given)', () 
     await expect(runCreateWithRepos(ctx, 'demo', {})).rejects.toThrow('terminal exploded')
   })
 })
+
+describe('runCreate — --no-agent-files', () => {
+  it('passes --no-agent-files through as agentInstructions: false', async () => {
+    await runCreate(ctx, 'demo', { dir: '/custom/path', agentFiles: false })
+
+    expect(createAndRegisterWorkspace).toHaveBeenCalledWith(expect.anything(), '/registry.json', {
+      name: 'demo',
+      dir: '/custom/path/demo',
+      agentInstructions: false,
+    })
+  })
+})

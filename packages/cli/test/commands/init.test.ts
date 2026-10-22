@@ -100,6 +100,20 @@ describe('runInit', () => {
     expect(result.outcomes).toEqual([{ folder: 'widgets', result: fakeAdoptedEntry('widgets') }])
   })
 
+  it('passes --no-agent-files through as agentInstructions: false', async () => {
+    vi.mocked(findGitRepoDirs).mockResolvedValue(['/home/user/demo/widgets'])
+    vi.mocked(select).mockResolvedValue(['widgets'])
+    vi.mocked(adoptRepoIntoWorkspace).mockResolvedValue(fakeAdoptedEntry('widgets'))
+
+    await runInit(ctx, 'demo', { agentFiles: false })
+
+    expect(initAndRegisterWorkspace).toHaveBeenCalledWith(expect.anything(), '/registry.json', {
+      name: 'demo',
+      dir: '/home/user/demo',
+      agentInstructions: false,
+    })
+  })
+
   it('offers a multi-select requiring at least one folder', async () => {
     vi.mocked(findGitRepoDirs).mockResolvedValue(['/home/user/demo/widgets'])
     vi.mocked(select).mockResolvedValue(['widgets'])
