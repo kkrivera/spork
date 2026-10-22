@@ -8,10 +8,20 @@ class Spork < Formula
     on_arm do
       url "https://github.com/kkrivera/spork/releases/download/v{{VERSION}}/spork-{{VERSION}}-darwin-arm64.tar.gz"
       sha256 "{{DARWIN_ARM64_SHA256}}"
+
+      resource "spork-mcp" do
+        url "https://github.com/kkrivera/spork/releases/download/v{{VERSION}}/spork-mcp-{{VERSION}}-darwin-arm64.tar.gz"
+        sha256 "{{MCP_DARWIN_ARM64_SHA256}}"
+      end
     end
     on_intel do
       url "https://github.com/kkrivera/spork/releases/download/v{{VERSION}}/spork-{{VERSION}}-darwin-x64.tar.gz"
       sha256 "{{DARWIN_X64_SHA256}}"
+
+      resource "spork-mcp" do
+        url "https://github.com/kkrivera/spork/releases/download/v{{VERSION}}/spork-mcp-{{VERSION}}-darwin-x64.tar.gz"
+        sha256 "{{MCP_DARWIN_X64_SHA256}}"
+      end
     end
   end
 
@@ -19,14 +29,25 @@ class Spork < Formula
     on_intel do
       url "https://github.com/kkrivera/spork/releases/download/v{{VERSION}}/spork-{{VERSION}}-linux-x64.tar.gz"
       sha256 "{{LINUX_X64_SHA256}}"
+
+      resource "spork-mcp" do
+        url "https://github.com/kkrivera/spork/releases/download/v{{VERSION}}/spork-mcp-{{VERSION}}-linux-x64.tar.gz"
+        sha256 "{{MCP_LINUX_X64_SHA256}}"
+      end
     end
   end
 
+  # spork-mcp ships alongside spork (same release, same version) so one
+  # `brew upgrade spork` keeps both current; it's the MCP server an agent
+  # launches, e.g. `claude mcp add spork -- "$(brew --prefix)/bin/spork-mcp"`.
   def install
     bin.install "spork"
+    resource("spork-mcp").stage { bin.install "spork-mcp" }
   end
 
   test do
     assert_match "Manage git-worktree-based workspaces", shell_output("#{bin}/spork --help")
+    # spork-mcp is a stdio server that waits for a client, so just check it was installed.
+    assert_predicate bin/"spork-mcp", :executable?
   end
 end

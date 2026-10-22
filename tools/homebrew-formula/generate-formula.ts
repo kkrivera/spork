@@ -8,6 +8,9 @@ export interface FormulaValues {
   darwinArm64Sha256: string
   darwinX64Sha256: string
   linuxX64Sha256: string
+  mcpDarwinArm64Sha256: string
+  mcpDarwinX64Sha256: string
+  mcpLinuxX64Sha256: string
 }
 
 const PLACEHOLDERS: Record<keyof FormulaValues, string> = {
@@ -15,6 +18,9 @@ const PLACEHOLDERS: Record<keyof FormulaValues, string> = {
   darwinArm64Sha256: '{{DARWIN_ARM64_SHA256}}',
   darwinX64Sha256: '{{DARWIN_X64_SHA256}}',
   linuxX64Sha256: '{{LINUX_X64_SHA256}}',
+  mcpDarwinArm64Sha256: '{{MCP_DARWIN_ARM64_SHA256}}',
+  mcpDarwinX64Sha256: '{{MCP_DARWIN_X64_SHA256}}',
+  mcpLinuxX64Sha256: '{{MCP_LINUX_X64_SHA256}}',
 }
 
 /** Full-text substitution, not an in-place patch — every run re-renders the whole file from the template, so it's idempotent regardless of what the previous release's values were. */
@@ -54,27 +60,42 @@ export function parseArgs(argv: readonly string[]): Args {
   }
 }
 
-function archivePath(artifactsDir: string, version: string, target: string): string {
-  return path.join(artifactsDir, `spork-${version}-${target}.tar.gz`)
+function archivePath(artifactsDir: string, binary: 'spork' | 'spork-mcp', version: string, target: string): string {
+  return path.join(artifactsDir, `${binary}-${version}-${target}.tar.gz`)
 }
 
 /**
  * Regenerates `Formula/spork.rb` from the template for one release's
- * `spork` (not `spork-mcp`) archives — the three `*-darwin-arm64`/
- * `*-darwin-x64`/`*-linux-x64` tarballs `release-build.yml` already
- * publishes (the same files `gh release create` attaches). Each archive's
+ * `spork` and `spork-mcp` archives — the `*-darwin-arm64`/`*-darwin-x64`/
+ * `*-linux-x64` tarballs of each that `release-build.yml` already publishes
+ * (the same files `gh release create` attaches). `spork` is the formula's
+ * main download; `spork-mcp` is a `resource` installed alongside it. Each archive's
  * real sha256 is computed locally rather than trusted from anywhere else,
  * since that's exactly what Homebrew itself re-verifies on install.
  */
 export async function generateFormula(args: Args): Promise<string> {
-  const [darwinArm64Sha256, darwinX64Sha256, linuxX64Sha256] = await Promise.all([
-    sha256File(archivePath(args.artifactsDir, args.version, 'darwin-arm64')),
-    sha256File(archivePath(args.artifactsDir, args.version, 'darwin-x64')),
-    sha256File(archivePath(args.artifactsDir, args.version, 'linux-x64')),
-  ])
+  const hash = (binary: 'spork' | 'spork-mcp', target: string): Promise<string> =>
+    sha256File(archivePath(args.artifactsDir, binary, args.version, target))
+  const [darwinArm64Sha256, darwinX64Sha256, linuxX64Sha256, mcpDarwinArm64Sha256, mcpDarwinX64Sha256, mcpLinuxX64Sha256] =
+    await Promise.all([
+      hash('spork', 'darwin-arm64'),
+      hash('spork', 'darwin-x64'),
+      hash('spork', 'linux-x64'),
+      hash('spork-mcp', 'darwin-arm64'),
+      hash('spork-mcp', 'darwin-x64'),
+      hash('spork-mcp', 'linux-x64'),
+    ])
 
   const template = await readFile(args.templatePath, 'utf8')
-  const rendered = renderFormula(template, { version: args.version, darwinArm64Sha256, darwinX64Sha256, linuxX64Sha256 })
+  const rendered = renderFormula(template, {
+    version: args.version,
+    darwinArm64Sha256,
+    darwinX64Sha256,
+    linuxX64Sha256,
+    mcpDarwinArm64Sha256,
+    mcpDarwinX64Sha256,
+    mcpLinuxX64Sha256,
+  })
   await writeFile(args.formulaPath, rendered, 'utf8')
   return rendered
 }

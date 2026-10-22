@@ -7,16 +7,23 @@ import { generateFormula, parseArgs, renderFormula, sha256File } from '../genera
 
 describe('renderFormula', () => {
   it('replaces every placeholder token', () => {
-    const template = 'version "{{VERSION}}"\n{{DARWIN_ARM64_SHA256}} {{DARWIN_X64_SHA256}} {{LINUX_X64_SHA256}}'
+    const template =
+      'version "{{VERSION}}"\n{{DARWIN_ARM64_SHA256}} {{DARWIN_X64_SHA256}} {{LINUX_X64_SHA256}}\n' +
+      '{{MCP_DARWIN_ARM64_SHA256}} {{MCP_DARWIN_X64_SHA256}} {{MCP_LINUX_X64_SHA256}}'
 
     const result = renderFormula(template, {
       version: '1.2.3',
       darwinArm64Sha256: 'a'.repeat(64),
       darwinX64Sha256: 'b'.repeat(64),
       linuxX64Sha256: 'c'.repeat(64),
+      mcpDarwinArm64Sha256: 'd'.repeat(64),
+      mcpDarwinX64Sha256: 'e'.repeat(64),
+      mcpLinuxX64Sha256: 'f'.repeat(64),
     })
 
-    expect(result).toBe(`version "1.2.3"\n${'a'.repeat(64)} ${'b'.repeat(64)} ${'c'.repeat(64)}`)
+    expect(result).toBe(
+      `version "1.2.3"\n${'a'.repeat(64)} ${'b'.repeat(64)} ${'c'.repeat(64)}\n${'d'.repeat(64)} ${'e'.repeat(64)} ${'f'.repeat(64)}`,
+    )
   })
 
   it('replaces every occurrence of a repeated token', () => {
@@ -25,6 +32,9 @@ describe('renderFormula', () => {
       darwinArm64Sha256: '',
       darwinX64Sha256: '',
       linuxX64Sha256: '',
+      mcpDarwinArm64Sha256: '',
+      mcpDarwinX64Sha256: '',
+      mcpLinuxX64Sha256: '',
     })
 
     expect(result).toBe('1.0.0 and 1.0.0 again')
@@ -78,11 +88,15 @@ describe('generateFormula', () => {
     await writeFile(path.join(artifactsDir, 'spork-1.2.3-darwin-arm64.tar.gz'), 'arm64')
     await writeFile(path.join(artifactsDir, 'spork-1.2.3-darwin-x64.tar.gz'), 'x64')
     await writeFile(path.join(artifactsDir, 'spork-1.2.3-linux-x64.tar.gz'), 'linux')
+    await writeFile(path.join(artifactsDir, 'spork-mcp-1.2.3-darwin-arm64.tar.gz'), 'mcp-arm64')
+    await writeFile(path.join(artifactsDir, 'spork-mcp-1.2.3-darwin-x64.tar.gz'), 'mcp-x64')
+    await writeFile(path.join(artifactsDir, 'spork-mcp-1.2.3-linux-x64.tar.gz'), 'mcp-linux')
 
     const templatePath = path.join(dir, 'template.rb')
     await writeFile(
       templatePath,
-      'version "{{VERSION}}"\ndarwin-arm64 {{DARWIN_ARM64_SHA256}}\ndarwin-x64 {{DARWIN_X64_SHA256}}\nlinux-x64 {{LINUX_X64_SHA256}}\n',
+      'version "{{VERSION}}"\ndarwin-arm64 {{DARWIN_ARM64_SHA256}}\ndarwin-x64 {{DARWIN_X64_SHA256}}\nlinux-x64 {{LINUX_X64_SHA256}}\n' +
+        'mcp-darwin-arm64 {{MCP_DARWIN_ARM64_SHA256}}\nmcp-darwin-x64 {{MCP_DARWIN_X64_SHA256}}\nmcp-linux-x64 {{MCP_LINUX_X64_SHA256}}\n',
     )
 
     const formulaPath = path.join(dir, 'Formula', 'spork.rb')
@@ -94,6 +108,9 @@ describe('generateFormula', () => {
     expect(rendered).toContain(createHash('sha256').update('arm64').digest('hex'))
     expect(rendered).toContain(createHash('sha256').update('x64').digest('hex'))
     expect(rendered).toContain(createHash('sha256').update('linux').digest('hex'))
+    expect(rendered).toContain(`mcp-darwin-arm64 ${createHash('sha256').update('mcp-arm64').digest('hex')}`)
+    expect(rendered).toContain(`mcp-darwin-x64 ${createHash('sha256').update('mcp-x64').digest('hex')}`)
+    expect(rendered).toContain(`mcp-linux-x64 ${createHash('sha256').update('mcp-linux').digest('hex')}`)
     expect(await readFile(formulaPath, 'utf8')).toBe(rendered)
   })
 })

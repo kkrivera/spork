@@ -11,9 +11,10 @@ won't accept — this doc records how `brew install spork` works instead,
 and what it took to automate without a second repo.
 
 Constraints fixed up front:
-- **Only `spork` (`@spork/cli`) gets a formula, not `spork-mcp`.** The MCP
-  server is a backend for an agent to launch, not a CLI tool someone
-  installs and runs by hand — not what Homebrew is for.
+- **One formula, `spork`, installs both binaries.** `spork-mcp` was
+  originally left out (it's a backend an agent launches, not a CLI someone
+  runs by hand), but that left it as a manual download with no upgrade
+  path at all — see "spork-mcp ships in the same formula" below.
 - **No second "tap" repo.** The canonical Homebrew pattern is a dedicated
   `<user>/homebrew-<name>` repo; this project's repo is just `spork`.
   Homebrew's tap command accepts an explicit URL for exactly this case
@@ -55,6 +56,26 @@ create` (which is what actually publishes the archives the formula's
 changed — the same direct-push pattern `release-bump.yml` already uses for
 the version-bump commit, under the same `contents: write` permission.
 
+### spork-mcp ships in the same formula
+
+`spork-mcp` is released in lockstep with `spork` (same tag, same version,
+same targets), so it's a `resource` inside the `spork` formula rather than
+a second formula: one `brew install spork` gets both, and one `brew
+upgrade spork` keeps both current. Each `on_arm`/`on_intel` block carries
+its own `resource "spork-mcp"` next to that platform's main `url`, so the
+right architecture's archive is picked the same way, and `install` stages
+it into the same `bin`. The path an agent is registered against,
+`$(brew --prefix)/bin/spork-mcp`, is a stable symlink that survives every
+upgrade, so registering it once (`claude mcp add`) is enough.
+
+A separate `spork-mcp` formula was considered and rejected: it would only
+help someone who wants the MCP server without the CLI (or vice versa),
+which nobody has asked for, at the cost of two packages to install and
+upgrade and a second formula to generate. Folding the server into the
+`spork` binary itself (a `spork mcp` subcommand) would simplify further
+still, but is an architecture change to `@spork/cli` — not needed to fix
+installs and upgrades.
+
 ### Before the first real release
 
 Nothing has been tagged yet as of this writing, so there's no real
@@ -71,6 +92,8 @@ values, same as every release after.
 brew tap kkrivera/spork https://github.com/kkrivera/spork
 brew install spork
 ```
+
+Both `spork` and `spork-mcp` land in `$(brew --prefix)/bin`.
 
 No Gatekeeper "unidentified developer" prompt here, unlike a binary
 downloaded straight from the release page — confirmed directly: Homebrew
