@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createProgram, handleFatalError, main } from '../src/index.js'
+
+// tools/release bumps the hardcoded `.version(...)` literal in lockstep with package.json.
+const packageVersion = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 
 describe('createProgram', () => {
   it('sets the program name, description, and version', () => {
@@ -7,7 +11,7 @@ describe('createProgram', () => {
 
     expect(program.name()).toBe('spork')
     expect(program.description()).toContain('workspaces')
-    expect(program.version()).toBe('0.1.0')
+    expect(program.version()).toBe(packageVersion)
   })
 
   it('registers --color/--no-color as recognized options', () => {

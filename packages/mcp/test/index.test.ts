@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
+
+// tools/release bumps the hardcoded `McpServer({ version })` literal in lockstep with package.json.
+const packageVersion = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version
 
 const connect = vi.fn().mockResolvedValue(undefined)
 const fakeServerInstance = { connect }
@@ -21,7 +25,7 @@ describe('createServer', () => {
   it('builds an McpServer named "spork"', () => {
     createServer()
 
-    expect(McpServer).toHaveBeenCalledWith({ name: 'spork', version: '0.1.0' })
+    expect(McpServer).toHaveBeenCalledWith({ name: 'spork', version: packageVersion })
   })
 
   it('registers every tool against the new server', () => {
