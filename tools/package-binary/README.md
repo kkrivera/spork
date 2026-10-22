@@ -16,7 +16,11 @@ into an unsigned Node.js
 for a given OS/arch target (defaulting to the host's own):
 
 1. `bundle` — bundles the entry with `esbuild` into a single CommonJS file
-   (SEA only supports one bundled script).
+   (SEA only supports one bundled script). Silences esbuild's
+   `empty-import-meta` warning: it fires because the bundle drags in
+   `index.ts`'s `import.meta.url`-based "am I the main module" guard, but
+   `sea-entry.ts` never consults that guard — it calls `main()` directly —
+   so the dead `import.meta` reference is safe to leave empty.
 2. `writeSeaConfig` + `generateBlob` — writes a `sea-config.json`
    (`useCodeCache`/`useSnapshot` both `false`, required for a
    cross-platform build since those are only loadable on the platform that
@@ -37,7 +41,13 @@ for a given OS/arch target (defaulting to the host's own):
    not a case the release workflow's job layout below ever hits).
 5. `injectBlob` — injects the blob via `postject`, under the resource name
    `NODE_SEA_BLOB` (plus `--macho-segment-name NODE_SEA` on a darwin
-   target).
+   target). On a downloaded `win32`/`linux` target, `postject` itself
+   prints `warning: The signature seems corrupted!` / `warning: Can't find
+   string offset for section name '.note.100'` — both upstream noise from
+   postject parsing the official PE/ELF binary, not from anything this
+   code controls, and already confirmed harmless above (the Linux binary
+   ran fine in Docker despite them; we don't sign Windows binaries at
+   all).
 
 **Cross-compiling is real and verified, not just documented by Node.**
 Built+injected official `linux-x64`/`win-x64` node binaries on a macOS

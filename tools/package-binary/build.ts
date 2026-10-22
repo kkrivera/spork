@@ -58,8 +58,25 @@ export function outputBinaryName(name: string, platform: NodeJS.Platform = proce
   return platform === 'win32' ? `${name}.exe` : name
 }
 
+/**
+ * `sea-entry.ts` calls `main()` directly and never reads `index.ts`'s
+ * top-level `isMainModule` guard, but esbuild still bundles that guard in
+ * (it's module-scope code in an imported file) and warns that
+ * `import.meta.url` is empty in "cjs" output — true, but harmless here
+ * since the guard's result is never consulted. Silenced rather than
+ * restructured: `index.ts` needs that guard to double as the npm package's
+ * own ESM bin entry, and the warning has no fix that doesn't either
+ * duplicate that file or fork its logic.
+ */
 export async function bundle(entry: string, bundlePath: string): Promise<void> {
-  await esbuild.build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', outfile: bundlePath })
+  await esbuild.build({
+    entryPoints: [entry],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    outfile: bundlePath,
+    logOverride: { 'empty-import-meta': 'silent' },
+  })
 }
 
 export async function writeSeaConfig(configPath: string, bundlePath: string, blobPath: string): Promise<void> {
