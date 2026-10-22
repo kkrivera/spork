@@ -1,4 +1,4 @@
-# spork 
+# spork
 
 [![CI](https://github.com/kkrivera/spork/actions/workflows/ci.yml/badge.svg)](https://github.com/kkrivera/spork/actions/workflows/ci.yml)
 
@@ -6,6 +6,96 @@
 single local **workspace** built from isolated `git worktree` checkouts — a "mini
 monorepo" you can open and work across in one place, without ever merging the repos'
 histories.
+
+## Install
+
+### Homebrew (macOS and Linux), recommended
+
+```sh
+brew tap kkrivera/spork https://github.com/kkrivera/spork
+brew install spork
+```
+
+Check it worked:
+
+```sh
+spork --version
+```
+
+To update later, just run:
+
+```sh
+brew upgrade spork
+```
+
+### Manual download (macOS, Linux, Windows)
+
+1. Open the [latest release](https://github.com/kkrivera/spork/releases/latest)
+   and download the `spork` archive for your computer:
+
+   | Your computer | Download |
+   | --- | --- |
+   | Mac with Apple silicon (M1 or later) | `spork-<version>-darwin-arm64.tar.gz` |
+   | Mac with Intel | `spork-<version>-darwin-x64.tar.gz` |
+   | Linux (x64) | `spork-<version>-linux-x64.tar.gz` |
+   | Windows (x64) | `spork-<version>-win32-x64.zip` |
+
+2. Extract it and move `spork` onto your `PATH`:
+
+   ```sh
+   tar -xzf spork-*.tar.gz
+   sudo mv spork /usr/local/bin/
+   ```
+
+   On Windows, unzip it and put `spork.exe` in a folder on your `PATH`.
+
+3. **macOS only:** the first run is blocked by Gatekeeper, because the
+   binaries aren't notarized yet. Clear the download flag once:
+
+   ```sh
+   xattr -d com.apple.quarantine /usr/local/bin/spork
+   ```
+
+4. Check it worked: `spork --version`.
+
+To update a manual install, repeat these steps with the newer release.
+
+### Use spork from Claude Code (optional)
+
+spork also ships an MCP server, `spork-mcp`, so Claude can create and manage
+workspaces for you. Homebrew installs it alongside `spork`. Register it
+once:
+
+```sh
+claude mcp add --scope user spork -- "$(brew --prefix)/bin/spork-mcp"
+```
+
+`brew upgrade spork` keeps it up to date too. A Claude Code session that's
+already open keeps using the old version until you restart it.
+
+Installed manually? Download the matching `spork-mcp-<version>-…` archive
+from the same release, install it the same way as `spork` above, and pass
+its full path to `claude mcp add`.
+
+### Using an SSH key with a passphrase?
+
+Load it into your ssh-agent once, so spork can clone without having to
+ask you for the passphrase:
+
+```sh
+ssh-add --apple-use-keychain ~/.ssh/id_ed25519   # macOS
+ssh-add ~/.ssh/id_ed25519                        # Linux
+```
+
+## Quick start
+
+```sh
+spork repo add git@github.com:acme/widgets.git   # register a repo once, as "widgets"
+spork workspace create demo --repo widgets       # make a workspace with it
+spork workspace open demo                        # open it in VS Code or Claude
+```
+
+## What's a workspace?
 
 A workspace is:
 
@@ -20,35 +110,7 @@ A workspace is:
 > [docs/plans/0001-worktree-workspace-architecture.md](docs/plans/0001-worktree-workspace-architecture.md)
 > for the design.
 
-## Installing
-
-On macOS or Linux, install `spork` via Homebrew (see
-[docs/plans/0003-homebrew-distribution.md](docs/plans/0003-homebrew-distribution.md)):
-
-```sh
-brew tap kkrivera/spork https://github.com/kkrivera/spork
-brew install spork
-```
-
-This only installs the `spork` CLI — `spork-mcp` has no formula (it's a
-backend an agent launches, not a tool you run by hand) and is only
-available as a prebuilt binary below.
-
-### Installing a prebuilt binary
-
-Every tagged release publishes standalone `spork` and `spork-mcp` binaries
-for macOS (arm64 + x64), Windows (x64), and Linux (x64) — no Node.js
-required — to that release's
-[GitHub Releases](../../releases) page. Download the archive for your
-platform, extract it, and put `spork` (or `spork-mcp`) on your `PATH`.
-
-> **macOS note**: until a Developer ID certificate is in place (see
-> [docs/RELEASING.md](docs/RELEASING.md)), these binaries are only ad-hoc
-> signed. The first time you run one, macOS Gatekeeper will block it —
-> right-click the binary → **Open** → confirm, or run
-> `xattr -d com.apple.quarantine <path-to-binary>`. This doesn't apply to
-> the Homebrew install above — `brew`'s own download never triggers
-> Gatekeeper's quarantine check in the first place.
+## Usage
 
 ```sh
 spork workspace create demo
@@ -169,7 +231,7 @@ spork repo list
 - [tools/homebrew-formula](tools/homebrew-formula) — regenerates
   [Formula/spork.rb](Formula/spork.rb) from each release; also run as a
   GitHub Action.
-- [Formula](Formula) — the Homebrew formula installed above. Generated, not
+- [Formula](Formula) — the Homebrew formula installed above (`spork` and `spork-mcp`). Generated, not
   hand-edited — see `tools/homebrew-formula`.
 - [docs/plans](docs/plans) — durable design docs, reviewed like code.
 - [.claude/skills](.claude/skills) — Claude Code skills used to maintain this repo.
