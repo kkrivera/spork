@@ -28,6 +28,19 @@ To update later, just run:
 brew upgrade spork
 ```
 
+#### Use spork from Claude Code (optional)
+
+spork also ships an MCP server, `spork-mcp`, so Claude can create and manage
+workspaces for you. Homebrew installs it alongside `spork`. Register it
+once:
+
+```sh
+claude mcp add --scope user spork -- "$(brew --prefix)/bin/spork-mcp"
+```
+
+`brew upgrade spork` keeps it up to date too. A Claude Code session that's
+already open keeps using the old version until you restart it.
+
 ### Manual download (macOS, Linux, Windows)
 
 1. Open the [latest release](https://github.com/kkrivera/spork/releases/latest)
@@ -60,22 +73,34 @@ brew upgrade spork
 
 To update a manual install, repeat these steps with the newer release.
 
-### Use spork from Claude Code (optional)
+#### Use spork from Claude Code (optional)
 
 spork also ships an MCP server, `spork-mcp`, so Claude can create and manage
-workspaces for you. Homebrew installs it alongside `spork`. Register it
-once:
+workspaces for you.
 
-```sh
-claude mcp add --scope user spork -- "$(brew --prefix)/bin/spork-mcp"
-```
+1. From the same release, download the `spork-mcp` archive for your
+   computer: the same names as the table above, starting with `spork-mcp-`
+   instead of `spork-` (for example `spork-mcp-<version>-darwin-arm64.tar.gz`).
 
-`brew upgrade spork` keeps it up to date too. A Claude Code session that's
-already open keeps using the old version until you restart it.
+2. Extract it and move it next to `spork`:
 
-Installed manually? Download the matching `spork-mcp-<version>-…` archive
-from the same release, install it the same way as `spork` above, and pass
-its full path to `claude mcp add`.
+   ```sh
+   tar -xzf spork-mcp-*.tar.gz
+   sudo mv spork-mcp /usr/local/bin/
+   xattr -d com.apple.quarantine /usr/local/bin/spork-mcp   # macOS only
+   ```
+
+   On Windows, unzip it and put `spork-mcp.exe` next to `spork.exe`.
+
+3. Register it once with its full path:
+
+   ```sh
+   claude mcp add --scope user spork -- /usr/local/bin/spork-mcp
+   ```
+
+To update it, download the newer `spork-mcp` archive and replace the file
+in step 2. The registration doesn't need to change. A Claude Code session
+that's already open keeps using the old version until you restart it.
 
 ### Using an SSH key with a passphrase?
 
