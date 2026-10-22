@@ -11,7 +11,7 @@ export function createProgram(ctx: AppContext = createAppContext()): Command {
   program
     .name('spork')
     .description('Manage git-worktree-based workspaces spanning multiple repos.')
-    .version('0.1.0')
+    .version('1.0.0')
     .option('--color', 'force-enable colored output')
     .option('--no-color', 'disable colored output')
 

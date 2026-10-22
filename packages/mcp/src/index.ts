@@ -5,7 +5,7 @@ import { createMcpContext } from './context.js'
 import { registerTools } from './tools/index.js'
 
 export function createServer(): McpServer {
-  const server = new McpServer({ name: 'spork', version: '0.1.0' })
+  const server = new McpServer({ name: 'spork', version: '1.0.0' })
   registerTools(server, createMcpContext())
   return server
 }
