@@ -72,6 +72,13 @@ directly from anywhere that also needs alias behavior (that now includes
 (`findRepoUsages`) reads the *workspace* registry and every workspace's
 manifest — don't add a force-override to skip it; a worktree still
 referencing a deleted cache is a real corruption, not a nuisance to bypass.
+`findRepoUsages` does deliberately exclude a `workspace init`-adopted entry
+(`kind: 'adopted'`) from that check, though — it was never a worktree of
+the cache being deleted, just a plain folder that happened to be
+identified by the same `source` at adoption time, so there's no object
+store for it to lose. Don't widen the force-override question to cover
+this case too; it's a correctness fix (an adopted entry structurally can't
+be corrupted this way), not a safety bypass.
 
 **The repo registry is two-tier (local + global), the cache is not.** A
 workspace-local alias file (`localRepoRegistryPath`) is just the *same*

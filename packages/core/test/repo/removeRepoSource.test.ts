@@ -52,12 +52,24 @@ describe('findRepoUsages', () => {
       return { name: 'other', createdAt: '', worktrees: [] }
     })
 
-    expect(await findRepoUsages(ctx, WIDGETS_SOURCE)).toEqual([{ workspaceName: 'demo', folder: 'widgets' }])
+    expect(await findRepoUsages(ctx, WIDGETS_SOURCE)).toEqual([{ workspaceName: 'demo', workspaceDir: '/ws/demo', folder: 'widgets' }])
   })
 
   it('returns an empty list when nothing references the source', async () => {
     vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
     vi.mocked(readManifest).mockResolvedValue({ name: 'demo', createdAt: '', worktrees: [] })
+
+    expect(await findRepoUsages(ctx, WIDGETS_SOURCE)).toEqual([])
+  })
+
+  it('excludes an adopted entry — it is not a worktree of this cache, so it has nothing to lose', async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(readManifest).mockResolvedValue({
+      name: 'demo',
+      createdAt: '',
+      origin: 'initialized',
+      worktrees: [{ kind: 'adopted', folder: 'widgets', source: WIDGETS_SOURCE, addedAt: '' }],
+    })
 
     expect(await findRepoUsages(ctx, WIDGETS_SOURCE)).toEqual([])
   })

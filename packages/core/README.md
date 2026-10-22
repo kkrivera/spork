@@ -89,8 +89,17 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
       the network, so it can't resolve-and-clone in one step).
     - `removeRepoSource` — deletes a cache and forgets its (global) alias,
       but hard-refuses via `findRepoUsages` if any workspace still has a
-      worktree checked out from it — no force-override, since that worktree
-      is a live pointer into the cache's object store.
+      *real* worktree checked out from it — no force-override, since that
+      worktree is a live pointer into the cache's object store.
+      `findRepoUsages` deliberately excludes a `workspace init`-adopted
+      entry (`kind: 'adopted'`) even when its `source` matches — it isn't a
+      worktree of this cache at all (just a plain folder recorded as
+      having come from this source), so deleting the cache can't corrupt
+      it the way it would a real worktree. Each returned `RepoUsage` also
+      carries `workspaceDir`, not just `workspaceName`/`folder`, so a
+      caller (`@spork/cli`'s `repo remove`) can act on a usage directly —
+      e.g. calling `workspace.ts`'s `removeRepo` on it — rather than
+      needing a second lookup.
     - `removeLocalRepoAlias(ctx, workspaceDir, alias)` — same operation,
       against a workspace's *local* registry instead. The in-use check is
       identical either way (a shared private helper) — it always scans

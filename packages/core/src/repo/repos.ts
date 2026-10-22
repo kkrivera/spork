@@ -126,6 +126,7 @@ function resolveAliasToRegister(source: string, existing: RepoRegistryEntry[], r
 
 export interface RepoUsage {
   workspaceName: string
+  workspaceDir: string
   folder: string
 }
 
@@ -134,7 +135,14 @@ export interface RemoveRepoSourceContext extends RepoContext {
   workspaceRegistryPath: string
 }
 
-/** Which workspaces (and which folder within each) currently have a worktree checked out from `source`. */
+/**
+ * Which workspaces (and which folder within each) currently have a real
+ * `git worktree` checked out from `source` — an `AdoptedEntry` (from
+ * `workspace init`) is deliberately excluded even if its `source` matches:
+ * it isn't a worktree of this cache at all (just a plain folder recorded
+ * as having come from this source), so it has nothing to lose if the
+ * cache goes away, unlike a real worktree's shared object store.
+ */
 export async function findRepoUsages(ctx: RemoveRepoSourceContext, source: string): Promise<RepoUsage[]> {
   const workspaces = await listWorkspaces(ctx.workspaceRegistryPath)
   const usages: RepoUsage[] = []
@@ -142,8 +150,8 @@ export async function findRepoUsages(ctx: RemoveRepoSourceContext, source: strin
   for (const workspace of workspaces) {
     const manifest = await readManifest(workspace.dir)
     for (const worktree of manifest.worktrees) {
-      if (worktree.source === source) {
-        usages.push({ workspaceName: workspace.name, folder: worktree.folder })
+      if (worktree.source === source && worktree.kind !== 'adopted') {
+        usages.push({ workspaceName: workspace.name, workspaceDir: workspace.dir, folder: worktree.folder })
       }
     }
   }
