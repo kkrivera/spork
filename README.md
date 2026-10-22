@@ -81,8 +81,13 @@ clone URL again:
 spork repo add git@github.com:acme/widgets.git   # -> "widgets" (default alias)
 spork repo list
 spork workspace create demo2 --repo widgets       # by alias, repeatable
-spork repo remove widgets                         # refuses while any workspace still uses it
+spork repo remove widgets gadgets                 # several at once
+spork repo remove                                 # omit entirely: multi-select from every registered alias
 ```
+
+If a repo you're removing still has a real worktree checked out somewhere, `repo remove` warns and lists exactly which workspaces/folders will also be removed before doing anything (`--yes` skips the prompt) — it doesn't just refuse. A folder a workspace merely *adopted* (`workspace init`, not a worktree) is never affected either way.
+
+`repo remove` is always global — there's no `--local` form of it. A workspace's own local alias (and the worktree behind it, if any) is removed with `spork workspace remove-repo` instead.
 
 Leave off `--repo` entirely in a real terminal and `workspace create` offers
 a fuzzy-searchable multi-select of every repo you already know about instead

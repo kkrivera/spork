@@ -293,10 +293,38 @@ logic lives here.
   a CLI-level check.
 - `src/commands/repo/` — `spork repo <verb>` (`add`, `list`, `remove`,
   `scan`), same `run<Verb>`/`register<Verb>Command` split. Decoupled from
-  any workspace: `repo add <source>` clones/registers an alias directly;
-  `repo remove <alias>` refuses if any workspace still references it. Both
-  take `--global`/`--local` (see `repoScope.ts`) and print which scope the
-  alias landed in or was removed from. `repo list` is the one place that
+  any workspace: `repo add <source>` clones/registers an alias directly.
+  `repo remove [aliases...]` is deliberately **global-only** — no
+  `--global`/`--local` flags at all, unlike `add`/`list`/`scan` below —
+  since a workspace's own *local* alias (and, for a real worktree, the
+  worktree itself) already has a dedicated, more honest command for it:
+  `workspace remove-repo`. Running `repo remove` inside a workspace
+  doesn't change its scope; an alias that only turns out to be local
+  somewhere gets a specific error pointing at `workspace remove-repo`
+  instead of a generic "not registered" (checked via one `listRepoAliases`
+  call against the global registry, reused for both this check and the
+  usage lookup below). If any workspace has a *real* worktree checked out
+  from the alias being removed (`@spork/core`'s `findRepoUsages` — a
+  `workspace init`-adopted folder never counts, see its own README),
+  `repo remove` cascades through `@spork/core`'s `removeRepo` to tear
+  that worktree down too, one per affected workspace/folder, before
+  removing the alias/cache itself. `checkUsages` runs this lookup for
+  every alias up front and, only if anything was found, warns and lists
+  exactly which workspaces/folders will also be removed, gated behind
+  `confirmDestructive.ts` (`-y`/`--yes` skips it, same convention as
+  `workspace remove-repo`) — no prompt at all when nothing's in use.
+  Omitting aliases offers a multi-select of every globally registered
+  alias instead of requiring them up front (`pickAliases`) —
+  `NotInteractiveError` there becomes a clear `SporkError` demanding
+  explicit aliases, same as `add-repo`'s own registry picker. Every
+  given/picked alias (cascade included) runs concurrently via
+  `runConcurrently` (best-effort, not fail-fast — one alias failing
+  doesn't stop the rest). `add` still takes `--global`/`--local` (see
+  `repoScope.ts`) and prints which scope the alias landed in — it (and
+  `scan` below) kept the toggle since neither has a `workspace`-command
+  substitute the way `remove` does: `workspace add-repo` registers an
+  alias *and* creates a worktree together, not "just register an alias"
+  on its own. `repo list` is the one place that
   doesn't pick a single scope by default — it merges local (if inside a
   workspace) and global entries into one table with a SCOPE column, so a
   shadowed alias is visible rather than a silent surprise; `--global`/

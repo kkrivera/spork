@@ -72,7 +72,42 @@ new business logic belongs in `@spork/core`, imported only from its
   explicitly rather than picked — don't gate the confirmation on "was this
   interactive," the destructiveness is what matters. Give it a `--yes`/`-y`
   flag so scripts/CI have an explicit bypass; don't invent a second way to
-  skip it.
+  skip it. `repo remove` is conditional on this instead of always-on:
+  deleting a repo's cache/alias alone is recoverable (re-add the same
+  source later; the cache is refetched, not re-created from scratch), so
+  it doesn't confirm for that case — but if removing it would *also* tear
+  down a real worktree somewhere (see below), that part isn't recoverable,
+  so it confirms only then. Don't make that confirmation unconditional
+  just for symmetry with the `workspace` commands above — the common case
+  (an alias nothing references) should stay prompt-free.
+- `repo remove [aliases...]` is **global-only** — no `--global`/`--local`
+  at all, unlike `repo add`/`list`/`scan`. This is a deliberate split
+  within the `repo` noun group, not an oversight: the rule is a `repo`
+  command stays local/global-aware *only* when there's no clean
+  `workspace`-command substitute for "just register/list an alias, no
+  worktree." `add`/`list`/`scan` qualify (`workspace add-repo` always
+  creates a worktree *and* registers the alias together — there's no way
+  to do just the alias part through it, and `list`'s merged view is relied
+  on by other pickers); `remove` doesn't, because `workspace remove-repo`
+  already *is* the dedicated way to drop a workspace's own local alias
+  (and, for a real worktree, the worktree itself) — a second path to the
+  same thing, gated on invisible cwd state, is exactly the confusing
+  footgun this split exists to avoid. If you're tempted to add a scope
+  flag back to `remove` "for consistency" with the other three, don't —
+  point the user at `workspace remove-repo` instead, same as the specific
+  error `runRemove` already gives for an alias that isn't global.
+  Otherwise, `remove` mirrors `remove-repo`'s variadic/multi-select-
+  when-omitted shape (`pickAliases`) and its concurrent, best-effort batch
+  removal via `runConcurrently`. It goes further than a plain alias/cache
+  removal though: `checkUsages` looks up every alias's real-worktree
+  usages (`@spork/core`'s `findRepoUsages`) before anything is removed,
+  and if any exist, each alias's own task cascades through `@spork/core`'s
+  `removeRepo` for every workspace/folder that used it *first*, then
+  removes the alias/cache — by which point core's own in-use check (see
+  `@spork/core`'s own CLAUDE.md) naturally passes rather than being
+  bypassed. Don't skip the pre-check and just retry on core's thrown
+  error instead; the whole point is warning the user *before* anything
+  destructive happens, not after.
 - A multi-item command must never buffer every item's result into an
   array and print it only after the whole batch finishes — a user watching
   the terminal needs to see progress as each item completes, not a wall of
