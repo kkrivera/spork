@@ -169,13 +169,32 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     what `removeWorkspace` checks to decide whether the workspace
     directory itself is ever a candidate for deletion (see below). Both
     fields are optional so no manifest written before they existed needs
-    migrating.
+    migrating. `agentInstructions: false` opts a workspace out of the
+    generated `AGENTS.md`/`CLAUDE.md` below (absent means on).
   - `codeWorkspace.ts` — generates the workspace's `.code-workspace` file from
     its manifest. `codeWorkspaceFilePath(workspaceDir, name)` names the file
     after only `name`'s last path segment (`path.basename`), since `name`
     may itself contain `/` and the workspace directory is already nested
     accordingly — using the whole thing again would try to nest the file
     under a non-existent extra subdirectory.
+  - `workspaceFiles.ts` — `writeWorkspaceFiles(dir, manifest)`, the one call
+    every manifest change in `workspace.ts` makes: it rewrites the
+    `.code-workspace` file and, unless opted out, the workspace root's
+    `AGENTS.md`/`CLAUDE.md` (so `create`, `init`, `add-repo`, `remove-repo`,
+    and reconcile all keep them current). `removeWorkspaceFiles` is the
+    `initialized`-workspace removal: drops the manifest and `.code-workspace`
+    file and strips only spork's block from the two Markdown files.
+    `inspectRepoAgentFiles` checks which instruction/config files a repo
+    folder has. See
+    [docs/plans/0004-workspace-agent-instructions.md](../../docs/plans/0004-workspace-agent-instructions.md).
+  - `agentInstructions.ts` — renders the content: `renderAgentsBody` (repo
+    table plus ground rules for working across independent repos) and
+    `renderClaudeBody` (imports `AGENTS.md`, imports a repo's `AGENTS.md`
+    when it has no `CLAUDE.md`, and names repos whose Claude Code settings
+    or subagents don't apply from the workspace root).
+  - `markerBlock.ts` — `upsertBlock`/`stripBlock`: keeps spork's content
+    between `<!-- spork:begin -->`/`<!-- spork:end -->` markers so a user's
+    own content in the same file is never rewritten or removed.
   - `workspace.ts` — orchestration: `createWorkspace`, `addRepo`, `removeRepo`,
     `removeWorkspace`, `getWorkspaceStatus`, and `reconcileWorkspace` (pruning
     stale git worktree metadata and dropping manifest entries for folders

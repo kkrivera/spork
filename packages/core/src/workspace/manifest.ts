@@ -39,6 +39,12 @@ export interface WorkspaceManifest {
   createdAt: string
   /** Absent on any manifest written before `origin` existed — treat as `'created'`. */
   origin?: 'created' | 'initialized'
+  /**
+   * `false` opts this workspace out of the generated root `AGENTS.md`/
+   * `CLAUDE.md` (see docs/plans/0004-workspace-agent-instructions.md).
+   * Absent means on, including on every manifest written before this existed.
+   */
+  agentInstructions?: boolean
   worktrees: ManifestEntry[]
 }
 
@@ -46,8 +52,12 @@ export function manifestPath(workspaceDir: string): string {
   return path.join(workspaceDir, MANIFEST_FILENAME)
 }
 
-export function createManifest(name: string, origin: WorkspaceManifest['origin'] = 'created'): WorkspaceManifest {
-  return { name, createdAt: new Date().toISOString(), origin, worktrees: [] }
+export function createManifest(
+  name: string,
+  origin: WorkspaceManifest['origin'] = 'created',
+  agentInstructions = true,
+): WorkspaceManifest {
+  return { name, createdAt: new Date().toISOString(), origin, ...(agentInstructions ? {} : { agentInstructions: false }), worktrees: [] }
 }
 
 export async function readManifest(workspaceDir: string): Promise<WorkspaceManifest> {

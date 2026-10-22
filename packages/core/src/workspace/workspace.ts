@@ -14,7 +14,7 @@ import { slugify } from '../util/slug.js'
 import { repoShortName } from '../util/repoName.js'
 import { withFileLock } from '../util/fileLock.js'
 import { SporkError } from '../errors.js'
-import { codeWorkspaceFilePath, writeCodeWorkspace } from './codeWorkspace.js'
+import { removeWorkspaceFiles, writeWorkspaceFiles } from './workspaceFiles.js'
 import {
   createManifest,
   manifestPath,
@@ -36,6 +36,8 @@ export interface WorkspaceContext {
 export interface CreateWorkspaceOptions {
   name: string
   dir: string
+  /** `false` skips the generated root `AGENTS.md`/`CLAUDE.md` for this workspace, for good. Default on. */
+  agentInstructions?: boolean
 }
 
 export interface WorkspaceHandle {
@@ -49,9 +51,9 @@ export async function createWorkspace(
   options: CreateWorkspaceOptions,
 ): Promise<WorkspaceHandle> {
   await mkdir(options.dir, { recursive: true })
-  const manifest = createManifest(options.name)
+  const manifest = createManifest(options.name, 'created', options.agentInstructions ?? true)
   await writeManifest(options.dir, manifest)
-  await writeCodeWorkspace(options.dir, manifest)
+  await writeWorkspaceFiles(options.dir, manifest)
   return { name: options.name, dir: options.dir, manifest }
 }
 
@@ -88,6 +90,8 @@ export interface InitWorkspaceOptions {
   name: string
   /** The existing folder to turn into a workspace root, in place — unlike `CreateWorkspaceOptions.dir`, never created. */
   dir: string
+  /** Same as `CreateWorkspaceOptions.agentInstructions`. */
+  agentInstructions?: boolean
 }
 
 /**
@@ -104,9 +108,9 @@ export async function initWorkspace(ctx: WorkspaceContext, options: InitWorkspac
     throw new SporkError(`"${options.dir}" is already a spork workspace.`)
   }
 
-  const manifest = createManifest(options.name, 'initialized')
+  const manifest = createManifest(options.name, 'initialized', options.agentInstructions ?? true)
   await writeManifest(options.dir, manifest)
-  await writeCodeWorkspace(options.dir, manifest)
+  await writeWorkspaceFiles(options.dir, manifest)
   return { name: options.name, dir: options.dir, manifest }
 }
 
@@ -168,7 +172,7 @@ export async function reconcileWorkspace(ctx: WorkspaceContext, workspaceDir: st
       const fresh = await readManifest(workspaceDir)
       fresh.worktrees = fresh.worktrees.filter((wt) => !removedFolders.includes(wt.folder))
       await writeManifest(workspaceDir, fresh)
-      await writeCodeWorkspace(workspaceDir, fresh)
+      await writeWorkspaceFiles(workspaceDir, fresh)
     })
   }
 
@@ -314,7 +318,7 @@ export async function addRepo(
     const fresh = await readManifest(workspaceDir)
     fresh.worktrees.push(entry)
     await writeManifest(workspaceDir, fresh)
-    await writeCodeWorkspace(workspaceDir, fresh)
+    await writeWorkspaceFiles(workspaceDir, fresh)
   })
 
   // Submodule init is per-worktree, not shared-cache state, so it runs after
@@ -360,7 +364,7 @@ export async function adoptRepoIntoWorkspace(
     const fresh = await readManifest(workspaceDir)
     fresh.worktrees.push(entry)
     await writeManifest(workspaceDir, fresh)
-    await writeCodeWorkspace(workspaceDir, fresh)
+    await writeWorkspaceFiles(workspaceDir, fresh)
   })
 
   return entry
@@ -393,7 +397,7 @@ export async function removeRepo(ctx: WorkspaceContext, workspaceDir: string, fo
     const fresh = await readManifest(workspaceDir)
     fresh.worktrees = fresh.worktrees.filter((wt) => wt.folder !== folder)
     await writeManifest(workspaceDir, fresh)
-    await writeCodeWorkspace(workspaceDir, fresh)
+    await writeWorkspaceFiles(workspaceDir, fresh)
   })
 }
 
@@ -419,8 +423,7 @@ export async function removeWorkspace(
   // own bookkeeping files, never the directory (or anything inside it;
   // every entry's own removal above already left its folder alone too).
   if (manifest.origin === 'initialized') {
-    await rm(manifestPath(workspaceDir), { force: true })
-    await rm(codeWorkspaceFilePath(workspaceDir, manifest.name), { force: true })
+    await removeWorkspaceFiles(workspaceDir, manifest)
     return
   }
 

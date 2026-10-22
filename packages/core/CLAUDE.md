@@ -103,6 +103,14 @@ workspace's worktree.
 
 ## `src/workspace`
 
+Every manifest change must regenerate the files derived from it through
+`workspaceFiles.ts`'s `writeWorkspaceFiles`, never `writeCodeWorkspace` (or
+the agent-instruction writers) directly. That single call is what keeps the
+`.code-workspace` file and the root `AGENTS.md`/`CLAUDE.md` in step with
+`add-repo`/`remove-repo`/reconcile. Never write outside spork's marker block
+in `AGENTS.md`/`CLAUDE.md`: in an `init`ed folder the rest of the file is the
+user's (see [docs/plans/0004-workspace-agent-instructions.md](../../docs/plans/0004-workspace-agent-instructions.md)).
+
 `workspace.ts` is the only place the `git`/`repo` layers get combined — keep it
 that way rather than having e.g. a CLI command call `addWorktree` directly.
 Every function that reads a manifest for anything other than a pure display
