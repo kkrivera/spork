@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/kkrivera/spork/actions/workflows/ci.yml/badge.svg)](https://github.com/kkrivera/spork/actions/workflows/ci.yml)
 
-`spork` is a CLI that turns a set of independent, unrelated git repositories into a
-single local **workspace** built from isolated `git worktree` checkouts — a "mini
-monorepo" you can open and work across in one place, without ever merging the repos'
+`spork` is a CLI that combines independent git repositories into one local
+**workspace** made of isolated `git worktree` checkouts. It works like a small
+monorepo you can open and work across in one place, without merging the repos'
 histories.
 
 ## Install
@@ -116,20 +116,18 @@ spork workspace open demo                        # open it in VS Code or Claude
 
 ## What's a workspace?
 
-A workspace is:
+A workspace is a folder containing:
 
-- a folder on disk containing one subfolder per repo (each an isolated `git worktree`
-  checkout of a chosen ref),
-- a generated VS Code `.code-workspace` file so you can open every repo as one
-  multi-root editor session,
-- and a `spork.workspace.json` manifest describing exactly what's in it, so the
-  workspace's layout is reproducible.
+- one subfolder per repo, each an isolated `git worktree` checkout of the ref you chose
+- a VS Code `.code-workspace` file that opens every repo in one window
+- a `spork.workspace.json` manifest listing what's in it, so the layout is reproducible
 
-> **Status**: v1 command surface implemented. See
-> [docs/plans/0001-worktree-workspace-architecture.md](docs/plans/0001-worktree-workspace-architecture.md)
-> for the design.
+The design is in
+[docs/plans/0001-worktree-workspace-architecture.md](docs/plans/0001-worktree-workspace-architecture.md).
 
 ## Usage
+
+### Workspaces
 
 ```sh
 spork workspace create demo
@@ -143,86 +141,66 @@ spork workspace remove-repo gadgets --workspace demo
 spork workspace remove demo
 ```
 
-Already have a folder of repos cloned yourself (not spork worktrees) and
-just want spork to treat it as a workspace, as-is? `cd` into it and run
-`workspace init` instead of `create` — it scans one level deep for git
-repos, lets you pick which join, and wires them in exactly as they
-already sit on disk. Unlike every other way of populating a workspace,
-`init` **never creates a worktree and never touches a branch** — your
-existing checkouts (and whatever they're currently on) are left
-completely alone, and `workspace remove` on one of these only ever
-deletes spork's own bookkeeping files, never your folders:
+You can leave off `--workspace`/`-w`, or the workspace name on `status`,
+`open`, and `remove`. spork then uses the workspace you're in, or shows a
+picker if you aren't in one. `add-repo` and `remove-repo` also let you leave
+off the repo and pick it from a list.
+
+Run `workspace create` without `--repo` in a terminal and it shows a
+searchable list of the repos you've already added. Type to filter, Space to
+toggle, Ctrl+A to toggle everything shown, Enter to confirm. It then asks
+whether to open the new workspace in VS Code or Claude. In CI or a script,
+it skips both questions and creates an empty workspace.
+
+`workspace open` asks the same question unless you pass `--with`:
 
 ```sh
-cd ~/code/some-project   # already has api/, web/, infra/ cloned inside it
-spork workspace init some-project   # pick which of api/web/infra join
-spork workspace status some-project
-spork workspace remove some-project   # drops spork.workspace.json + .code-workspace only
+spork workspace open demo               # pick VS Code or Claude
+spork workspace open demo --with claude # skip the question
 ```
 
-Set `SPORK_WORKSPACE_DIR` to change `workspace create`'s default parent
-directory (otherwise cwd) — an explicit `--dir` always overrides it. This
-is the first of spork's `SPORK_*` environment variables; more may be added
-over time.
+New workspaces go in the current directory. Set `SPORK_WORKSPACE_DIR` to
+use a different default parent directory. `--dir` overrides both.
 
-`--workspace`/`-w` (and the matching positional on `status`/`open`/
-`remove`) is optional everywhere above — omit it and spork uses the
-workspace you're already `cd`'d into, or offers a picker if you're not
-inside one. `add-repo`/`remove-repo` go a step further: omit the repo
-entirely and pick from a list instead (registered repos to add, or the
-workspace's current repos to remove).
+### Repos and aliases
 
-Every repo you add is cached once (`~/.spork/repos/`) and given a short
-alias, so the next workspace that needs the same repo doesn't need the full
-clone URL again:
+spork clones each repo once into `~/.spork/repos/` and gives it a short
+alias, so later workspaces can use the alias instead of the URL:
 
 ```sh
-spork repo add git@github.com:acme/widgets.git   # -> "widgets" (default alias)
+spork repo add git@github.com:acme/widgets.git   # alias "widgets"
 spork repo list
 spork workspace create demo2 --repo widgets       # by alias, repeatable
 spork repo remove widgets gadgets                 # several at once
-spork repo remove                                 # omit entirely: multi-select from every registered alias
+spork repo remove                                 # pick from a list
 ```
 
-If a repo you're removing still has a real worktree checked out somewhere, `repo remove` warns and lists exactly which workspaces/folders will also be removed before doing anything (`--yes` skips the prompt) — it doesn't just refuse. A folder a workspace merely *adopted* (`workspace init`, not a worktree) is never affected either way.
-
-`repo remove` is always global — there's no `--local` form of it. A workspace's own local alias (and the worktree behind it, if any) is removed with `spork workspace remove-repo` instead.
-
-Leave off `--repo` entirely in a real terminal and `workspace create` offers
-a fuzzy-searchable multi-select of every repo you already know about instead
-of starting empty — type to narrow, space to toggle, Ctrl+A to select/
-deselect everything filtered, Enter to confirm. It then asks whether to open
-the new workspace right away, and with what — VS Code, or Claude (launched
-right at the workspace directory). In CI or a script (no TTY), both
-prompts are skipped — it falls back to creating an empty workspace and
-leaves opening it to you, exactly like today.
-
-`spork workspace open` offers the same choice whenever `--with <code|claude>`
-is omitted:
-
-```sh
-spork workspace open demo               # pick VS Code or Claude interactively
-spork workspace open demo --with claude # skip the prompt
-```
-
-Aliases are two-tier — **local to a workspace by default, global as an
-opt-in** — so two different workspaces can give the same short name to two
-different repos without colliding:
+Aliases are local to a workspace by default, so two workspaces can use the
+same short name for different repos. Pass `--global` to share one across
+every workspace:
 
 ```sh
 spork workspace add-repo git@github.com:acme/widgets.git --workspace demo           # alias "widgets", local to demo
-spork workspace add-repo git@github.com:acme/widgets.git --workspace demo --global  # same, but shared across every workspace
+spork workspace add-repo git@github.com:acme/widgets.git --workspace demo --global  # shared by every workspace
 
-spork repo add git@github.com:acme/gadgets.git            # standalone: local if run inside a workspace, else global
-spork repo add git@github.com:acme/gadgets.git --local     # force local (must be inside a workspace)
-spork repo list                                            # merged view, local + global, tagged
+spork repo add git@github.com:acme/gadgets.git          # local if run inside a workspace, otherwise global
+spork repo add git@github.com:acme/gadgets.git --local  # force local (must be inside a workspace)
+spork repo list                                          # local and global together, labeled
 ```
 
-Already have a folder of clones lying around (`~/code`, `~/src`, ...)? `spork
-repo scan` adopts every repo in it in one pass — each one is cloned into
-spork's managed cache from its existing local checkout (fast, hardlinked)
-rather than the network, so you don't have to retype URLs by hand. The
-directory argument is optional and defaults to the current directory:
+`repo remove` only removes global aliases. To remove a workspace's local
+alias, and its worktree if it has one, use `spork workspace remove-repo`.
+
+If a repo you're removing is still checked out as a worktree in some
+workspace, `repo remove` lists which workspaces and folders will also be
+removed and asks before doing anything. Pass `--yes` to skip the question.
+Folders added with `workspace init` (below) are never touched.
+
+### Adding repos you've already cloned
+
+`spork repo scan` registers every repo in a folder in one go. It copies each
+one from your local checkout instead of the network, which is fast and saves
+retyping URLs. The folder defaults to the current directory:
 
 ```sh
 spork repo scan ~/code
@@ -230,54 +208,68 @@ cd ~/code && spork repo scan   # same thing
 spork repo list
 ```
 
+### Using an existing folder as a workspace
+
+If you already have a folder with repos cloned inside it, `cd` into it and
+run `workspace init` instead of `create`. It finds git repos one level down,
+lets you pick which to include, and uses them where they are. `init` never
+creates a worktree or switches a branch, and `workspace remove` on one of
+these workspaces deletes only spork's own files, never your folders:
+
+```sh
+cd ~/code/some-project              # already has api/, web/, infra/ inside it
+spork workspace init some-project   # pick which of api/web/infra to include
+spork workspace status some-project
+spork workspace remove some-project # deletes spork.workspace.json and the .code-workspace file only
+```
+
 ## Repository layout
 
-- [packages/core](packages/core) — domain logic: git worktree management, workspace
-  manifests, the `.code-workspace` generator, the workspace registry.
-- [packages/cli](packages/cli) — the `spork` command-line interface, built on `core`.
-- [packages/task-runner](packages/task-runner) — runs concurrent tasks with a
+- [packages/core](packages/core): domain logic, including git worktree
+  management, workspace manifests, the `.code-workspace` generator, and the
+  workspace registry.
+- [packages/cli](packages/cli): the `spork` command-line interface, built on `core`.
+- [packages/task-runner](packages/task-runner): runs tasks concurrently with a
   live terminal dashboard (used by `repo scan`, `repo add`, `workspace
-  add-repo`/`create --repo`, and `workspace status`).
-- [packages/prompts](packages/prompts) — interactive terminal prompts: the
-  fuzzy select and the yes/no confirm `workspace create` uses above.
-- [packages/mcp](packages/mcp) — an MCP server exposing `core`'s operations as
-  tools, so an agent can drive spork directly instead of through the CLI.
-- [tools/readme-sync](tools/readme-sync) — the CI check that keeps module READMEs honest.
-- [tools/release](tools/release) — bumps every package's version in lockstep;
-  run as a GitHub Action (see [docs/RELEASING.md](docs/RELEASING.md)).
-- [tools/package-binary](tools/package-binary) — builds/signs the standalone
-  binaries described above; also run as a GitHub Action.
-- [tools/homebrew-formula](tools/homebrew-formula) — regenerates
-  [Formula/spork.rb](Formula/spork.rb) from each release; also run as a
-  GitHub Action.
-- [Formula](Formula) — the Homebrew formula installed above (`spork` and `spork-mcp`). Generated, not
-  hand-edited — see `tools/homebrew-formula`.
-- [docs/plans](docs/plans) — durable design docs, reviewed like code.
-- [.claude/skills](.claude/skills) — Claude Code skills used to maintain this repo.
+  add-repo`, `create --repo`, and `workspace status`).
+- [packages/prompts](packages/prompts): the interactive pickers and yes/no
+  prompts.
+- [packages/mcp](packages/mcp): the `spork-mcp` server, which exposes `core`'s
+  operations as MCP tools so an agent can drive spork directly.
+- [tools/readme-sync](tools/readme-sync): the CI check that a module's README
+  changes along with its source.
+- [tools/release](tools/release): bumps every package's version together. Run
+  by a GitHub Action, see [docs/RELEASING.md](docs/RELEASING.md).
+- [tools/package-binary](tools/package-binary): builds and signs the
+  standalone binaries. Also run by a GitHub Action.
+- [tools/homebrew-formula](tools/homebrew-formula): regenerates
+  [Formula/spork.rb](Formula/spork.rb) for each release. Also run by a GitHub
+  Action.
+- [Formula](Formula): the Homebrew formula (`spork` and `spork-mcp`).
+  Generated, so don't edit it by hand.
+- [docs/plans](docs/plans): design docs, reviewed like code.
+- [.claude/skills](.claude/skills): Claude Code skills for maintaining this repo.
 
 ## Development
 
-This is a [yarn workspaces](https://yarnpkg.com/features/workspaces) monorepo, written
-in TypeScript.
+This is a TypeScript monorepo using
+[yarn workspaces](https://yarnpkg.com/features/workspaces).
 
 ```sh
 corepack enable
 yarn install
 yarn build          # tsc -b, via TypeScript project references
 yarn lint
-yarn test           # vitest, ≥80% coverage enforced
+yarn test           # vitest, at least 80% coverage required
 ```
 
-`vitest.workspace.ts` lists the actual test projects (`packages/*`, `tools/*`);
-`vitest.config.ts` alongside it holds the coverage settings that govern the one
-merged report `yarn test` produces across all of them — each project's own
-`vitest.config.ts` still governs its *own* standalone run (`cd packages/core &&
-yarn test`), but only the root config's `include`/`exclude` apply once everything
-is combined, so that's the one to touch if the merged report ever needs
-adjusting.
+`vitest.workspace.ts` lists the test projects (`packages/*` and `tools/*`).
+`yarn test` produces one merged coverage report, and only the root
+`vitest.config.ts` controls what that report includes, so edit that file to
+change it. Each project's own `vitest.config.ts` applies only when you run
+that project's tests by themselves, for example `cd packages/core && yarn test`.
 
-A top-level `workspaces/` directory, if you have one, is a personal scratch
-space for `spork workspace create`'s own output — fully ignored by git, ESLint,
-and Vitest (including its coverage report), regardless of what ends up in it.
+A top-level `workspaces/` folder is ignored by git, ESLint, and Vitest, so
+you can use it as scratch space for `spork workspace create`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
