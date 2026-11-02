@@ -5,7 +5,7 @@ vi.mock('../../src/git/exec.js', () => ({
 }))
 
 const { execGit } = await import('../../src/git/exec.js')
-const { cloneBare, fetchAll, resolveRef, setHeadBranch } = await import('../../src/git/clone.js')
+const { cloneBare, resolveRef, setHeadBranch } = await import('../../src/git/clone.js')
 
 const execGitMock = vi.mocked(execGit)
 
@@ -29,47 +29,16 @@ describe('cloneBare', () => {
 
     expect(execGitMock).toHaveBeenCalledWith(['clone', '--bare', 'git@example.com:foo/bar.git', '/cache/foo-bar'], { allowPrompts: true })
   })
-})
 
-describe('fetchAll', () => {
-  it('fetches all branches and tags in the bare cache', async () => {
+  it('configures the standard remote-tracking fetch refspec, which --bare leaves unset', async () => {
     execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
 
-    await fetchAll('/cache/foo-bar')
+    await cloneBare('git@example.com:foo/bar.git', '/cache/foo-bar')
 
-    expect(execGitMock).toHaveBeenCalledWith(['fetch', '--all', '--tags'], { cwd: '/cache/foo-bar' })
-  })
-
-  it('forwards allowPrompts to the fetch, not the local config write', async () => {
-    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
-
-    await fetchAll('/cache/foo-bar', { allowPrompts: true })
-
-    expect(execGitMock).toHaveBeenCalledWith(['fetch', '--all', '--tags'], { cwd: '/cache/foo-bar', allowPrompts: true })
-    expect(execGitMock).toHaveBeenCalledWith(['config', 'remote.origin.fetch', '+refs/heads/*:refs/heads/*'], { cwd: '/cache/foo-bar' })
-  })
-
-  it('configures the fetch refspec before fetching, so refs/heads/* actually refreshes (git clone --bare sets none by default)', async () => {
-    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
-
-    await fetchAll('/cache/foo-bar')
-
-    expect(execGitMock).toHaveBeenCalledWith(
-      ['config', 'remote.origin.fetch', '+refs/heads/*:refs/heads/*'],
+    expect(execGitMock).toHaveBeenLastCalledWith(
+      ['config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*'],
       { cwd: '/cache/foo-bar' },
     )
-    const configCallOrder = execGitMock.mock.calls.findIndex((call) => call[0][0] === 'config')
-    const fetchCallOrder = execGitMock.mock.calls.findIndex((call) => call[0][0] === 'fetch')
-    expect(configCallOrder).toBeLessThan(fetchCallOrder)
-  })
-
-  it('never passes --prune, which would delete local-only spork-owned branches missing from the remote', async () => {
-    execGitMock.mockResolvedValue({ stdout: '', stderr: '' })
-
-    await fetchAll('/cache/foo-bar')
-
-    const fetchCall = execGitMock.mock.calls.find((call) => call[0][0] === 'fetch')
-    expect(fetchCall?.[0]).not.toContain('--prune')
   })
 })
 

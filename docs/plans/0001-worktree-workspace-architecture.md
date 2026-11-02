@@ -534,6 +534,41 @@ never pushed upstream. A mirroring or pruning fetch would silently delete
 a user's own in-progress workspace branches the next time any sibling
 `addRepo` call happened to touch the same repo's cache.
 
+### Fetch only the ref a worktree starts from (supersedes the above)
+
+The `+refs/heads/*:refs/heads/*` fix assumed workspace branches stay
+local-only. They don't: people push them to open PRs. Once a pushed
+workspace branch and its remote copy differ (an unpushed local commit, a
+rebase, a push from CI), the whole-namespace fetch tries to force-overwrite
+the local branch with the remote one. If that branch is checked out in a
+worktree, git refuses (`refusing to fetch into branch ... checked out at
+...`) and the entire fetch fails, so `add-repo`/`create` fails for that
+repo in *every* other workspace. If it isn't checked out, the `+` silently
+discards the local commits.
+
+Creating a worktree only needs its start point to be current, so
+`git/fetch.ts`'s `fetchRef` now fetches just that. `addRepo` passes its
+requested ref (default `HEAD`, the cache's default branch) down through
+`addRepoSource` and `ensureRepoCache`. A branch or tag is looked up with
+`git ls-remote` and fetched straight into the cache's matching local ref,
+so `addWorktree`'s start point resolves the same way as before. A full sha
+is fetched only if missing. A ref the remote doesn't have fetches nothing
+and resolves locally. A requested branch that's checked out in a worktree
+is skipped, since its local copy is authoritative. `--no-tags` keeps
+tag auto-following from failing a fetch over a tag that moved upstream.
+
+The configured `remote.origin.fetch` changes too, to the standard
+`+refs/heads/*:refs/remotes/origin/*`. spork's own fetches pass explicit
+refspecs and don't depend on it, but worktrees share the cache's config,
+so it's what a hand-run `git fetch`/`git pull` inside a workspace uses. The
+old value made those hit the same refusal. `cloneBare` sets it on a fresh
+clone and `fetchRef` re-asserts it every time, so older caches self-heal.
+
+Consequence: a branch someone else pushed is no longer pulled into the
+cache as a side effect. A new workspace whose name matches an existing
+remote branch starts fresh from the default branch rather than resuming
+that branch, unless the cache already had it locally.
+
 ### Every `workspace <verb>` can omit its workspace argument, and destructive ones confirm
 
 `workspace open <name>`'s name was the first argument made optional (see

@@ -42,7 +42,7 @@ surface; nothing in this repo should import from `src/*` paths directly.
 `ensureRepoCache` (clone-or-fetch) and any worktree mutation against the same
 cache path must be called from inside `withRepoLock` by the caller — `cache.ts`
 itself doesn't lock, it just does the filesystem/git work. Don't call
-`cloneBare`/`fetchAll` directly outside the lock from orchestration code.
+`cloneBare`/`fetchRef` directly outside the lock from orchestration code.
 
 ## Index files (manifest/registries) need locking too, via `withFileLock`
 

@@ -73,14 +73,15 @@ describe('addRepo', () => {
     expect(submodulesInitialized).toBe(false)
     expect(reusedExistingBranch).toBe(false)
     expect(addWorktreeMock).toHaveBeenCalledWith(widgetsCachePath(), path.join(dir, 'widgets'), 'demo', 'HEAD')
-    expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE, {})
+    expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE, { ref: 'HEAD' })
     expect((await readManifest(dir)).worktrees).toEqual([entry])
   })
 
-  it('uses the requested ref as the worktree start point', async () => {
+  it('uses the requested ref as the worktree start point, and fetches only that ref', async () => {
     await addRepo(ctx, dir, { source: WIDGETS_SOURCE, ref: 'release/2.0' })
 
     expect(addWorktreeMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), 'release/2.0')
+    expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE, { ref: 'release/2.0' })
   })
 
   it('honors an explicit --as folder name, without changing the (workspace-wide) branch', async () => {

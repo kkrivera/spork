@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
-import { cloneBare, fetchAll } from '../git/clone.js'
+import { cloneBare } from '../git/clone.js'
+import { fetchRef } from '../git/fetch.js'
 import { slugify } from '../util/slug.js'
 import { repoOwner, repoShortName } from '../util/repoName.js'
 
@@ -66,13 +67,20 @@ export interface EnsureRepoCacheOptions {
    * cache already exists, since that branch fetches, not clones.
    */
   cloneFrom?: string
+  /**
+   * The ref a worktree is about to start from (`'HEAD'`, the default,
+   * meaning the default branch) — the only thing fetched when the cache
+   * already exists; see `git/fetch.ts`'s `fetchRef` for why it's never
+   * everything. Ignored on a fresh clone, which already has every ref.
+   */
+  ref?: string
   /** Let the clone/fetch prompt on the terminal — see `git/exec.ts`'s `ExecOptions.allowPrompts`. */
   allowPrompts?: boolean
 }
 
 /**
  * Ensures a bare clone of `source` exists under `reposRoot`, cloning it on
- * first use and fetching to refresh refs on subsequent calls. Callers that
+ * first use and fetching `options.ref` to refresh it on subsequent calls. Callers that
  * mutate the cache (this included) should hold the lock from `repo/lock.ts`
  * (on the cache's `lockPath`, not `path`) around the whole operation, since
  * the cache is shared across workspaces.
@@ -86,7 +94,7 @@ export async function ensureRepoCache(
   await mkdir(reposRoot, { recursive: true })
 
   if (isCloned(cache.path)) {
-    await fetchAll(cache.path, { allowPrompts: options.allowPrompts })
+    await fetchRef(cache.path, options.ref, { allowPrompts: options.allowPrompts })
   } else {
     await cloneBare(options.cloneFrom ?? source, cache.path, { allowPrompts: options.allowPrompts })
   }

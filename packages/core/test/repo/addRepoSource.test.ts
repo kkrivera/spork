@@ -109,6 +109,12 @@ describe('addRepoSource — cloneFrom / correctOriginTo', () => {
     expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE, { cloneFrom: '/home/user/code/widgets' })
   })
 
+  it('passes ref through to ensureRepoCache', async () => {
+    await addRepoSource(ctx, WIDGETS_SOURCE, { ref: 'v1.2.0' })
+
+    expect(ensureRepoCache).toHaveBeenCalledWith('/repos', WIDGETS_SOURCE, { ref: 'v1.2.0' })
+  })
+
   it('passes allowPrompts through to ensureRepoCache', async () => {
     await addRepoSource(ctx, WIDGETS_SOURCE, { allowPrompts: true })
 

@@ -292,7 +292,7 @@ export async function addRepo(
   // the shared registry instead.
   const aliasScope: 'local' | 'global' = options.global ? 'global' : 'local'
   const aliasRegistryPath = options.global ? ctx.repoRegistryPath : localRepoRegistryPath(workspaceDir)
-  await addRepoSource({ reposRoot: ctx.reposRoot, repoRegistryPath: aliasRegistryPath }, source)
+  await addRepoSource({ reposRoot: ctx.reposRoot, repoRegistryPath: aliasRegistryPath }, source, { ref: requestedRef })
 
   const cache = resolveRepoCache(ctx.reposRoot, source)
   const reusedExistingBranch = await createWorktreeOrThrow(cache, worktreePath, localBranch, requestedRef, source)
