@@ -565,9 +565,29 @@ old value made those hit the same refusal. `cloneBare` sets it on a fresh
 clone and `fetchRef` re-asserts it every time, so older caches self-heal.
 
 Consequence: a branch someone else pushed is no longer pulled into the
-cache as a side effect. A new workspace whose name matches an existing
-remote branch starts fresh from the default branch rather than resuming
-that branch, unless the cache already had it locally.
+cache as a side effect. Resuming one is now an explicit choice instead
+(next section).
+
+### Offer to start from an already-pushed workspace branch
+
+Before adding repos, `create`/`add-repo` ask each repo's remote
+(`remoteHasWorkspaceBranch`, a `git ls-remote` against the source, so it
+works before the repo is cloned) whether the workspace's branch already
+exists there. If any do, they confirm once for the whole batch. The
+question has to come before the live dashboard starts, since the adds run
+concurrently and nothing can prompt while it's drawing.
+`--from-remote-branch`/`--no-from-remote-branch` answer it up front.
+Without a TTY, spork keeps the old default (start fresh) and prints the
+flag to pass. The MCP tools don't offer this yet.
+
+A yes sets `AddRepoOptions.fetchRemoteBranch`. Inside the repo lock and
+just before `addWorktree`, `fastForwardBranch` fetches
+`refs/heads/<branch>:refs/heads/<branch>` *without* `+`. Git then only
+creates the local branch or fast-forwards it, and `addWorktree`'s existing
+reuse-if-it-exists logic checks it out. If the local branch has commits
+the remote doesn't, git rejects the update. The local branch is kept and
+the result reports `'diverged'` so the CLI can warn, rather than losing
+the local work or failing the add.
 
 ### Every `workspace <verb>` can omit its workspace argument, and destructive ones confirm
 

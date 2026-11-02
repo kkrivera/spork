@@ -152,6 +152,14 @@ toggle, Ctrl+A to toggle everything shown, Enter to confirm. It then asks
 whether to open the new workspace in VS Code or Claude. In CI or a script,
 it skips both questions and creates an empty workspace.
 
+Every repo in a workspace uses a branch named after the workspace. If that
+branch is already on a repo's remote (you pushed it from an earlier
+workspace, say), `create` and `add-repo` ask whether to start from it
+instead of from the default branch. spork only fast-forwards that branch,
+so a local copy with commits the remote doesn't have is kept as-is. Pass
+`--from-remote-branch` or `--no-from-remote-branch` to answer up front; in
+CI or a script, spork starts fresh and prints which flag to pass.
+
 `workspace open` asks the same question unless you pass `--with`:
 
 ```sh
