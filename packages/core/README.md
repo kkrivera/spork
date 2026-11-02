@@ -49,6 +49,12 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     share the cache's config, so this is what a hand-run `git fetch`/`git
     pull` inside a workspace uses; re-asserting it self-heals caches from
     before this change, which mapped onto `refs/heads/*`.
+    `fastForwardBranch(bareRepoPath, branch)` is the one deliberate
+    exception, for resuming a pushed workspace branch: it fetches
+    `refs/heads/<branch>` into the local branch *without* `+`, so git only
+    creates or fast-forwards it. If the two have diverged, git rejects the
+    update and the local branch is kept (`'diverged'`); a branch checked
+    out in a worktree is skipped (`'checked-out'`).
   - `worktree.ts` — worktree add/remove/prune/list. `addWorktree` always
     checks out one local branch per workspace — the *workspace's own name*,
     verbatim, shared by every repo in it, never the requested ref directly
@@ -71,7 +77,9 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     back to that upstream afterward. `getRemoteDefaultBranch(source)` asks a
     URL or local path directly what its default branch is (`git ls-remote
     --symref <source> HEAD`), without needing it cloned first — same
-    fail-open-to-`null` convention as `getRemoteUrl`.
+    fail-open-to-`null` convention as `getRemoteUrl`. `remoteHasBranch(source,
+    branch)` likewise asks `source` directly whether it has exactly
+    `refs/heads/<branch>` (fails open to `false`).
   - `submodule.ts` — `hasSubmodules` (checks for a `.gitmodules` file) and
     `initSubmodules` (`git submodule update --init --recursive`), since
     `worktree add` never initializes submodules on its own.
@@ -205,6 +213,16 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
   - `markerBlock.ts` — `upsertBlock`/`stripBlock`: keeps spork's content
     between `<!-- spork:begin -->`/`<!-- spork:end -->` markers so a user's
     own content in the same file is never rewritten or removed.
+  - `workspaceBranch.ts` — the workspace's shared branch.
+    `checkOutWorkspaceBranch` creates `addRepo`'s worktree inside the repo
+    lock, first fast-forwarding the branch from the remote when asked
+    (`AddRepoOptions.fetchRemoteBranch`, reported back as
+    `AddRepoResult.remoteBranch`), and turns `addWorktree`'s
+    `isBranchExistsError`/`isWorktreeCollisionError` into a clear
+    `SporkError`. `remoteHasWorkspaceBranch(ctx, workspaceDir,
+    aliasOrSource, branch)` resolves an alias the same way `addRepo` does
+    and asks the remote whether the branch already exists, so a frontend can
+    offer `fetchRemoteBranch` before adding anything.
   - `workspace.ts` — orchestration: `createWorkspace`, `addRepo`, `removeRepo`,
     `removeWorkspace`, `getWorkspaceStatus`, and `reconcileWorkspace` (pruning
     stale git worktree metadata and dropping manifest entries for folders
@@ -256,10 +274,10 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     `git`/`repo` actually get used together: `addRepo` gives every repo in a
     workspace the identical branch (the workspace's own name, verbatim —
     see the design doc), rejects adding the same repo twice upfront, and
-    turns `addWorktree`'s `isBranchExistsError`/`isWorktreeCollisionError`
-    into a clear `SporkError` when the branch is checked out elsewhere
-    right now — the one case `addWorktree`'s own reuse-if-exists logic
-    can't resolve on its own. `addRepo` also initializes submodules if the worktree
+    checks the worktree out through `workspaceBranch.ts` (above). It
+    refreshes the cache with only its requested ref (`AddRepoOptions.ref`,
+    default `HEAD`), plus the workspace's own branch when
+    `fetchRemoteBranch` is set. `addRepo` also initializes submodules if the worktree
     has any, after the repo-cache lock is released; a submodule-init
     failure produces a warning in the returned `AddRepoResult`, not a
     thrown error — the worktree is still registered. `addRepo`'s `source`

@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { addWorktree, isBranchExistsError, isWorktreeCollisionError, pruneWorktrees, removeWorktree } from '../git/worktree.js'
+import type { FastForwardOutcome } from '../git/fetch.js'
+import { pruneWorktrees, removeWorktree } from '../git/worktree.js'
 import { getStatus, type WorktreeStatus } from '../git/status.js'
 import { hasSubmodules, initSubmodules } from '../git/submodule.js'
 import { resolveRepoCache } from '../repo/cache.js'
@@ -15,6 +16,7 @@ import { repoShortName } from '../util/repoName.js'
 import { withFileLock } from '../util/fileLock.js'
 import { SporkError } from '../errors.js'
 import { removeWorkspaceFiles, writeWorkspaceFiles } from './workspaceFiles.js'
+import { checkOutWorkspaceBranch } from './workspaceBranch.js'
 import {
   createManifest,
   manifestPath,
@@ -185,6 +187,14 @@ export interface AddRepoOptions {
   folder?: string
   /** Register the alias globally instead of locally to this workspace (the default). */
   global?: boolean
+  /**
+   * Also fast-forward the cache's copy of this workspace's branch from the
+   * remote before creating the worktree, for resuming a workspace branch
+   * that's already been pushed (see `git/fetch.ts`'s `fastForwardBranch`).
+   * Off by default: a frontend decides, typically by asking after
+   * `remoteHasWorkspaceBranch` finds one.
+   */
+  fetchRemoteBranch?: boolean
 }
 
 export interface AddRepoResult {
@@ -197,6 +207,8 @@ export interface AddRepoResult {
   submoduleWarning?: string
   /** True if `localBranch` already existed in this repo's cache and was checked out as-is, rather than created fresh. */
   reusedExistingBranch: boolean
+  /** Set only when `fetchRemoteBranch` was requested: whether the remote branch was brought in or had diverged from the local one. */
+  remoteBranch?: FastForwardOutcome
 }
 
 /**
@@ -221,40 +233,6 @@ function assertCanAddRepo(manifest: WorkspaceManifest, folder: string, source: s
     throw new SporkError(
       `"${source}" is already in workspace "${manifest.name}" (as "${alreadyAdded.folder}"). A workspace shares one branch per repo, so the same repo can only be added once.`,
     )
-  }
-}
-
-/**
- * Creates the worktree — reusing `localBranch` as-is if it already exists in
- * this repo's cache (e.g. a previous, removed workspace of the same name
- * touched it before), or creating it fresh from `requestedRef` otherwise —
- * and returns whether it reused an existing branch. The one thing this
- * can't resolve is `localBranch` already being checked out *elsewhere*
- * right now (`isWorktreeCollisionError`; `isBranchExistsError` is kept as a
- * defensive fallback for a check-then-act race, though `addWorktree`'s own
- * existence check means it shouldn't normally fire) — a branch can only be
- * checked out in one worktree at a time, so that still becomes a clear
- * `SporkError` instead of letting git's own failure surface as-is.
- */
-async function createWorktreeOrThrow(
-  cache: { path: string; lockPath: string },
-  worktreePath: string,
-  localBranch: string,
-  requestedRef: string,
-  source: string,
-): Promise<boolean> {
-  try {
-    const { reusedExistingBranch } = await withRepoLock(cache.lockPath, () =>
-      addWorktree(cache.path, worktreePath, localBranch, requestedRef),
-    )
-    return reusedExistingBranch
-  } catch (error) {
-    if (isBranchExistsError(error) || isWorktreeCollisionError(error)) {
-      throw new SporkError(
-        `Branch "${localBranch}" is already checked out elsewhere in the cache for "${source}" (${cache.path}) and can't be reused here. Resolve that checkout first, or create this workspace under a different name.`,
-      )
-    }
-    throw error
   }
 }
 
@@ -295,7 +273,14 @@ export async function addRepo(
   await addRepoSource({ reposRoot: ctx.reposRoot, repoRegistryPath: aliasRegistryPath }, source, { ref: requestedRef })
 
   const cache = resolveRepoCache(ctx.reposRoot, source)
-  const reusedExistingBranch = await createWorktreeOrThrow(cache, worktreePath, localBranch, requestedRef, source)
+  const { reusedExistingBranch, remoteBranch } = await checkOutWorkspaceBranch(
+    cache,
+    worktreePath,
+    localBranch,
+    requestedRef,
+    source,
+    options.fetchRemoteBranch === true,
+  )
 
   const entry: WorktreeEntry = {
     folder,
@@ -321,21 +306,25 @@ export async function addRepo(
     await writeWorkspaceFiles(workspaceDir, fresh)
   })
 
-  // Submodule init is per-worktree, not shared-cache state, so it runs after
-  // the lock is released — no reason to hold up other spork operations on
-  // this repo's cache while (potentially slow) submodule clones happen. A
-  // failure here doesn't undo the worktree/manifest entry above: the repo
-  // itself checked out fine, so the add is still considered successful.
-  if (!hasSubmodules(worktreePath)) {
-    return { entry, aliasScope, submodulesInitialized: false, reusedExistingBranch }
-  }
+  return { entry, aliasScope, reusedExistingBranch, remoteBranch, ...(await initSubmodulesIfAny(worktreePath)) }
+}
 
+/**
+ * Submodule init is per-worktree, not shared-cache state, so `addRepo` runs
+ * it after the lock is released — no reason to hold up other spork
+ * operations on this repo's cache while (potentially slow) submodule clones
+ * happen. A failure here doesn't undo the worktree/manifest entry: the repo
+ * itself checked out fine, so the add is still considered successful.
+ */
+async function initSubmodulesIfAny(
+  worktreePath: string,
+): Promise<Pick<AddRepoResult, 'submodulesInitialized' | 'submoduleWarning'>> {
+  if (!hasSubmodules(worktreePath)) return { submodulesInitialized: false }
   try {
     await initSubmodules(worktreePath)
-    return { entry, aliasScope, submodulesInitialized: true, reusedExistingBranch }
+    return { submodulesInitialized: true }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return { entry, aliasScope, submodulesInitialized: false, submoduleWarning: message, reusedExistingBranch }
+    return { submodulesInitialized: false, submoduleWarning: error instanceof Error ? error.message : String(error) }
   }
 }
 

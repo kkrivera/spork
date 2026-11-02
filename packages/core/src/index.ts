@@ -31,6 +31,9 @@ export {
   getWorkspaceStatus,
 } from './workspace/workspace.js'
 
+export { remoteHasWorkspaceBranch } from './workspace/workspaceBranch.js'
+export type { FastForwardOutcome } from './git/fetch.js'
+
 export type { WorktreeStatus } from './git/status.js'
 
 export type { RegistryEntry } from './registry/registry.js'

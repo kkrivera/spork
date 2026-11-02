@@ -1,4 +1,4 @@
-import { execGit, type PromptOptions } from './exec.js'
+import { execGit, GitCommandError, type PromptOptions } from './exec.js'
 import { listWorktrees } from './worktree.js'
 
 /**
@@ -43,6 +43,30 @@ export async function fetchRef(bareRepoPath: string, ref = 'HEAD', options: Prom
   const refspecs = await refspecsFor(bareRepoPath, ref, options)
   if (refspecs.length === 0) return
   await execGit(['fetch', '--no-tags', 'origin', ...refspecs], { cwd: bareRepoPath, ...options })
+}
+
+/** `'checked-out'`: skipped, since a worktree has the branch and its local copy is authoritative. */
+export type FastForwardOutcome = 'updated' | 'diverged' | 'checked-out'
+
+/**
+ * Brings the cache's local `branch` up to the remote's copy, creating it if
+ * it's missing — but only ever as a fast-forward (no `+` on the refspec), so
+ * local commits the remote doesn't have are never discarded. If the two
+ * have diverged, git rejects the update and the local branch is left as-is
+ * (`'diverged'`). For resuming a workspace branch that's already been
+ * pushed, which `fetchRef` deliberately never touches.
+ */
+export async function fastForwardBranch(bareRepoPath: string, branch: string): Promise<FastForwardOutcome> {
+  const ref = `refs/heads/${branch}`
+  if ((await checkedOutRefs(bareRepoPath)).has(ref)) return 'checked-out'
+
+  try {
+    await execGit(['fetch', '--no-tags', 'origin', `${ref}:${ref}`], { cwd: bareRepoPath })
+    return 'updated'
+  } catch (error) {
+    if (error instanceof GitCommandError && /non-fast-forward|\[rejected\]/.test(error.stderr)) return 'diverged'
+    throw error
+  }
 }
 
 async function refspecsFor(bareRepoPath: string, ref: string, options: PromptOptions): Promise<string[]> {

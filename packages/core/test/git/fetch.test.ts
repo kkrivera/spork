@@ -1,11 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-vi.mock('../../src/git/exec.js', () => ({
-  execGit: vi.fn(),
-}))
+vi.mock('../../src/git/exec.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/git/exec.js')>('../../src/git/exec.js')
+  return { execGit: vi.fn(), GitCommandError: actual.GitCommandError }
+})
 
-const { execGit } = await import('../../src/git/exec.js')
-const { configureFetchRefspec, fetchRef } = await import('../../src/git/fetch.js')
+const { execGit, GitCommandError } = await import('../../src/git/exec.js')
+const { configureFetchRefspec, fastForwardBranch, fetchRef } = await import('../../src/git/fetch.js')
 
 const execGitMock = vi.mocked(execGit)
 
@@ -172,5 +173,41 @@ describe('fetchRef — refs the remote may not have', () => {
       const isNetwork = args[0] === 'ls-remote' || args[0] === 'fetch'
       expect(options).toEqual(isNetwork ? { cwd: CACHE, allowPrompts: true } : { cwd: CACHE })
     }
+  })
+})
+
+describe('fastForwardBranch', () => {
+  it('fetches the branch without + so it only ever fast-forwards or creates it', async () => {
+    fakeGit()
+
+    expect(await fastForwardBranch(CACHE, 'me/feature')).toBe('updated')
+    expect(fetchCall()).toEqual(['fetch', '--no-tags', 'origin', 'refs/heads/me/feature:refs/heads/me/feature'])
+  })
+
+  it("reports 'diverged' and keeps the local branch when git rejects a non-fast-forward", async () => {
+    fakeGit()
+    const rejected = new GitCommandError(['fetch'], ' ! [rejected]        me/feature -> me/feature  (non-fast-forward)')
+    execGitMock.mockImplementation(async (args) => {
+      if (args[0] === 'fetch') throw rejected
+      return { stdout: '', stderr: '' }
+    })
+
+    expect(await fastForwardBranch(CACHE, 'me/feature')).toBe('diverged')
+  })
+
+  it('rethrows any other fetch failure', async () => {
+    execGitMock.mockImplementation(async (args) => {
+      if (args[0] === 'fetch') throw new GitCommandError(['fetch'], 'fatal: could not read from remote repository')
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(fastForwardBranch(CACHE, 'me/feature')).rejects.toThrow('could not read from remote')
+  })
+
+  it("skips a branch that's checked out in a worktree", async () => {
+    fakeGit({ checkedOut: ['me/feature'] })
+
+    expect(await fastForwardBranch(CACHE, 'me/feature')).toBe('checked-out')
+    expect(fetchCall()).toBeUndefined()
   })
 })

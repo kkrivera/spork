@@ -5,7 +5,7 @@ vi.mock('../../src/git/exec.js', () => ({
 }))
 
 const { execGit } = await import('../../src/git/exec.js')
-const { getRemoteUrl, setRemoteUrl, getRemoteDefaultBranch } = await import('../../src/git/remote.js')
+const { getRemoteUrl, setRemoteUrl, getRemoteDefaultBranch, remoteHasBranch } = await import('../../src/git/remote.js')
 
 const execGitMock = vi.mocked(execGit)
 
@@ -91,5 +91,32 @@ describe('getRemoteDefaultBranch', () => {
     const branch = await getRemoteDefaultBranch('git@github.com:acme/widgets.git')
 
     expect(branch).toBeNull()
+  })
+})
+
+describe('remoteHasBranch', () => {
+  it('is true when ls-remote lists exactly that branch', async () => {
+    execGitMock.mockReset().mockResolvedValue({ stdout: 'abc123\trefs/heads/me/feature\n', stderr: '' })
+
+    expect(await remoteHasBranch('git@github.com:acme/widgets.git', 'me/feature')).toBe(true)
+    expect(execGitMock).toHaveBeenCalledWith(['ls-remote', 'git@github.com:acme/widgets.git', 'refs/heads/me/feature'])
+  })
+
+  it('ignores a branch that only ends with the same path', async () => {
+    execGitMock.mockReset().mockResolvedValue({ stdout: 'abc123\trefs/heads/other/me/feature\n', stderr: '' })
+
+    expect(await remoteHasBranch('git@github.com:acme/widgets.git', 'me/feature')).toBe(false)
+  })
+
+  it('is false when the remote has no such branch', async () => {
+    execGitMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+
+    expect(await remoteHasBranch('git@github.com:acme/widgets.git', 'me/feature')).toBe(false)
+  })
+
+  it('fails open to false when the remote is unreachable', async () => {
+    execGitMock.mockReset().mockRejectedValue(new Error('could not read from remote'))
+
+    expect(await remoteHasBranch('git@github.com:acme/widgets.git', 'me/feature')).toBe(false)
   })
 })
