@@ -132,6 +132,16 @@ logic lives here.
   Ctrl+C) becomes `SporkError('Cancelled.')`. Both resolve to the
   workspace's *name*, not its directory, so a caller still goes through
   `resolveWorkspaceDir` the normal way afterward.
+- `src/commands/workspace/remoteBranchPrompt.ts` —
+  `resolveFetchRemoteBranch`: decides `@spork/core`'s
+  `AddRepoOptions.fetchRemoteBranch` for `create` and both `add-repo`
+  flows, before their live dashboard starts (nothing can prompt while it's
+  drawing). `--from-remote-branch`/`--no-from-remote-branch` win outright.
+  Otherwise it asks every source's remote in parallel
+  (`remoteHasWorkspaceBranch`) whether the workspace's branch already
+  exists there and, if any do, confirms once for the whole batch (default
+  yes). Without a TTY it starts fresh and returns a `notice` naming the
+  flag, which the `register*` side prints.
 - `src/commands/workspace/addReposBatch.ts` — `addReposToWorkspace`: adds
   several sources to one workspace directory concurrently
   (`runConcurrently`'s live dashboard), calling `@spork/core`'s `addRepo`
@@ -197,7 +207,10 @@ logic lives here.
   the shared registry instead — `printAddRepoResult` always shows which one
   happened (`(alias: local)`/`(alias: global)`), whether an existing branch
   was reused instead of creating a fresh one (`AddRepoResult.reusedExistingBranch`
-  — e.g. recreating a workspace that touched this repo before), plus
+  — e.g. recreating a workspace that touched this repo before), whether
+  the worktree started from the remote's copy of the branch or kept a
+  local one that had diverged from it (`AddRepoResult.remoteBranch`; see
+  `remoteBranchPrompt.ts` above), plus
   whether submodules were initialized or a warning if that failed (the add
   itself still succeeds — see `AddRepoResult` in `@spork/core`). `add-repo`
   with an explicit `[source]` runs its single `addRepo` call through

@@ -25,21 +25,36 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     askpass so a user's own `core.sshCommand` stays untouched), the stderr
     patterns that mean "couldn't authenticate," and the next steps shown for
     one (ssh-agent, accepting a host key, an HTTPS credential helper).
-  - `clone.ts` — bare-clone creation, fetching, and ref resolution against a
-    shared repo cache. `fetchAll` configures the cache's fetch refspec
-    (`remote.origin.fetch = +refs/heads/*:refs/heads/*`) before every fetch,
-    re-asserting it rather than relying on it being set once — `git clone
-    --bare` deliberately doesn't set one (git-clone(1)), so without this,
-    `git fetch` only updates `FETCH_HEAD` and the cache's branches stay
-    frozen at whatever they were at clone time, confirmed by direct
-    testing. Deliberately no `--prune`: that would delete any local
-    `refs/heads/*` entry missing from the remote, including every
-    spork-owned workspace branch (local-only, never pushed upstream).
+  - `clone.ts` — bare-clone creation and ref resolution against a shared
+    repo cache. `cloneBare` gives a fresh clone the standard fetch refspec
+    (see `fetch.ts`), which `git clone --bare` leaves unset.
     `setHeadBranch(bareRepoPath, branch)` repoints the cache's own HEAD, for
     correcting it after a clone whose source wasn't the repo's real
     upstream (see `repo/scan.ts` below) — safe even if `branch` doesn't
     exist in the cache yet, since HEAD can symbolically point at a
     not-yet-existent ref and resolves once a later fetch brings it in.
+  - `fetch.ts` — `fetchRef(bareRepoPath, ref = 'HEAD')` refreshes only the
+    ref a new worktree is about to start from: `HEAD` means the cache's
+    default branch, a branch or tag name is looked up with `git ls-remote`,
+    and a full sha is fetched only if the cache lacks it. Each lands
+    straight in the cache's matching local ref. It never fetches
+    everything: workspace branches are local branches in the same cache,
+    and once one is pushed, a whole-namespace fetch would try to
+    force-overwrite it with the remote copy (refused if it's checked out,
+    silently dropping unpushed commits if not). A requested branch that's
+    checked out in a worktree is skipped for the same reason, and a ref the
+    remote doesn't have fetches nothing and resolves locally.
+    `configureFetchRefspec` sets `remote.origin.fetch` to the standard
+    `+refs/heads/*:refs/remotes/origin/*` before every fetch. Worktrees
+    share the cache's config, so this is what a hand-run `git fetch`/`git
+    pull` inside a workspace uses; re-asserting it self-heals caches from
+    before this change, which mapped onto `refs/heads/*`.
+    `fastForwardBranch(bareRepoPath, branch)` is the one deliberate
+    exception, for resuming a pushed workspace branch: it fetches
+    `refs/heads/<branch>` into the local branch *without* `+`, so git only
+    creates or fast-forwards it. If the two have diverged, git rejects the
+    update and the local branch is kept (`'diverged'`); a branch checked
+    out in a worktree is skipped (`'checked-out'`).
   - `worktree.ts` — worktree add/remove/prune/list. `addWorktree` always
     checks out one local branch per workspace — the *workspace's own name*,
     verbatim, shared by every repo in it, never the requested ref directly
@@ -62,7 +77,9 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     back to that upstream afterward. `getRemoteDefaultBranch(source)` asks a
     URL or local path directly what its default branch is (`git ls-remote
     --symref <source> HEAD`), without needing it cloned first — same
-    fail-open-to-`null` convention as `getRemoteUrl`.
+    fail-open-to-`null` convention as `getRemoteUrl`. `remoteHasBranch(source,
+    branch)` likewise asks `source` directly whether it has exactly
+    `refs/heads/<branch>` (fails open to `false`).
   - `submodule.ts` — `hasSubmodules` (checks for a `.gitmodules` file) and
     `initSubmodules` (`git submodule update --init --recursive`), since
     `worktree add` never initializes submodules on its own.
@@ -73,9 +90,9 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     repo read as distinct cache directories rather than only differing by
     hash; a local path has no owner to extract, so it's just
     `widgets-<hash>`) and ensures a bare clone of it exists
-    (`ensureRepoCache`), fetching to refresh refs if it's already cached
-    rather than re-cloning. Its `allowPrompts` option is forwarded to
-    `cloneBare`/`fetchAll` (and on to `execGit`).
+    (`ensureRepoCache`), fetching just its `ref` option (default `HEAD`)
+    if it's already cached rather than re-cloning. Its `allowPrompts`
+    option is forwarded to `cloneBare`/`fetchRef` (and on to `execGit`).
   - `lock.ts` — `withRepoLock`, an exclusive lock (via `proper-lockfile`) around
     mutating a repo cache, since the cache is shared across workspaces and
     concurrent `spork` invocations are expected, not exceptional.
@@ -83,8 +100,9 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     below to tell whether a registered alias's cache is still actually there.
   - `repos.ts` — the service layer over the repo registry:
     - `addRepoSource(ctx, source, { alias?, cloneFrom?, correctOriginTo?,
-      correctHeadTo?, allowPrompts? })` — ensure cloned, then register/reuse an alias for
-      it. `allowPrompts` lets the clone/fetch prompt on the terminal (off by
+      correctHeadTo?, ref?, allowPrompts? })` — ensure cloned (fetching only
+      `ref`, default the default branch, if already cached), then
+      register/reuse an alias for it. `allowPrompts` lets the clone/fetch prompt on the terminal (off by
       default — see `git/exec.ts`). Expects a real source, not an alias. `cloneFrom` clones from a
       different (typically local) path than `source` on a fresh clone while
       keeping `source` as the cache's identity; when that produces a fresh
@@ -195,6 +213,16 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
   - `markerBlock.ts` — `upsertBlock`/`stripBlock`: keeps spork's content
     between `<!-- spork:begin -->`/`<!-- spork:end -->` markers so a user's
     own content in the same file is never rewritten or removed.
+  - `workspaceBranch.ts` — the workspace's shared branch.
+    `checkOutWorkspaceBranch` creates `addRepo`'s worktree inside the repo
+    lock, first fast-forwarding the branch from the remote when asked
+    (`AddRepoOptions.fetchRemoteBranch`, reported back as
+    `AddRepoResult.remoteBranch`), and turns `addWorktree`'s
+    `isBranchExistsError`/`isWorktreeCollisionError` into a clear
+    `SporkError`. `remoteHasWorkspaceBranch(ctx, workspaceDir,
+    aliasOrSource, branch)` resolves an alias the same way `addRepo` does
+    and asks the remote whether the branch already exists, so a frontend can
+    offer `fetchRemoteBranch` before adding anything.
   - `workspace.ts` — orchestration: `createWorkspace`, `addRepo`, `removeRepo`,
     `removeWorkspace`, `getWorkspaceStatus`, and `reconcileWorkspace` (pruning
     stale git worktree metadata and dropping manifest entries for folders
@@ -246,10 +274,10 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     `git`/`repo` actually get used together: `addRepo` gives every repo in a
     workspace the identical branch (the workspace's own name, verbatim —
     see the design doc), rejects adding the same repo twice upfront, and
-    turns `addWorktree`'s `isBranchExistsError`/`isWorktreeCollisionError`
-    into a clear `SporkError` when the branch is checked out elsewhere
-    right now — the one case `addWorktree`'s own reuse-if-exists logic
-    can't resolve on its own. `addRepo` also initializes submodules if the worktree
+    checks the worktree out through `workspaceBranch.ts` (above). It
+    refreshes the cache with only its requested ref (`AddRepoOptions.ref`,
+    default `HEAD`), plus the workspace's own branch when
+    `fetchRemoteBranch` is set. `addRepo` also initializes submodules if the worktree
     has any, after the repo-cache lock is released; a submodule-init
     failure produces a warning in the returned `AddRepoResult`, not a
     thrown error — the worktree is still registered. `addRepo`'s `source`

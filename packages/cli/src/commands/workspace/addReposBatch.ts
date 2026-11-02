@@ -33,14 +33,18 @@ export async function addReposToWorkspace(
   ctx: AppContext,
   dir: string,
   sources: readonly string[],
-  options: { global?: boolean },
+  options: { global?: boolean; fetchRemoteBranch?: boolean },
 ): Promise<AddRepoBatchOutcome[]> {
   const outcomes = await runConcurrently(
     sources.map((source) => ({
       name: defaultAlias(source),
       call: (report: TaskReporter) => {
         report.log(`cloning/fetching ${source}...`)
-        return addRepo(workspaceContext(ctx), dir, { source, global: options.global })
+        return addRepo(workspaceContext(ctx), dir, {
+          source,
+          global: options.global,
+          fetchRemoteBranch: options.fetchRemoteBranch,
+        })
       },
     })),
   )

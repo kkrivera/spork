@@ -35,3 +35,19 @@ export async function getRemoteDefaultBranch(source: string): Promise<string | n
     return null
   }
 }
+
+/**
+ * Whether `source` (a URL or local path — doesn't need to be cloned yet)
+ * has a branch named exactly `branch`, via `git ls-remote`. Fails open to
+ * `false` like `getRemoteDefaultBranch`: an unreachable remote just means
+ * there's nothing to offer, not an error worth surfacing.
+ */
+export async function remoteHasBranch(source: string, branch: string): Promise<boolean> {
+  const ref = `refs/heads/${branch}`
+  try {
+    const { stdout } = await execGit(['ls-remote', source, ref])
+    return stdout.split('\n').some((line) => line.split('\t')[1]?.trim() === ref)
+  } catch {
+    return false
+  }
+}

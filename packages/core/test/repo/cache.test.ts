@@ -12,20 +12,23 @@ vi.mock('node:fs/promises', () => ({
 }))
 vi.mock('../../src/git/clone.js', () => ({
   cloneBare: vi.fn(),
-  fetchAll: vi.fn(),
+}))
+vi.mock('../../src/git/fetch.js', () => ({
+  fetchRef: vi.fn(),
 }))
 
-const { cloneBare, fetchAll } = await import('../../src/git/clone.js')
+const { cloneBare } = await import('../../src/git/clone.js')
+const { fetchRef } = await import('../../src/git/fetch.js')
 const { repoCacheId, resolveRepoCache, ensureRepoCache, repoCacheExists } = await import('../../src/repo/cache.js')
 
 const cloneBareMock = vi.mocked(cloneBare)
-const fetchAllMock = vi.mocked(fetchAll)
+const fetchRefMock = vi.mocked(fetchRef)
 
 beforeEach(() => {
   existsSyncMock.mockReset()
   mkdirMock.mockReset().mockResolvedValue(undefined)
   cloneBareMock.mockReset().mockResolvedValue(undefined)
-  fetchAllMock.mockReset().mockResolvedValue(undefined)
+  fetchRefMock.mockReset().mockResolvedValue(undefined)
 })
 
 describe('repoCacheId', () => {
@@ -74,7 +77,7 @@ describe('ensureRepoCache', () => {
     expect(mkdirMock).toHaveBeenCalledWith('/repos', { recursive: true })
     expect(existsSyncMock).toHaveBeenCalledWith(path.join(cache.path, 'HEAD'))
     expect(cloneBareMock).toHaveBeenCalledWith('git@github.com:acme/widgets.git', cache.path, {})
-    expect(fetchAllMock).not.toHaveBeenCalled()
+    expect(fetchRefMock).not.toHaveBeenCalled()
   })
 
   it('fetches instead of re-cloning once a HEAD file is present', async () => {
@@ -82,7 +85,7 @@ describe('ensureRepoCache', () => {
 
     const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git')
 
-    expect(fetchAllMock).toHaveBeenCalledWith(cache.path, {})
+    expect(fetchRefMock).toHaveBeenCalledWith(cache.path, undefined, {})
     expect(cloneBareMock).not.toHaveBeenCalled()
   })
 
@@ -103,8 +106,26 @@ describe('ensureRepoCache', () => {
       cloneFrom: '/home/user/code/widgets',
     })
 
-    expect(fetchAllMock).toHaveBeenCalledWith(cache.path, {})
+    expect(fetchRefMock).toHaveBeenCalledWith(cache.path, undefined, {})
     expect(cloneBareMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('ensureRepoCache — ref', () => {
+  it('fetches only the requested ref once the cache exists', async () => {
+    existsSyncMock.mockReturnValue(true)
+
+    const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git', { ref: 'release/2.x' })
+
+    expect(fetchRefMock).toHaveBeenCalledWith(cache.path, 'release/2.x', {})
+  })
+
+  it('ignores ref on a fresh clone, which already has every ref', async () => {
+    existsSyncMock.mockReturnValue(false)
+
+    await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git', { ref: 'release/2.x' })
+
+    expect(fetchRefMock).not.toHaveBeenCalled()
   })
 })
 
@@ -122,7 +143,7 @@ describe('ensureRepoCache — allowPrompts', () => {
 
     const cache = await ensureRepoCache('/repos', 'git@github.com:acme/widgets.git', { allowPrompts: true })
 
-    expect(fetchAllMock).toHaveBeenCalledWith(cache.path, { allowPrompts: true })
+    expect(fetchRefMock).toHaveBeenCalledWith(cache.path, undefined, { allowPrompts: true })
   })
 })
 

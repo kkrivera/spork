@@ -6,6 +6,7 @@ import type { LaunchDeps } from '../../src/launchTarget.js'
 vi.mock('@spork/core', () => ({
   createAndRegisterWorkspace: vi.fn(),
   addRepo: vi.fn(),
+  remoteHasWorkspaceBranch: vi.fn(async () => false),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
   findEnclosingWorkspaceDir: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('@spork/task-runner', () => ({
 }))
 vi.mock('@spork/prompts', () => ({
   select: vi.fn(),
+  confirm: vi.fn(),
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 

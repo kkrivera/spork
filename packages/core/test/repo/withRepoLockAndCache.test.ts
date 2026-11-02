@@ -5,22 +5,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../src/git/clone.js', () => ({
   cloneBare: vi.fn(),
-  fetchAll: vi.fn(),
+}))
+vi.mock('../../src/git/fetch.js', () => ({
+  fetchRef: vi.fn(),
 }))
 
-const { cloneBare, fetchAll } = await import('../../src/git/clone.js')
+const { cloneBare } = await import('../../src/git/clone.js')
+const { fetchRef } = await import('../../src/git/fetch.js')
 const { resolveRepoCache, ensureRepoCache } = await import('../../src/repo/cache.js')
 const { withRepoLock } = await import('../../src/repo/lock.js')
 
 const cloneBareMock = vi.mocked(cloneBare)
-const fetchAllMock = vi.mocked(fetchAll)
+const fetchRefMock = vi.mocked(fetchRef)
 
 let reposRoot: string
 
 beforeEach(async () => {
   reposRoot = await mkdtemp(path.join(os.tmpdir(), 'spork-lock-cache-'))
   cloneBareMock.mockReset().mockResolvedValue(undefined)
-  fetchAllMock.mockReset().mockResolvedValue(undefined)
+  fetchRefMock.mockReset().mockResolvedValue(undefined)
 })
 
 afterEach(async () => {
@@ -41,6 +44,6 @@ describe('withRepoLock + ensureRepoCache, wired the way workspace.ts wires them'
     })
 
     expect(cloneBareMock).toHaveBeenCalledWith('git@github.com:acme/widgets.git', cache.path, {})
-    expect(fetchAllMock).not.toHaveBeenCalled()
+    expect(fetchRefMock).not.toHaveBeenCalled()
   })
 })

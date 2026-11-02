@@ -15,6 +15,9 @@ vi.mock('../../src/git/worktree.js', async () => {
   const actual = await vi.importActual<typeof import('../../src/git/worktree.js')>('../../src/git/worktree.js')
   return { ...actual, addWorktree: vi.fn(), removeWorktree: vi.fn(), pruneWorktrees: vi.fn() }
 })
+vi.mock('../../src/git/fetch.js', () => ({
+  fastForwardBranch: vi.fn(),
+}))
 vi.mock('../../src/git/submodule.js', () => ({
   hasSubmodules: vi.fn(),
   initSubmodules: vi.fn(),
@@ -23,6 +26,7 @@ vi.mock('../../src/git/submodule.js', () => ({
 const { addWorktree } = await import('../../src/git/worktree.js')
 const { GitCommandError } = await import('../../src/git/exec.js')
 const { hasSubmodules, initSubmodules } = await import('../../src/git/submodule.js')
+const { fastForwardBranch } = await import('../../src/git/fetch.js')
 const { ensureRepoCache, resolveRepoCache } = await import('../../src/repo/cache.js')
 const { createWorkspace, addRepo } = await import('../../src/workspace/workspace.js')
 const { readManifest } = await import('../../src/workspace/manifest.js')
@@ -34,6 +38,7 @@ const addWorktreeMock = vi.mocked(addWorktree)
 const ensureRepoCacheMock = vi.mocked(ensureRepoCache)
 const hasSubmodulesMock = vi.mocked(hasSubmodules)
 const initSubmodulesMock = vi.mocked(initSubmodules)
+const fastForwardBranchMock = vi.mocked(fastForwardBranch)
 const WIDGETS_SOURCE = 'git@github.com:acme/widgets.git'
 
 let root: string
@@ -54,6 +59,7 @@ beforeEach(async () => {
   ensureRepoCacheMock.mockReset().mockResolvedValue({ id: 'widgets-abc', source: '', path: '/unused' })
   hasSubmodulesMock.mockReset().mockReturnValue(false)
   initSubmodulesMock.mockReset().mockResolvedValue(undefined)
+  fastForwardBranchMock.mockReset().mockResolvedValue('updated')
 })
 
 afterEach(async () => {
@@ -73,14 +79,15 @@ describe('addRepo', () => {
     expect(submodulesInitialized).toBe(false)
     expect(reusedExistingBranch).toBe(false)
     expect(addWorktreeMock).toHaveBeenCalledWith(widgetsCachePath(), path.join(dir, 'widgets'), 'demo', 'HEAD')
-    expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE, {})
+    expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE, { ref: 'HEAD' })
     expect((await readManifest(dir)).worktrees).toEqual([entry])
   })
 
-  it('uses the requested ref as the worktree start point', async () => {
+  it('uses the requested ref as the worktree start point, and fetches only that ref', async () => {
     await addRepo(ctx, dir, { source: WIDGETS_SOURCE, ref: 'release/2.0' })
 
     expect(addWorktreeMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), 'release/2.0')
+    expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE, { ref: 'release/2.0' })
   })
 
   it('honors an explicit --as folder name, without changing the (workspace-wide) branch', async () => {
@@ -194,6 +201,42 @@ describe('addRepo — submodules', () => {
     expect(submodulesInitialized).toBe(false)
     expect(submoduleWarning).toContain('private-submodule-host')
     expect((await readManifest(dir)).worktrees).toEqual([entry])
+  })
+})
+
+describe('addRepo — fetchRemoteBranch', () => {
+  it("fast-forwards the workspace's branch from the remote before creating the worktree", async () => {
+    const order: string[] = []
+    fastForwardBranchMock.mockImplementation(async () => {
+      order.push('fastForward')
+      return 'updated'
+    })
+    addWorktreeMock.mockImplementation(async (...args) => {
+      order.push('addWorktree')
+      return fakeAddWorktree(...args)
+    })
+
+    const result = await addRepo(ctx, dir, { source: WIDGETS_SOURCE, fetchRemoteBranch: true })
+
+    expect(fastForwardBranchMock).toHaveBeenCalledWith(widgetsCachePath(), 'demo')
+    expect(order).toEqual(['fastForward', 'addWorktree'])
+    expect(result.remoteBranch).toBe('updated')
+  })
+
+  it('reports a diverged branch without failing the add', async () => {
+    fastForwardBranchMock.mockResolvedValue('diverged')
+
+    const result = await addRepo(ctx, dir, { source: WIDGETS_SOURCE, fetchRemoteBranch: true })
+
+    expect(result.remoteBranch).toBe('diverged')
+    expect((await readManifest(dir)).worktrees).toHaveLength(1)
+  })
+
+  it('leaves the remote alone by default', async () => {
+    const result = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
+
+    expect(fastForwardBranchMock).not.toHaveBeenCalled()
+    expect(result.remoteBranch).toBeUndefined()
   })
 })
 

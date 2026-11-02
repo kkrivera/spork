@@ -7,6 +7,7 @@ import { workspaceContext, type AppContext } from '../../context.js'
 import { runList } from '../repo/list.js'
 import { addReposToWorkspace, type AddRepoBatchFailure, type AddRepoBatchOutcome } from './addReposBatch.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
+import { resolveFetchRemoteBranch } from './remoteBranchPrompt.js'
 
 export interface AddRepoOptions {
   /** Which workspace to add to — defaults to the cwd's enclosing workspace, or a picker (see `pickWorkspace.ts`). */
@@ -15,11 +16,15 @@ export interface AddRepoOptions {
   as?: string
   /** Register the repo's alias globally instead of locally to this workspace (the default). */
   global?: boolean
+  /** `--from-remote-branch`/`--no-from-remote-branch`; unset means ask (see `remoteBranchPrompt.ts`). */
+  fromRemoteBranch?: boolean
 }
 
 export interface RunAddRepoResult {
   workspace: string
   result: AddRepoResult
+  /** See `remoteBranchPrompt.ts`'s `RemoteBranchDecision.notice`. */
+  remoteBranchNotice?: string
 }
 
 /**
@@ -48,6 +53,7 @@ export async function runAddRepo(
       'Multiple workspaces are registered — pass one explicitly: spork workspace add-repo --workspace <name> <source>',
     ))
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspaceName)
+  const remoteBranch = await resolveFetchRemoteBranch(ctx, dir, workspaceName, [source], options.fromRemoteBranch)
   const [outcome] = await runConcurrently([
     {
       name: defaultAlias(source),
@@ -58,6 +64,7 @@ export async function runAddRepo(
           ref: options.branch,
           folder: options.as,
           global: options.global,
+          fetchRemoteBranch: remoteBranch.fetchRemoteBranch,
         })
       },
     },
@@ -66,7 +73,7 @@ export async function runAddRepo(
   if (outcome?.value === undefined) {
     throw outcome?.cancelled ? new SporkError('Cancelled.') : outcome?.error
   }
-  return { workspace: workspaceName, result: outcome.value }
+  return { workspace: workspaceName, result: outcome.value, remoteBranchNotice: remoteBranch.notice }
 }
 
 /** Prints an AddRepoResult the same way regardless of whether it came from `add-repo` or `create --repo`. */
@@ -78,7 +85,15 @@ export function printAddRepoResult(ctx: AppContext, workspace: string, result: A
     ),
   )
 
-  if (result.reusedExistingBranch) {
+  if (result.remoteBranch === 'updated') {
+    console.log(ctx.ui.color.dim(`Started "${entry.folder}" from the remote's "${entry.localBranch}".`))
+  } else if (result.remoteBranch === 'diverged') {
+    console.log(
+      ctx.ui.color.yellow(
+        `Warning: "${entry.localBranch}" in "${entry.folder}" has diverged from the remote's copy; kept the local one. Reconcile with git pull in that folder.`,
+      ),
+    )
+  } else if (result.reusedExistingBranch) {
     console.log(ctx.ui.color.dim(`Reused existing branch "${entry.localBranch}" for "${entry.folder}".`))
   }
 
@@ -123,6 +138,8 @@ async function pickRegisteredSources(ctx: AppContext): Promise<string[]> {
 export interface RunAddRepoFromRegistryResult {
   workspace: string
   outcomes: AddRepoBatchOutcome[]
+  /** See `remoteBranchPrompt.ts`'s `RemoteBranchDecision.notice`. */
+  remoteBranchNotice?: string
 }
 
 /**
@@ -137,7 +154,7 @@ export interface RunAddRepoFromRegistryResult {
 export async function runAddRepoFromRegistry(
   ctx: AppContext,
   workspace: string | undefined,
-  options: Pick<AddRepoOptions, 'global'>,
+  options: Pick<AddRepoOptions, 'global' | 'fromRemoteBranch'>,
 ): Promise<RunAddRepoFromRegistryResult> {
   const workspaceName =
     workspace ??
@@ -148,9 +165,13 @@ export async function runAddRepoFromRegistry(
     ))
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspaceName)
   const sources = await pickRegisteredSources(ctx)
-  const outcomes = await addReposToWorkspace(ctx, dir, sources, { global: options.global })
+  const remoteBranch = await resolveFetchRemoteBranch(ctx, dir, workspaceName, sources, options.fromRemoteBranch)
+  const outcomes = await addReposToWorkspace(ctx, dir, sources, {
+    global: options.global,
+    fetchRemoteBranch: remoteBranch.fetchRemoteBranch,
+  })
 
-  return { workspace: workspaceName, outcomes }
+  return { workspace: workspaceName, outcomes, remoteBranchNotice: remoteBranch.notice }
 }
 
 /** Prints every outcome from `runAddRepoFromRegistry`, then throws (after printing all of them) if any failed. */
@@ -178,17 +199,21 @@ export function registerAddRepoCommand(program: Command, ctx: AppContext): void 
     .option('--branch <ref>', "branch/tag/sha to check out (default: the repo's default branch; requires <source>)")
     .option('--as <folder>', 'folder name to use (default: derived from the repo name; requires <source>)')
     .option('--global', "register the repo's alias globally instead of locally to this workspace")
+    .option('--from-remote-branch', "start from this workspace's branch on the remote if it's already been pushed (default: ask)")
+    .option('--no-from-remote-branch', "start fresh even if this workspace's branch is already on the remote, without asking")
     .action(async (source: string | undefined, options: AddRepoOptions) => {
       if (source === undefined) {
         if (options.branch !== undefined || options.as !== undefined) {
           throw new SporkError('--branch/--as require an explicit <source> — they cannot apply to a multi-repo pick.')
         }
-        const { workspace, outcomes } = await runAddRepoFromRegistry(ctx, options.workspace, options)
+        const { workspace, outcomes, remoteBranchNotice } = await runAddRepoFromRegistry(ctx, options.workspace, options)
+        if (remoteBranchNotice) console.log(ctx.ui.color.dim(remoteBranchNotice))
         printAddRepoBatchOutcomes(ctx, workspace, outcomes)
         return
       }
 
-      const { workspace, result } = await runAddRepo(ctx, options.workspace, source, options)
+      const { workspace, result, remoteBranchNotice } = await runAddRepo(ctx, options.workspace, source, options)
+      if (remoteBranchNotice) console.log(ctx.ui.color.dim(remoteBranchNotice))
       printAddRepoResult(ctx, workspace, result)
     })
 }

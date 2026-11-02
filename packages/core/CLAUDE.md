@@ -42,7 +42,7 @@ surface; nothing in this repo should import from `src/*` paths directly.
 `ensureRepoCache` (clone-or-fetch) and any worktree mutation against the same
 cache path must be called from inside `withRepoLock` by the caller — `cache.ts`
 itself doesn't lock, it just does the filesystem/git work. Don't call
-`cloneBare`/`fetchAll` directly outside the lock from orchestration code.
+`cloneBare`/`fetchRef` directly outside the lock from orchestration code.
 
 ## Index files (manifest/registries) need locking too, via `withFileLock`
 
@@ -111,8 +111,10 @@ the agent-instruction writers) directly. That single call is what keeps the
 in `AGENTS.md`/`CLAUDE.md`: in an `init`ed folder the rest of the file is the
 user's (see [docs/plans/0004-workspace-agent-instructions.md](../../docs/plans/0004-workspace-agent-instructions.md)).
 
-`workspace.ts` is the only place the `git`/`repo` layers get combined — keep it
-that way rather than having e.g. a CLI command call `addWorktree` directly.
+`workspace.ts` (with `workspaceBranch.ts`, which it delegates the
+workspace-branch checkout and remote-branch check to) is the only place the
+`git`/`repo` layers get combined — keep it that way rather than having e.g. a
+CLI command call `addWorktree` directly.
 Every function that reads a manifest for anything other than a pure display
 purpose should go through `reconcileWorkspace` first (see `addRepo`/`removeRepo`
 for the pattern), not call `readManifest` directly — that's what keeps stale

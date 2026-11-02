@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FunctionTask, TaskResult } from '@spork/task-runner'
 
 vi.mock('@spork/core', () => ({
   createAndRegisterWorkspace: vi.fn(),
   addRepo: vi.fn(),
+  remoteHasWorkspaceBranch: vi.fn(async () => false),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
   findEnclosingWorkspaceDir: vi.fn(),
@@ -21,10 +22,10 @@ vi.mock('@spork/prompts', () => ({
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 
-const { createAndRegisterWorkspace, addRepo, resolveWorkspaceDir, findEnclosingWorkspaceDir, listRepoAliases, codeWorkspaceFilePath, SporkError } =
+const { createAndRegisterWorkspace, addRepo, remoteHasWorkspaceBranch, resolveWorkspaceDir, findEnclosingWorkspaceDir, listRepoAliases, codeWorkspaceFilePath, SporkError } =
   await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
-const { select, NotInteractiveError } = await import('@spork/prompts')
+const { confirm, select, NotInteractiveError } = await import('@spork/prompts')
 const { runCreate, runCreateWithRepos } = await import('../../src/commands/workspace/create.js')
 const { createUi } = await import('../../src/output/color.js')
 
@@ -243,5 +244,40 @@ describe('runCreate — --no-agent-files', () => {
       dir: '/custom/path/demo',
       agentInstructions: false,
     })
+  })
+})
+
+describe('runCreateWithRepos — remote workspace branch', () => {
+  beforeEach(() => {
+    vi.mocked(addRepo).mockImplementation(async (_ctx, _dir, options) => fakeEntryResult(options.source))
+    vi.mocked(remoteHasWorkspaceBranch).mockReset().mockResolvedValue(false)
+    vi.mocked(confirm).mockReset()
+    vi.spyOn(process, 'cwd').mockReturnValue('/home/user')
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('asks about the new workspace\'s branch before creating anything, then forwards the answer to every add', async () => {
+    vi.mocked(remoteHasWorkspaceBranch).mockImplementation(async (_ctx, _dir, source) => source === 'app')
+    vi.mocked(confirm).mockImplementation(async () => {
+      expect(createAndRegisterWorkspace).not.toHaveBeenCalled()
+      return true
+    })
+
+    await runCreateWithRepos(ctx, 'demo', { repo: ['app', 'connector'] })
+
+    expect(remoteHasWorkspaceBranch).toHaveBeenCalledWith(expect.anything(), '/home/user/demo', 'app', 'demo')
+    expect(vi.mocked(addRepo).mock.calls.map((call) => call[2].fetchRemoteBranch)).toEqual([true, true])
+  })
+
+  it('returns the no-TTY notice for the command to print', async () => {
+    vi.mocked(remoteHasWorkspaceBranch).mockResolvedValue(true)
+    vi.mocked(confirm).mockRejectedValue(new NotInteractiveError())
+
+    const { remoteBranchNotice } = await runCreateWithRepos(ctx, 'demo', { repo: ['app'] })
+
+    expect(remoteBranchNotice).toContain('pass --from-remote-branch')
   })
 })

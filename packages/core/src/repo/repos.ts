@@ -43,6 +43,8 @@ export interface AddRepoSourceOptions {
    * Ignored when the cache already existed.
    */
   correctOriginTo?: string
+  /** Which ref to refresh when the cache already exists — see `EnsureRepoCacheOptions.ref`. Defaults to the default branch. */
+  ref?: string
   /**
    * Let the clone/fetch prompt on the terminal (SSH passphrase, HTTPS
    * password) — only for a caller with a person at a real terminal and
@@ -73,7 +75,11 @@ export async function addRepoSource(
   const cache = resolveRepoCache(ctx.reposRoot, source)
   const isFreshClone = !repoCacheExists(ctx.reposRoot, source)
   await withRepoLock(cache.lockPath, () =>
-    ensureRepoCache(ctx.reposRoot, source, { cloneFrom: options.cloneFrom, allowPrompts: options.allowPrompts }),
+    ensureRepoCache(ctx.reposRoot, source, {
+      cloneFrom: options.cloneFrom,
+      ref: options.ref,
+      allowPrompts: options.allowPrompts,
+    }),
   )
 
   if (isFreshClone && options.correctOriginTo) {
