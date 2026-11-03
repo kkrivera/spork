@@ -168,6 +168,12 @@ so a local copy with commits the remote doesn't have is kept as-is. Pass
 `--from-remote-branch` or `--no-from-remote-branch` to answer up front; in
 CI or a script, spork starts fresh and prints which flag to pass.
 
+Because the branch is the workspace's name, the name has to work as a
+branch in every repo. Git can't have a branch named `test` in a repo that
+already has branches like `test/fix-login`, or `kris/test` in one that
+has a `kris` branch. spork checks this before creating anything and says
+which repo and branches are in the way; pick a different name.
+
 `workspace open` asks the same question unless you pass `--with`:
 
 ```sh

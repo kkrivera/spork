@@ -102,16 +102,19 @@ describe('probeRemote', () => {
   it('reaches the remote and finds exactly that branch', async () => {
     execGitMock.mockReset().mockResolvedValue({ stdout: 'abc123\trefs/heads/me/feature\n', stderr: '' })
 
-    expect(await probeRemote(SOURCE, 'me/feature')).toEqual({ status: 'ok', hasBranch: true })
-    expect(execGitMock).toHaveBeenCalledWith(['ls-remote', SOURCE, 'refs/heads/me/feature'], {})
+    expect(await probeRemote(SOURCE, 'me/feature')).toEqual({ status: 'ok', hasBranch: true, conflicts: [] })
+    expect(execGitMock).toHaveBeenCalledWith(
+      ['ls-remote', SOURCE, 'refs/heads/me/feature', 'refs/heads/me', 'refs/heads/me/feature/*'],
+      {},
+    )
   })
 
   it('ignores a branch that only ends with the same path, and a remote without the branch', async () => {
     execGitMock.mockReset().mockResolvedValueOnce({ stdout: 'abc123\trefs/heads/other/me/feature\n', stderr: '' })
     execGitMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
 
-    expect(await probeRemote(SOURCE, 'me/feature')).toEqual({ status: 'ok', hasBranch: false })
-    expect(await probeRemote(SOURCE, 'me/feature')).toEqual({ status: 'ok', hasBranch: false })
+    expect(await probeRemote(SOURCE, 'me/feature')).toEqual({ status: 'ok', hasBranch: false, conflicts: [] })
+    expect(await probeRemote(SOURCE, 'me/feature')).toEqual({ status: 'ok', hasBranch: false, conflicts: [] })
   })
 
   it('goes through the given ssh-agent', async () => {
@@ -119,14 +122,25 @@ describe('probeRemote', () => {
 
     await probeRemote(SOURCE, 'main', { sshAuthSock: '/tmp/agent.sock' })
 
-    expect(execGitMock).toHaveBeenCalledWith(['ls-remote', SOURCE, 'refs/heads/main'], { sshAuthSock: '/tmp/agent.sock' })
+    expect(execGitMock).toHaveBeenCalledWith(['ls-remote', SOURCE, 'refs/heads/main', 'refs/heads/main/*'], {
+      sshAuthSock: '/tmp/agent.sock',
+    })
   })
 
   it('reports an authentication failure separately from any other failure', async () => {
     execGitMock.mockReset().mockRejectedValueOnce(new GitAuthError(['ls-remote'], 'Permission denied (publickey).', false))
     execGitMock.mockRejectedValueOnce(new Error('Could not resolve hostname'))
 
-    expect(await probeRemote(SOURCE, 'main')).toEqual({ status: 'auth-failed', hasBranch: false })
-    expect(await probeRemote(SOURCE, 'main')).toEqual({ status: 'unreachable', hasBranch: false })
+    expect(await probeRemote(SOURCE, 'main')).toEqual({ status: 'auth-failed', hasBranch: false, conflicts: [] })
+    expect(await probeRemote(SOURCE, 'main')).toEqual({ status: 'unreachable', hasBranch: false, conflicts: [] })
+  })
+
+  it('reports branches that clash with the name, but not ones that only share a prefix or tail', async () => {
+    execGitMock.mockReset().mockResolvedValue({
+      stdout: ['refs/heads/test/a', 'refs/heads/test/b/c', 'refs/heads/other/test/x', 'refs/tags/test/v1'].map((ref) => `abc\t${ref}\n`).join(''),
+      stderr: '',
+    })
+
+    expect(await probeRemote(SOURCE, 'test')).toEqual({ status: 'ok', hasBranch: false, conflicts: ['test/a', 'test/b/c'] })
   })
 })

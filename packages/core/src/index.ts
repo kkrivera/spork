@@ -37,7 +37,7 @@ export type {
   PrepareRemoteAccessOptions,
   RemoteAccessSession,
 } from './workspace/remoteAccess.js'
-export { prepareRemoteAccess } from './workspace/remoteAccess.js'
+export { prepareRemoteAccess, branchConflictError } from './workspace/remoteAccess.js'
 export type { RemoteAccessStatus } from './git/remote.js'
 export type { FastForwardOutcome } from './git/fetch.js'
 

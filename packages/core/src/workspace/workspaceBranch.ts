@@ -1,7 +1,9 @@
 import type { RemoteOptions } from '../git/exec.js'
+import { conflictingBranchIn } from '../git/branchConflict.js'
 import { fastForwardBranch, type FastForwardOutcome } from '../git/fetch.js'
 import { addWorktree, isBranchExistsError, isWorktreeCollisionError } from '../git/worktree.js'
 import { withRepoLock } from '../repo/lock.js'
+import { repoShortName } from '../util/repoName.js'
 import { SporkError } from '../errors.js'
 
 export interface CheckOutResult {
@@ -22,7 +24,9 @@ export interface CheckOutResult {
  * check-then-act race, though `addWorktree`'s own existence check means it
  * shouldn't normally fire) — a branch can only be checked out in one
  * worktree at a time, so that still becomes a clear `SporkError` instead of
- * letting git's own failure surface as-is.
+ * letting git's own failure surface as-is. So does `localBranch` clashing
+ * with another branch's name (`git/branchConflict.ts`), which a frontend
+ * normally catches before adding anything (`prepareRemoteAccess`).
  */
 export async function checkOutWorkspaceBranch(
   cache: { path: string; lockPath: string },
@@ -40,6 +44,8 @@ export async function checkOutWorkspaceBranch(
       return { reusedExistingBranch, remoteBranch }
     })
   } catch (error) {
+    const clash = conflictingBranchIn(error)
+    if (clash) throw new SporkError(branchConflictMessage(localBranch, repoShortName(source), [clash]))
     if (isBranchExistsError(error) || isWorktreeCollisionError(error)) {
       throw new SporkError(
         `Branch "${localBranch}" is already checked out elsewhere in the cache for "${source}" (${cache.path}) and can't be reused here. Resolve that checkout first, or create this workspace under a different name.`,
@@ -47,4 +53,23 @@ export async function checkOutWorkspaceBranch(
     }
     throw error
   }
+}
+
+/**
+ * Why `branch` can't be the workspace's branch in `repo`, given the
+ * branches there that clash with it (see `git/branchConflict.ts`'s
+ * `branchesConflict`). Worded for both `create` and `add-repo`: either
+ * way, the fix is a workspace with a different name.
+ */
+export function branchConflictMessage(branch: string, repo: string, conflicts: readonly string[]): string {
+  const parent = conflicts.find((name) => branch.startsWith(`${name}/`))
+  const reason = parent
+    ? `it already has a branch named "${parent}"`
+    : `it already has ${conflicts.length === 1 ? 'a branch' : 'branches'} under "${branch}/" (${listSome(conflicts)})`
+  return `Can't use "${branch}" as the workspace branch in ${repo}: ${reason}, and git can't have both. Use a different workspace name for this repo.`
+}
+
+function listSome(names: readonly string[]): string {
+  const shown = names.slice(0, 3).join(', ')
+  return names.length > 3 ? `${shown}, and ${names.length - 3} more` : shown
 }

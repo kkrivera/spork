@@ -5,6 +5,7 @@ import type { FunctionTask, TaskResult } from '@spork/task-runner'
 vi.mock('@spork/core', () => ({
   addRepo: vi.fn(),
   prepareRemoteAccess: vi.fn(),
+  branchConflictError: vi.fn(() => null),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
   listWorkspaces: vi.fn(),

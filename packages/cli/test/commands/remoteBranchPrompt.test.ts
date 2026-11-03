@@ -14,7 +14,7 @@ const { resolveFetchRemoteBranch } = await import('../../src/commands/workspace/
 
 function repos(...pushed: boolean[]): RepoRemoteAccess[] {
   const names = ['app', 'connector', 'infra']
-  return pushed.map((hasBranch, index) => ({ source: names[index] as string, status: 'ok', hasBranch }))
+  return pushed.map((hasBranch, index) => ({ source: names[index] as string, status: 'ok', hasBranch, conflicts: [] }))
 }
 
 beforeEach(() => {

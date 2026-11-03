@@ -1,8 +1,13 @@
+import { findLocalBranchConflicts } from '../git/branchConflict.js'
 import { probeRemote, type RemoteAccessStatus, type RemoteProbe } from '../git/remote.js'
+import { repoCacheExists, resolveRepoCache } from '../repo/cache.js'
 import { localRepoRegistryPath, resolveScopedRepoAlias } from '../registry/repoRegistry.js'
 import { startTemporaryAgent, type TemporaryAgent } from '../ssh/agent.js'
 import { findLockedKeys } from '../ssh/keys.js'
 import { parseSshTarget, sshTargetKey, type SshTarget } from '../ssh/target.js'
+import { repoShortName } from '../util/repoName.js'
+import { SporkError } from '../errors.js'
+import { branchConflictMessage } from './workspaceBranch.js'
 
 export interface RepoRemoteAccess {
   /** The alias or source exactly as given. */
@@ -10,6 +15,12 @@ export interface RepoRemoteAccess {
   status: RemoteAccessStatus
   /** Whether the remote already has the workspace's branch (it's been pushed). */
   hasBranch: boolean
+  /**
+   * Branches, on the remote or in spork's cache of the repo, that git won't
+   * allow alongside the workspace's branch (`test/a` when the workspace is
+   * `test`) — see `branchConflictError`.
+   */
+  conflicts: string[]
   /** Set when this repo is only reachable through the temporary agent — pass it on as `AddRepoOptions.sshAuthSock`. */
   sshAuthSock?: string
 }
@@ -56,7 +67,9 @@ interface Pending {
  * doesn't work.
  *
  * Doubles as the check for an already-pushed workspace branch
- * (`hasBranch`), since it's the same `ls-remote` either way.
+ * (`hasBranch`), and for branches whose names clash with it (`conflicts`,
+ * from that same `ls-remote` plus the repo's cache if it has one), so a
+ * frontend can stop before creating anything (`branchConflictError`).
  */
 export async function prepareRemoteAccess(
   ctx: { reposRoot: string; repoRegistryPath: string },
@@ -77,12 +90,36 @@ export async function prepareRemoteAccess(
     const target = parseSshTarget(urls[index] as string)
     return repo.status === 'auth-failed' && target ? [{ index, url: urls[index] as string, target }] : []
   })
-  if (!options.onUnlock || pending.length === 0 || process.platform === 'win32') {
-    return { repos, close: async () => {} }
-  }
-
-  const agent = await unlockMissingKeys(repos, pending, branch, options.onUnlock)
+  const agent =
+    options.onUnlock && pending.length > 0 && process.platform !== 'win32'
+      ? await unlockMissingKeys(repos, pending, branch, options.onUnlock)
+      : undefined
+  await addLocalConflicts(ctx.reposRoot, repos, urls, branch)
   return { repos, close: async () => agent?.stop() }
+}
+
+/**
+ * The error to stop on if the workspace's `branch` can't exist in one or
+ * more of `repos` — one line per repo, naming what clashes — or null when
+ * it can everywhere.
+ */
+export function branchConflictError(branch: string, repos: readonly RepoRemoteAccess[]): SporkError | null {
+  const lines = repos
+    .filter((repo) => repo.conflicts.length > 0)
+    .map((repo) => branchConflictMessage(branch, repoShortName(repo.source), repo.conflicts))
+  return lines.length > 0 ? new SporkError(lines.join('\n')) : null
+}
+
+/** Adds the clashing branches in each repo's existing cache to what its remote reported. */
+async function addLocalConflicts(reposRoot: string, repos: RepoRemoteAccess[], urls: string[], branch: string): Promise<void> {
+  await Promise.all(
+    repos.map(async (repo, index) => {
+      const url = urls[index] as string
+      if (!repoCacheExists(reposRoot, url)) return
+      const local = await findLocalBranchConflicts(resolveRepoCache(reposRoot, url).path, branch).catch(() => [])
+      repo.conflicts = [...new Set([...repo.conflicts, ...local])].sort()
+    }),
+  )
 }
 
 /**

@@ -6,17 +6,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../src/git/remote.js', () => ({ probeRemote: vi.fn() }))
 vi.mock('../../src/ssh/keys.js', () => ({ findLockedKeys: vi.fn() }))
 vi.mock('../../src/ssh/agent.js', () => ({ startTemporaryAgent: vi.fn() }))
+vi.mock('../../src/git/branchConflict.js', () => ({ findLocalBranchConflicts: vi.fn() }))
 
 const { probeRemote } = await import('../../src/git/remote.js')
 const { findLockedKeys } = await import('../../src/ssh/keys.js')
 const { startTemporaryAgent } = await import('../../src/ssh/agent.js')
-const { prepareRemoteAccess } = await import('../../src/workspace/remoteAccess.js')
+const { findLocalBranchConflicts } = await import('../../src/git/branchConflict.js')
+const { prepareRemoteAccess, branchConflictError } = await import('../../src/workspace/remoteAccess.js')
 const { registerRepoAlias, localRepoRegistryPath } = await import('../../src/registry/repoRegistry.js')
 const { resolveRepoCache } = await import('../../src/repo/cache.js')
 
 const probeRemoteMock = vi.mocked(probeRemote)
 const findLockedKeysMock = vi.mocked(findLockedKeys)
 const startAgentMock = vi.mocked(startTemporaryAgent)
+const localConflictsMock = vi.mocked(findLocalBranchConflicts)
 
 const WIDGETS = 'git@github.com:acme/widgets.git'
 const GADGETS = 'git@github.com:acme/gadgets.git'
@@ -32,7 +35,10 @@ const ctx = { reposRoot: '', repoRegistryPath: '' }
  * entry means the user's own agent already gets in); a probe through the
  * temporary agent succeeds once that key has been unlocked into it.
  */
-function fakeRemotes(needs: Record<string, string>, options: { unlockable?: string[]; pushed?: string[] } = {}) {
+function fakeRemotes(
+  needs: Record<string, string>,
+  options: { unlockable?: string[]; pushed?: string[]; conflicts?: Record<string, string[]> } = {},
+) {
   const loaded = new Set<string>()
   const agent = {
     socket: SOCKET,
@@ -47,8 +53,8 @@ function fakeRemotes(needs: Record<string, string>, options: { unlockable?: stri
   probeRemoteMock.mockImplementation(async (url, _branch, opts) => {
     const key = needs[url]
     const gotIn = key === undefined ? !opts?.sshAuthSock : opts?.sshAuthSock === SOCKET && loaded.has(key)
-    if (!gotIn) return { status: 'auth-failed', hasBranch: false }
-    return { status: 'ok', hasBranch: options.pushed?.includes(url) ?? false }
+    if (!gotIn) return { status: 'auth-failed', hasBranch: false, conflicts: [] }
+    return { status: 'ok', hasBranch: options.pushed?.includes(url) ?? false, conflicts: options.conflicts?.[url] ?? [] }
   })
   return agent
 }
@@ -61,6 +67,7 @@ beforeEach(async () => {
   probeRemoteMock.mockReset()
   findLockedKeysMock.mockReset().mockResolvedValue([])
   startAgentMock.mockReset()
+  localConflictsMock.mockReset().mockResolvedValue([])
   // A registered alias only counts while its cache exists (the registry self-heals otherwise).
   const cachePath = resolveRepoCache(ctx.reposRoot, WIDGETS).path
   await mkdir(cachePath, { recursive: true })
@@ -78,8 +85,8 @@ describe('prepareRemoteAccess — checking each repo', () => {
     const { repos } = await prepareRemoteAccess(ctx, dir, [WIDGETS, GADGETS], 'me/demo')
 
     expect(repos).toEqual([
-      { source: WIDGETS, status: 'ok', hasBranch: true },
-      { source: GADGETS, status: 'ok', hasBranch: false },
+      { source: WIDGETS, status: 'ok', hasBranch: true, conflicts: [] },
+      { source: GADGETS, status: 'ok', hasBranch: false, conflicts: [] },
     ])
     expect(probeRemoteMock).toHaveBeenCalledWith(WIDGETS, 'me/demo')
   })
@@ -135,8 +142,8 @@ describe('prepareRemoteAccess — unlocking keys', () => {
     expect(onUnlock).toHaveBeenCalledWith({ keyPath: '/k/id_rsa', sources: [WIDGETS, GADGETS] })
     expect(findLockedKeysMock).toHaveBeenCalledWith({ host: 'github.com', user: 'git' })
     expect(session.repos).toEqual([
-      { source: WIDGETS, status: 'ok', hasBranch: false, sshAuthSock: SOCKET },
-      { source: GADGETS, status: 'ok', hasBranch: true, sshAuthSock: SOCKET },
+      { source: WIDGETS, status: 'ok', hasBranch: false, conflicts: [], sshAuthSock: SOCKET },
+      { source: GADGETS, status: 'ok', hasBranch: true, conflicts: [], sshAuthSock: SOCKET },
     ])
     expect(agent.stop).not.toHaveBeenCalled()
     await session.close()
@@ -150,7 +157,7 @@ describe('prepareRemoteAccess — unlocking keys', () => {
     const { repos } = await prepareRemoteAccess(ctx, dir, [WIDGETS, GADGETS], 'me/demo', { onUnlock: vi.fn() })
 
     expect(repos[0]?.sshAuthSock).toBe(SOCKET)
-    expect(repos[1]).toEqual({ source: GADGETS, status: 'ok', hasBranch: false })
+    expect(repos[1]).toEqual({ source: GADGETS, status: 'ok', hasBranch: false, conflicts: [] })
   })
 
   it('asks separately for each host that needs a different key', async () => {
@@ -179,7 +186,7 @@ describe('prepareRemoteAccess — when unlocking does not help', () => {
 
     expect(onUnlock.mock.calls.map((call) => call[0].keyPath)).toEqual(['/k/id_first', '/k/id_second'])
     expect(agent.unlock).toHaveBeenCalledTimes(2)
-    expect(session.repos[0]).toEqual({ source: WIDGETS, status: 'auth-failed', hasBranch: false })
+    expect(session.repos[0]).toEqual({ source: WIDGETS, status: 'auth-failed', hasBranch: false, conflicts: [] })
     await session.close()
     expect(agent.stop).toHaveBeenCalled()
   })
@@ -195,5 +202,49 @@ describe('prepareRemoteAccess — when unlocking does not help', () => {
     expect(onUnlock).not.toHaveBeenCalled()
     expect(session.repos[0]?.status).toBe('auth-failed')
     await expect(session.close()).resolves.toBeUndefined()
+  })
+})
+
+describe('prepareRemoteAccess — branch name clashes', () => {
+  it("adds clashing branches from the repo's cache to the remote's, once each, and skips repos with no cache", async () => {
+    fakeRemotes({}, { conflicts: { [WIDGETS]: ['test/b'], [GADGETS]: ['test/x'] } })
+    localConflictsMock.mockResolvedValue(['test/a', 'test/b'])
+
+    const { repos } = await prepareRemoteAccess(ctx, dir, [WIDGETS, GADGETS], 'test')
+
+    expect(repos.map((repo) => repo.conflicts)).toEqual([['test/a', 'test/b'], ['test/x']])
+    expect(localConflictsMock).toHaveBeenCalledTimes(1)
+    expect(localConflictsMock).toHaveBeenCalledWith(resolveRepoCache(ctx.reposRoot, WIDGETS).path, 'test')
+  })
+
+  it("ignores a cache it can't read", async () => {
+    fakeRemotes({})
+    localConflictsMock.mockRejectedValue(new Error('not a git repository'))
+
+    const { repos } = await prepareRemoteAccess(ctx, dir, [WIDGETS], 'test')
+
+    expect(repos[0]?.conflicts).toEqual([])
+  })
+})
+
+describe('branchConflictError', () => {
+  const repo = (source: string, conflicts: string[]) => ({ source, status: 'ok' as const, hasBranch: false, conflicts })
+
+  it('is null when the branch can exist in every repo', () => {
+    expect(branchConflictError('test', [repo(WIDGETS, []), repo(GADGETS, [])])).toBeNull()
+  })
+
+  it('names each repo and what clashes there, one line each', () => {
+    const error = branchConflictError('test', [repo(WIDGETS, ['test/a', 'test/b']), repo(GADGETS, []), repo('app', ['test/x'])])
+
+    expect(error?.message.split('\n')).toEqual([
+      'Can\'t use "test" as the workspace branch in widgets: it already has branches under "test/" (test/a, test/b), and git can\'t have both. Use a different workspace name for this repo.',
+      'Can\'t use "test" as the workspace branch in app: it already has a branch under "test/" (test/x), and git can\'t have both. Use a different workspace name for this repo.',
+    ])
+  })
+
+  it('names a parent branch, and shortens a long list', () => {
+    expect(branchConflictError('kris/test', [repo(WIDGETS, ['kris'])])?.message).toContain('it already has a branch named "kris",')
+    expect(branchConflictError('t', [repo(WIDGETS, ['t/1', 't/2', 't/3', 't/4', 't/5'])])?.message).toContain('(t/1, t/2, t/3, and 2 more)')
   })
 })

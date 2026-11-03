@@ -5,6 +5,7 @@ vi.mock('@spork/core', () => ({
   createAndRegisterWorkspace: vi.fn(),
   addRepo: vi.fn(),
   prepareRemoteAccess: vi.fn(),
+  branchConflictError: vi.fn(() => null),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
   findEnclosingWorkspaceDir: vi.fn(),

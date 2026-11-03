@@ -1,3 +1,4 @@
+import { branchConflictPatterns, branchesConflict } from './branchConflict.js'
 import { execGit, GitAuthError, type RemoteOptions } from './exec.js'
 
 /**
@@ -43,12 +44,15 @@ export interface RemoteProbe {
   status: RemoteAccessStatus
   /** Whether the remote has a branch named exactly `branch`; false unless `status` is `'ok'`. */
   hasBranch: boolean
+  /** Remote branches git won't allow alongside `branch` (see `branchesConflict`); empty unless `status` is `'ok'`. */
+  conflicts: string[]
 }
 
 /**
  * Asks `source` (a URL or local path — doesn't need to be cloned yet)
- * whether it has a branch named exactly `branch`, via `git ls-remote`,
- * which also shows whether spork can reach it at all with the given
+ * whether it has a branch named exactly `branch`, and which of its
+ * branches would stop `branch` from existing at all, via one `git
+ * ls-remote`. That also shows whether spork can reach it with the given
  * `options` (prompts off by default, so this never waits on anyone).
  * Never throws: a failure is reported as a status, for the caller to
  * decide whether it's worth fixing first (an unlocked SSH key) or just
@@ -57,9 +61,14 @@ export interface RemoteProbe {
 export async function probeRemote(source: string, branch: string, options: RemoteOptions = {}): Promise<RemoteProbe> {
   const ref = `refs/heads/${branch}`
   try {
-    const { stdout } = await execGit(['ls-remote', source, ref], options)
-    return { status: 'ok', hasBranch: stdout.split('\n').some((line) => line.split('\t')[1]?.trim() === ref) }
+    const { stdout } = await execGit(['ls-remote', source, ref, ...branchConflictPatterns(branch)], options)
+    const refs = stdout.split('\n').map((line) => line.split('\t')[1]?.trim() ?? '')
+    const conflicts = refs
+      .filter((name) => name.startsWith('refs/heads/'))
+      .map((name) => name.slice('refs/heads/'.length))
+      .filter((name) => branchesConflict(branch, name))
+    return { status: 'ok', hasBranch: refs.includes(ref), conflicts }
   } catch (error) {
-    return { status: error instanceof GitAuthError ? 'auth-failed' : 'unreachable', hasBranch: false }
+    return { status: error instanceof GitAuthError ? 'auth-failed' : 'unreachable', hasBranch: false, conflicts: [] }
   }
 }

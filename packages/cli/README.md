@@ -139,8 +139,10 @@ logic lives here.
   First, in a terminal, any SSH key that isn't loaded in the user's
   ssh-agent is unlocked for this one command: `keyUnlockNotifier` (passed
   in by `register*` as `onUnlockKey`, undefined without a TTY) prints which
-  repos need which key, then `ssh-add` asks for the passphrase. Then
-  `remoteBranchPrompt.ts` decides whether to start from an already-pushed
+  repos need which key, then `ssh-add` asks for the passphrase. Next, if
+  the workspace's name can't be a branch in some repo (`@spork/core`'s
+  `branchConflictError`: say `test` when the repo has `test/a`), it throws
+  that error before anything is created. Then `remoteBranchPrompt.ts` decides whether to start from an already-pushed
   workspace branch. Returns each repo's agent socket (`sshAuthSocks`) and
   a `close()` the caller runs in a `finally`, which forgets the key.
 - `src/commands/workspace/remoteBranchPrompt.ts` —

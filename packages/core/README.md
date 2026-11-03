@@ -85,7 +85,16 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     branch, options)` likewise asks `source` directly whether it has exactly
     `refs/heads/<branch>`, and never throws: it reports `'ok'`,
     `'auth-failed'` (a `GitAuthError`), or `'unreachable'`, so a caller can
-    tell a missing SSH key apart from any other failure.
+    tell a missing SSH key apart from any other failure. The same call also
+    lists the remote's branches whose names clash with `branch` (`conflicts`).
+  - `branchConflict.ts` — git can't have a branch and a folder of branches
+    with the same name (`test` next to `test/a`, or `kris/test` next to
+    `kris`). `branchesConflict` is that rule; `branchConflictPatterns` are
+    the `ls-remote` patterns `probeRemote` uses to find clashes on a
+    remote; `findLocalBranchConflicts` finds them in a cache (a fresh
+    `clone --bare` copies every remote branch, so a cache can hold clashes
+    the remote has since deleted); `conflictingBranchIn` reads git's own
+    refusal out of a failed `worktree add`.
   - `submodule.ts` — `hasSubmodules` (checks for a `.gitmodules` file) and
     `initSubmodules` (`git submodule update --init --recursive`), since
     `worktree add` never initializes submodules on its own.
@@ -240,7 +249,8 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     (`AddRepoOptions.fetchRemoteBranch`, reported back as
     `AddRepoResult.remoteBranch`), and turns `addWorktree`'s
     `isBranchExistsError`/`isWorktreeCollisionError` into a clear
-    `SporkError`.
+    `SporkError`, and git refusing a clashing branch name into
+    `branchConflictMessage`'s, for a frontend that didn't check first.
   - `remoteAccess.ts` — `prepareRemoteAccess(ctx, workspaceDir, sources,
     branch, { onUnlock })`, run by a frontend before it adds anything:
     resolves each alias the same way `addRepo` does, `probeRemote`s every
@@ -249,8 +259,11 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     time, re-checking after each. Each repo comes back with its `status`,
     whether the workspace branch is already pushed (`hasBranch`, for
     offering `fetchRemoteBranch`), and the `sshAuthSock` to pass to
-    `addRepo` if only the temporary agent gets in. `close()` stops that
-    agent. See [docs/plans/0005-ssh-key-unlock.md](../../docs/plans/0005-ssh-key-unlock.md).
+    `addRepo` if only the temporary agent gets in, plus the branches on the
+    remote or in the repo's cache that clash with the workspace's branch
+    (`conflicts`). `branchConflictError(branch, repos)` turns those into
+    one `SporkError` (a line per repo, from `workspaceBranch.ts`'s
+    `branchConflictMessage`), or null. `close()` stops that agent. See [docs/plans/0005-ssh-key-unlock.md](../../docs/plans/0005-ssh-key-unlock.md).
   - `workspace.ts` — orchestration: `createWorkspace`, `addRepo`, `removeRepo`,
     `removeWorkspace`, `getWorkspaceStatus`, and `reconcileWorkspace` (pruning
     stale git worktree metadata and dropping manifest entries for folders

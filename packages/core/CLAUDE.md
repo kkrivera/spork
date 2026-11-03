@@ -51,6 +51,13 @@ surface; nothing in this repo should import from `src/*` paths directly.
   failure surface, or trying to work around something it fundamentally
   can't. See
   [docs/plans/0001-worktree-workspace-architecture.md](../../docs/plans/0001-worktree-workspace-architecture.md).
+- The other thing it can't resolve is the workspace's name clashing with
+  another branch's (`test` when the repo has `test/a`; see
+  `git/branchConflict.ts`). The remote would refuse that branch too, so
+  don't try to work around it (deleting the cache's clashing ref, or
+  quietly renaming the workspace's branch): a workspace's branch is always
+  its name. Report it before anything is created instead, the way
+  `prepareRemoteAccess`'s `conflicts` and `branchConflictError` do.
 
 ## `src/repo`
 

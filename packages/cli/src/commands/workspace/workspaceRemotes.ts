@@ -1,5 +1,5 @@
 import os from 'node:os'
-import { defaultAlias, prepareRemoteAccess, type KeyUnlockRequest } from '@spork/core'
+import { branchConflictError, defaultAlias, prepareRemoteAccess, type KeyUnlockRequest } from '@spork/core'
 import { workspaceContext, type AppContext } from '../../context.js'
 import { resolveFetchRemoteBranch } from './remoteBranchPrompt.js'
 
@@ -28,6 +28,8 @@ export interface WorkspaceRemotes {
  * dashboard starts, from one `ls-remote` per repo (`@spork/core`'s
  * `prepareRemoteAccess`): unlocking any SSH key that isn't loaded (asked
  * for on the terminal by `ssh-add`, only when `onUnlockKey` is set), then
+ * stopping with a clear error if the workspace's name can't be a branch in
+ * some repo (`branchConflictError`: `test` when it has `test/a`), then
  * whether to start from an already-pushed workspace branch. The caller
  * must `close()` the result once its adds are done, so the key is
  * forgotten — see docs/plans/0005-ssh-key-unlock.md.
@@ -43,6 +45,8 @@ export async function prepareWorkspaceRemotes(
     onUnlock: options.onUnlockKey,
   })
   try {
+    const conflict = branchConflictError(branch, session.repos)
+    if (conflict) throw conflict
     const decision = await resolveFetchRemoteBranch(session.repos, branch, options.fromRemoteBranch)
     const sshAuthSocks = new Map(session.repos.flatMap((repo) => (repo.sshAuthSock ? [[repo.source, repo.sshAuthSock] as const] : [])))
     return { fetchRemoteBranch: decision.fetchRemoteBranch, remoteBranchNotice: decision.notice, sshAuthSocks, close: session.close }

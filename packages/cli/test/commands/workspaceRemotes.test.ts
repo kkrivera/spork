@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@spork/core', () => ({
   defaultAlias: (source: string) => source.replace(/^.*\/(.*)\.git$/, '$1'),
   prepareRemoteAccess: vi.fn(),
+  branchConflictError: (branch: string, repos: Array<{ source: string; conflicts: string[] }>) => {
+    const clashing = repos.filter((repo) => repo.conflicts.length > 0)
+    return clashing.length > 0 ? new Error(`"${branch}" clashes in ${clashing.map((repo) => repo.source).join(', ')}`) : null
+  },
 }))
 vi.mock('@spork/prompts', () => ({
   confirm: vi.fn(),
@@ -58,6 +62,17 @@ describe('prepareWorkspaceRemotes', () => {
     vi.mocked(confirm).mockRejectedValue(new Error('stdin closed'))
 
     await expect(prepareWorkspaceRemotes(ctx, '/ws/demo', 'demo', [WIDGETS], {})).rejects.toThrow('stdin closed')
+    expect(access.close).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('prepareWorkspaceRemotes — branch name clashes', () => {
+  it("stops before asking anything else when the workspace's name can't be a branch in some repo", async () => {
+    const access = fakeRemoteAccess({ pushed: [GADGETS], conflicts: { [WIDGETS]: ['demo/a'] } })
+    vi.mocked(prepareRemoteAccess).mockReset().mockImplementation(access)
+
+    await expect(prepareWorkspaceRemotes(ctx, '/ws/demo', 'demo', [WIDGETS, GADGETS], {})).rejects.toThrow(`"demo" clashes in ${WIDGETS}`)
+    expect(confirm).not.toHaveBeenCalled()
     expect(access.close).toHaveBeenCalledTimes(1)
   })
 })
