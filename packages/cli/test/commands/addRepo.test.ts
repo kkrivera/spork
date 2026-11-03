@@ -4,7 +4,7 @@ import type { FunctionTask, TaskResult } from '@spork/task-runner'
 
 vi.mock('@spork/core', () => ({
   addRepo: vi.fn(),
-  remoteHasWorkspaceBranch: vi.fn(async () => false),
+  prepareRemoteAccess: vi.fn(),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
   listWorkspaces: vi.fn(),
@@ -23,15 +23,16 @@ vi.mock('../../src/commands/repo/list.js', () => ({
   runList: vi.fn(),
 }))
 
-const { addRepo, remoteHasWorkspaceBranch, resolveWorkspaceDir, listWorkspaces, findEnclosingWorkspaceDir, SporkError } =
+const { addRepo, prepareRemoteAccess, resolveWorkspaceDir, listWorkspaces, findEnclosingWorkspaceDir, SporkError } =
   await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
 const { confirm, select, NotInteractiveError } = await import('@spork/prompts')
 const { runList } = await import('../../src/commands/repo/list.js')
-const { runAddRepo, runAddRepoFromRegistry, printAddRepoResult, registerAddRepoCommand } = await import(
+const { runAddRepo, runAddRepoFromRegistry, registerAddRepoCommand } = await import(
   '../../src/commands/workspace/addRepo.js'
 )
 const { createUi } = await import('../../src/output/color.js')
+const { fakeRemoteAccess } = await import('./fakeRemoteAccess.js')
 
 const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 
@@ -70,7 +71,7 @@ beforeEach(() => {
   vi.mocked(findEnclosingWorkspaceDir).mockReset().mockReturnValue(null)
   vi.mocked(select).mockReset()
   vi.mocked(confirm).mockReset()
-  vi.mocked(remoteHasWorkspaceBranch).mockReset().mockResolvedValue(false)
+  vi.mocked(prepareRemoteAccess).mockReset().mockImplementation(fakeRemoteAccess())
   vi.mocked(runList).mockReset().mockResolvedValue([])
 })
 
@@ -174,71 +175,9 @@ describe('runAddRepoFromRegistry', () => {
   })
 })
 
-describe('printAddRepoResult', () => {
-  it('is reused directly by callers other than the add-repo command (e.g. create --repo)', () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    printAddRepoResult(ctx, 'demo', { entry: widgetsEntry, aliasScope: 'local', submodulesInitialized: false })
-
-    expect(logSpy.mock.calls.flat().join('\n')).toContain('Added "widgets"')
-    logSpy.mockRestore()
-  })
-
-  it('shows which registry the alias landed in', () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    printAddRepoResult(ctx, 'demo', { entry: widgetsEntry, aliasScope: 'global', submodulesInitialized: false })
-
-    expect(logSpy.mock.calls.flat().join('\n')).toContain('(alias: global)')
-    logSpy.mockRestore()
-  })
-})
-
-describe('printAddRepoResult — branch reuse', () => {
-  it('notes when an existing branch was reused instead of creating a fresh one', () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    printAddRepoResult(ctx, 'demo', { entry: widgetsEntry, aliasScope: 'local', submodulesInitialized: false, reusedExistingBranch: true })
-
-    expect(logSpy.mock.calls.flat().join('\n')).toContain('Reused existing branch "demo"')
-    logSpy.mockRestore()
-  })
-
-  it('says nothing about reuse when a fresh branch was created', () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    printAddRepoResult(ctx, 'demo', { entry: widgetsEntry, aliasScope: 'local', submodulesInitialized: false, reusedExistingBranch: false })
-
-    expect(logSpy.mock.calls.flat().join('\n')).not.toContain('Reused')
-    logSpy.mockRestore()
-  })
-})
-
-describe('printAddRepoResult — remote branch', () => {
-  it('notes when the worktree started from the remote branch', () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    printAddRepoResult(ctx, 'demo', { entry: widgetsEntry, aliasScope: 'local', submodulesInitialized: false, reusedExistingBranch: true, remoteBranch: 'updated' })
-
-    const output = logSpy.mock.calls.flat().join('\n')
-    expect(output).toContain(`Started "widgets" from the remote's "demo"`)
-    expect(output).not.toContain('Reused')
-    logSpy.mockRestore()
-  })
-
-  it('warns when the local branch had diverged and was kept', () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    printAddRepoResult(ctx, 'demo', { entry: widgetsEntry, aliasScope: 'local', submodulesInitialized: false, reusedExistingBranch: true, remoteBranch: 'diverged' })
-
-    expect(logSpy.mock.calls.flat().join('\n')).toContain('has diverged from the remote')
-    logSpy.mockRestore()
-  })
-})
-
 describe('registerAddRepoCommand', () => {
   it('prints the no-TTY notice when the remote has the branch but there was no one to ask', async () => {
-    vi.mocked(remoteHasWorkspaceBranch).mockResolvedValue(true)
+    vi.mocked(prepareRemoteAccess).mockImplementation(fakeRemoteAccess({ pushed: ['git@github.com:acme/widgets.git'] }))
     vi.mocked(confirm).mockRejectedValue(new NotInteractiveError())
     const program = new Command()
     registerAddRepoCommand(program, ctx)
@@ -246,20 +185,23 @@ describe('registerAddRepoCommand', () => {
 
     await program.parseAsync(['node', 'test', 'add-repo', '--workspace', 'demo', 'git@github.com:acme/widgets.git'])
 
-    expect(remoteHasWorkspaceBranch).toHaveBeenCalledWith(expect.anything(), '/ws/demo', 'git@github.com:acme/widgets.git', 'demo')
+    expect(prepareRemoteAccess).toHaveBeenCalledWith(expect.anything(), '/ws/demo', ['git@github.com:acme/widgets.git'], 'demo', {
+      onUnlock: undefined,
+    })
     expect(logSpy.mock.calls.flat().join('\n')).toContain('pass --from-remote-branch to start from it')
     expect(addRepo).toHaveBeenCalledWith(expect.anything(), '/ws/demo', expect.objectContaining({ fetchRemoteBranch: false }))
     logSpy.mockRestore()
   })
 
-  it('parses --no-from-remote-branch as an explicit no, skipping the remote check', async () => {
+  it('parses --no-from-remote-branch as an explicit no, without asking', async () => {
+    vi.mocked(prepareRemoteAccess).mockImplementation(fakeRemoteAccess({ pushed: ['git@github.com:acme/widgets.git'] }))
     const program = new Command()
     registerAddRepoCommand(program, ctx)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await program.parseAsync(['node', 'test', 'add-repo', '-w', 'demo', '--no-from-remote-branch', 'git@github.com:acme/widgets.git'])
 
-    expect(remoteHasWorkspaceBranch).not.toHaveBeenCalled()
+    expect(confirm).not.toHaveBeenCalled()
     expect(addRepo).toHaveBeenCalledWith(expect.anything(), '/ws/demo', expect.objectContaining({ fetchRemoteBranch: false }))
     logSpy.mockRestore()
   })

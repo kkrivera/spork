@@ -98,13 +98,21 @@ that's already open keeps using the old version until you restart it.
 
 ### Using an SSH key with a passphrase?
 
-Load it into your ssh-agent once, so spork can clone without having to
-ask you for the passphrase:
+`workspace create` and `add-repo` ask for it when a repo needs a key that
+isn't loaded in your ssh-agent. spork keeps the key only until that
+command finishes, so the next one asks again. Press Enter with no
+passphrase to skip a key.
+
+To stop being asked, load the key into your ssh-agent yourself. spork
+then uses it without asking:
 
 ```sh
 ssh-add --apple-use-keychain ~/.ssh/id_ed25519   # macOS
 ssh-add ~/.ssh/id_ed25519                        # Linux
 ```
+
+spork only asks in a terminal, and not on Windows. In CI or a script, load
+the key first.
 
 ## Quick start
 

@@ -192,7 +192,7 @@ export interface AddRepoOptions {
    * remote before creating the worktree, for resuming a workspace branch
    * that's already been pushed (see `git/fetch.ts`'s `fastForwardBranch`).
    * Off by default: a frontend decides, typically by asking after
-   * `remoteHasWorkspaceBranch` finds one.
+   * `prepareRemoteAccess` finds one (`hasBranch`).
    */
   fetchRemoteBranch?: boolean
   /**

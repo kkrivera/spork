@@ -571,8 +571,9 @@ cache as a side effect. Resuming one is now an explicit choice instead
 ### Offer to start from an already-pushed workspace branch
 
 Before adding repos, `create`/`add-repo` ask each repo's remote
-(`remoteHasWorkspaceBranch`, a `git ls-remote` against the source, so it
-works before the repo is cloned) whether the workspace's branch already
+(a `git ls-remote` against the source, so it works before the repo is
+cloned; since 0005 it's the same check `prepareRemoteAccess` runs to
+find a missing SSH key) whether the workspace's branch already
 exists there. If any do, they confirm once for the whole batch. The
 question has to come before the live dashboard starts, since the adds run
 concurrently and nothing can prompt while it's drawing.

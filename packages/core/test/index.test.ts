@@ -5,7 +5,7 @@ describe('public exports', () => {
   it('exposes the workspace lifecycle API', () => {
     expect(core.createWorkspace).toBeInstanceOf(Function)
     expect(core.addRepo).toBeInstanceOf(Function)
-    expect(core.remoteHasWorkspaceBranch).toBeInstanceOf(Function)
+    expect(core.prepareRemoteAccess).toBeInstanceOf(Function)
     expect(core.removeRepo).toBeInstanceOf(Function)
     expect(core.removeWorkspace).toBeInstanceOf(Function)
     expect(core.reconcileWorkspace).toBeInstanceOf(Function)

@@ -1,6 +1,6 @@
 # 0005 — Asking for an SSH key's passphrase, one command at a time
 
-Status: Accepted
+Status: Implemented
 
 ## Problem
 

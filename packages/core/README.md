@@ -81,9 +81,11 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     back to that upstream afterward. `getRemoteDefaultBranch(source)` asks a
     URL or local path directly what its default branch is (`git ls-remote
     --symref <source> HEAD`), without needing it cloned first — same
-    fail-open-to-`null` convention as `getRemoteUrl`. `remoteHasBranch(source,
-    branch)` likewise asks `source` directly whether it has exactly
-    `refs/heads/<branch>` (fails open to `false`).
+    fail-open-to-`null` convention as `getRemoteUrl`. `probeRemote(source,
+    branch, options)` likewise asks `source` directly whether it has exactly
+    `refs/heads/<branch>`, and never throws: it reports `'ok'`,
+    `'auth-failed'` (a `GitAuthError`), or `'unreachable'`, so a caller can
+    tell a missing SSH key apart from any other failure.
   - `submodule.ts` — `hasSubmodules` (checks for a `.gitmodules` file) and
     `initSubmodules` (`git submodule update --init --recursive`), since
     `worktree add` never initializes submodules on its own.
@@ -238,10 +240,17 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     (`AddRepoOptions.fetchRemoteBranch`, reported back as
     `AddRepoResult.remoteBranch`), and turns `addWorktree`'s
     `isBranchExistsError`/`isWorktreeCollisionError` into a clear
-    `SporkError`. `remoteHasWorkspaceBranch(ctx, workspaceDir,
-    aliasOrSource, branch)` resolves an alias the same way `addRepo` does
-    and asks the remote whether the branch already exists, so a frontend can
-    offer `fetchRemoteBranch` before adding anything.
+    `SporkError`.
+  - `remoteAccess.ts` — `prepareRemoteAccess(ctx, workspaceDir, sources,
+    branch, { onUnlock })`, run by a frontend before it adds anything:
+    resolves each alias the same way `addRepo` does, `probeRemote`s every
+    repo with the user's own ssh-agent, and, given `onUnlock`, unlocks any
+    missing SSH key into a temporary agent (`ssh/agent.ts`), one key at a
+    time, re-checking after each. Each repo comes back with its `status`,
+    whether the workspace branch is already pushed (`hasBranch`, for
+    offering `fetchRemoteBranch`), and the `sshAuthSock` to pass to
+    `addRepo` if only the temporary agent gets in. `close()` stops that
+    agent. See [docs/plans/0005-ssh-key-unlock.md](../../docs/plans/0005-ssh-key-unlock.md).
   - `workspace.ts` — orchestration: `createWorkspace`, `addRepo`, `removeRepo`,
     `removeWorkspace`, `getWorkspaceStatus`, and `reconcileWorkspace` (pruning
     stale git worktree metadata and dropping manifest entries for folders

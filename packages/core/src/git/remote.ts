@@ -1,4 +1,4 @@
-import { execGit } from './exec.js'
+import { execGit, GitAuthError, type RemoteOptions } from './exec.js'
 
 /**
  * Returns the remote's URL, or null if it has none (the only realistic
@@ -36,18 +36,30 @@ export async function getRemoteDefaultBranch(source: string): Promise<string | n
   }
 }
 
+/** `'auth-failed'`: git couldn't authenticate (see `isAuthFailure`); `'unreachable'`: any other failure. */
+export type RemoteAccessStatus = 'ok' | 'auth-failed' | 'unreachable'
+
+export interface RemoteProbe {
+  status: RemoteAccessStatus
+  /** Whether the remote has a branch named exactly `branch`; false unless `status` is `'ok'`. */
+  hasBranch: boolean
+}
+
 /**
- * Whether `source` (a URL or local path — doesn't need to be cloned yet)
- * has a branch named exactly `branch`, via `git ls-remote`. Fails open to
- * `false` like `getRemoteDefaultBranch`: an unreachable remote just means
- * there's nothing to offer, not an error worth surfacing.
+ * Asks `source` (a URL or local path — doesn't need to be cloned yet)
+ * whether it has a branch named exactly `branch`, via `git ls-remote`,
+ * which also shows whether spork can reach it at all with the given
+ * `options` (prompts off by default, so this never waits on anyone).
+ * Never throws: a failure is reported as a status, for the caller to
+ * decide whether it's worth fixing first (an unlocked SSH key) or just
+ * left for the real clone/fetch to report.
  */
-export async function remoteHasBranch(source: string, branch: string): Promise<boolean> {
+export async function probeRemote(source: string, branch: string, options: RemoteOptions = {}): Promise<RemoteProbe> {
   const ref = `refs/heads/${branch}`
   try {
-    const { stdout } = await execGit(['ls-remote', source, ref])
-    return stdout.split('\n').some((line) => line.split('\t')[1]?.trim() === ref)
-  } catch {
-    return false
+    const { stdout } = await execGit(['ls-remote', source, ref], options)
+    return { status: 'ok', hasBranch: stdout.split('\n').some((line) => line.split('\t')[1]?.trim() === ref) }
+  } catch (error) {
+    return { status: error instanceof GitAuthError ? 'auth-failed' : 'unreachable', hasBranch: false }
   }
 }

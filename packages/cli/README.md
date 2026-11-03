@@ -132,16 +132,24 @@ logic lives here.
   Ctrl+C) becomes `SporkError('Cancelled.')`. Both resolve to the
   workspace's *name*, not its directory, so a caller still goes through
   `resolveWorkspaceDir` the normal way afterward.
+- `src/commands/workspace/workspaceRemotes.ts` —
+  `prepareWorkspaceRemotes`: everything `create` and both `add-repo` flows
+  settle with the remotes before their live dashboard starts (nothing can
+  prompt while it's drawing), from `@spork/core`'s `prepareRemoteAccess`.
+  First, in a terminal, any SSH key that isn't loaded in the user's
+  ssh-agent is unlocked for this one command: `keyUnlockNotifier` (passed
+  in by `register*` as `onUnlockKey`, undefined without a TTY) prints which
+  repos need which key, then `ssh-add` asks for the passphrase. Then
+  `remoteBranchPrompt.ts` decides whether to start from an already-pushed
+  workspace branch. Returns each repo's agent socket (`sshAuthSocks`) and
+  a `close()` the caller runs in a `finally`, which forgets the key.
 - `src/commands/workspace/remoteBranchPrompt.ts` —
   `resolveFetchRemoteBranch`: decides `@spork/core`'s
-  `AddRepoOptions.fetchRemoteBranch` for `create` and both `add-repo`
-  flows, before their live dashboard starts (nothing can prompt while it's
-  drawing). `--from-remote-branch`/`--no-from-remote-branch` win outright.
-  Otherwise it asks every source's remote in parallel
-  (`remoteHasWorkspaceBranch`) whether the workspace's branch already
-  exists there and, if any do, confirms once for the whole batch (default
-  yes). Without a TTY it starts fresh and returns a `notice` naming the
-  flag, which the `register*` side prints.
+  `AddRepoOptions.fetchRemoteBranch` from what `prepareRemoteAccess` found.
+  `--from-remote-branch`/`--no-from-remote-branch` win outright. Otherwise,
+  if any repo's remote already has the workspace's branch, it confirms once
+  for the whole batch (default yes). Without a TTY it starts fresh and
+  returns a `notice` naming the flag, which the `register*` side prints.
 - `src/commands/workspace/addReposBatch.ts` — `addReposToWorkspace`: adds
   several sources to one workspace directory concurrently
   (`runConcurrently`'s live dashboard), calling `@spork/core`'s `addRepo`
@@ -317,8 +325,10 @@ logic lives here.
   true`, so git/ssh can ask for an SSH passphrase, HTTPS password, or
   host-key confirmation; the dashboard's redraws would otherwise erase
   that prompt the moment it appeared, leaving what looks like a hang.
-  Everywhere else (CI, a pipe, and every batch command) prompts stay off,
-  and an auth failure errors immediately with what to do next.
+  Everywhere else (CI, a pipe, and every batch command) git's own prompts
+  stay off, and an auth failure errors immediately with what to do next.
+  `workspace create`/`add-repo` instead ask for a missing SSH key's
+  passphrase up front (`workspaceRemotes.ts` above).
   `repo remove [aliases...]` is deliberately **global-only** — no
   `--global`/`--local` flags at all, unlike `add`/`list`/`scan` below —
   since a workspace's own *local* alias (and, for a real worktree, the

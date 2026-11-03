@@ -31,7 +31,14 @@ export {
   getWorkspaceStatus,
 } from './workspace/workspace.js'
 
-export { remoteHasWorkspaceBranch } from './workspace/workspaceBranch.js'
+export type {
+  RepoRemoteAccess,
+  KeyUnlockRequest,
+  PrepareRemoteAccessOptions,
+  RemoteAccessSession,
+} from './workspace/remoteAccess.js'
+export { prepareRemoteAccess } from './workspace/remoteAccess.js'
+export type { RemoteAccessStatus } from './git/remote.js'
 export type { FastForwardOutcome } from './git/fetch.js'
 
 export type { WorktreeStatus } from './git/status.js'
