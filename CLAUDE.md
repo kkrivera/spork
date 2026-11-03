@@ -55,3 +55,7 @@ for the full design and its rationale — read that before changing anything und
   module's README.md from its current source.
 - [.claude/skills/new-package](.claude/skills/new-package/SKILL.md) — scaffold a new
   `packages/<name>` package with the standard boilerplate.
+- [.claude/skills/changelog](.claude/skills/changelog/SKILL.md) — write a release's
+  `CHANGELOG.md` entry. The `changelog-check` hook (see
+  [.claude/README.md](.claude/README.md)) asks for this whenever a release tag has
+  no entry: write it, get the user's approval, commit and push it, then carry on.

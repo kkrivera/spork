@@ -16,9 +16,10 @@ the root `package.json`, computes the next one (`nextVersion`), and then:
   `McpServer({ version })` in `packages/mcp/src/index.ts`.
 
 It prints the new version to stdout as its last line, which
-`release-bump.yml` captures to name the commit and tag it creates. No
-changelog file is generated — GitHub's `gh release create --generate-notes`
-builds release notes from commit history instead.
+`release-bump.yml` captures to name the commit and tag it creates. It
+doesn't write the changelog: each release's `CHANGELOG.md` entry is written
+afterwards in Claude Code (the `changelog` skill), prompted by the
+`changelog-check` hook in `.claude/`.
 
 ## Usage
 

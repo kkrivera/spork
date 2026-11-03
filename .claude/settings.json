@@ -5,5 +5,31 @@
       "Bash(./node_modules/.bin/eslint .)",
       "Bash(./node_modules/.bin/vitest run *)"
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/changelog-check.sh session-start",
+            "timeout": 15,
+            "statusMessage": "Checking for releases without a changelog entry"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/changelog-check.sh prompt",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

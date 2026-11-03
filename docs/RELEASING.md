@@ -16,7 +16,14 @@ for the design behind this. This doc is the operational runbook.
    and regenerates `Formula/spork.rb` from the new release's archives
    (committed straight to `main`).
 
-Nothing else to do — steps 2–3 are fully automatic once step 1 is run.
+Steps 2–3 are fully automatic once step 1 is run.
+
+4. Write the release's `CHANGELOG.md` entry. The next time you work in
+   this repo with Claude Code, its `changelog-check` hook notices the new
+   tag has no entry. Claude writes it from the release's commits (the
+   [changelog skill](../.claude/skills/changelog/SKILL.md)), shows it to
+   you, and commits and pushes it once you approve. To do it straight
+   away instead, ask Claude to write the changelog.
 
 ## One-time setup: release GitHub App
 
