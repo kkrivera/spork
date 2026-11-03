@@ -195,6 +195,13 @@ export interface AddRepoOptions {
    * `remoteHasWorkspaceBranch` finds one.
    */
   fetchRemoteBranch?: boolean
+  /**
+   * The ssh-agent socket every git process for this repo should use (clone,
+   * fetch, fast-forward, submodules) — set by a frontend that unlocked this
+   * repo's key into a temporary agent (see `ssh/access.ts`). Unset keeps
+   * the user's own agent.
+   */
+  sshAuthSock?: string
 }
 
 export interface AddRepoResult {
@@ -270,7 +277,10 @@ export async function addRepo(
   // the shared registry instead.
   const aliasScope: 'local' | 'global' = options.global ? 'global' : 'local'
   const aliasRegistryPath = options.global ? ctx.repoRegistryPath : localRepoRegistryPath(workspaceDir)
-  await addRepoSource({ reposRoot: ctx.reposRoot, repoRegistryPath: aliasRegistryPath }, source, { ref: requestedRef })
+  await addRepoSource({ reposRoot: ctx.reposRoot, repoRegistryPath: aliasRegistryPath }, source, {
+    ref: requestedRef,
+    sshAuthSock: options.sshAuthSock,
+  })
 
   const cache = resolveRepoCache(ctx.reposRoot, source)
   const { reusedExistingBranch, remoteBranch } = await checkOutWorkspaceBranch(
@@ -280,6 +290,7 @@ export async function addRepo(
     requestedRef,
     source,
     options.fetchRemoteBranch === true,
+    { sshAuthSock: options.sshAuthSock },
   )
 
   const entry: WorktreeEntry = {
@@ -306,7 +317,7 @@ export async function addRepo(
     await writeWorkspaceFiles(workspaceDir, fresh)
   })
 
-  return { entry, aliasScope, reusedExistingBranch, remoteBranch, ...(await initSubmodulesIfAny(worktreePath)) }
+  return { entry, aliasScope, reusedExistingBranch, remoteBranch, ...(await initSubmodulesIfAny(worktreePath, options.sshAuthSock)) }
 }
 
 /**
@@ -318,10 +329,11 @@ export async function addRepo(
  */
 async function initSubmodulesIfAny(
   worktreePath: string,
+  sshAuthSock: string | undefined,
 ): Promise<Pick<AddRepoResult, 'submodulesInitialized' | 'submoduleWarning'>> {
   if (!hasSubmodules(worktreePath)) return { submodulesInitialized: false }
   try {
-    await initSubmodules(worktreePath)
+    await initSubmodules(worktreePath, { sshAuthSock })
     return { submodulesInitialized: true }
   } catch (error) {
     return { submodulesInitialized: false, submoduleWarning: error instanceof Error ? error.message : String(error) }

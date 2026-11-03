@@ -52,6 +52,8 @@ export interface AddRepoSourceOptions {
    * default; see `git/exec.ts`'s `ExecOptions.allowPrompts`.
    */
   allowPrompts?: boolean
+  /** The ssh-agent socket the clone/fetch should use — see `git/exec.ts`'s `ExecOptions.sshAuthSock`. */
+  sshAuthSock?: string
   /**
    * Once a fresh clone finishes, repoint the cache's own HEAD at this
    * branch. Needed for the same reason as `correctOriginTo`: a local
@@ -79,6 +81,7 @@ export async function addRepoSource(
       cloneFrom: options.cloneFrom,
       ref: options.ref,
       allowPrompts: options.allowPrompts,
+      sshAuthSock: options.sshAuthSock,
     }),
   )
 

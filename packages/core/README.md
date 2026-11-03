@@ -17,8 +17,12 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     key fails fast instead of hanging on a prompt nobody can see (the MCP
     server, CI, or a live dashboard redrawing over it). `allowPrompts: true`
     opts back in, for a caller with a person at a real terminal and nothing
-    drawing over it. An auth failure throws `GitAuthError` (a
-    `GitCommandError` subclass) whose message ends with what to do next.
+    drawing over it. `sshAuthSock` points ssh at a different ssh-agent socket
+    (a temporary agent holding a key unlocked for one command); `RemoteOptions`
+    is the pair of these that clone/fetch/submodule calls forward unchanged,
+    all the way down from `addRepo`'s own `sshAuthSock`. An auth failure throws
+    `GitAuthError` (a `GitCommandError` subclass) whose message ends with what
+    to do next.
   - `auth.ts` — `NO_PROMPT_ENV`, `isAuthFailure(stderr)`, and
     `authFailureGuidance(allowPrompts)`: the env that disables prompts
     (`GIT_TERMINAL_PROMPT=0`, plus ssh forced onto an always-failing

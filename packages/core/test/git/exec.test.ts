@@ -65,6 +65,18 @@ describe('execGit — prompts and auth failures', () => {
     expect(execFileMock).toHaveBeenCalledWith('git', ['fetch'], { cwd: '/repo' })
   })
 
+  it('points ssh at the given agent socket, with or without prompts', async () => {
+    execFileMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await execGit(['fetch'], { sshAuthSock: '/tmp/agent.sock' })
+    await execGit(['fetch'], { sshAuthSock: '/tmp/agent.sock', allowPrompts: true })
+
+    const envs = execFileMock.mock.calls.map((call) => (call[2] as { env: Record<string, string> }).env)
+    expect(envs[0]).toMatchObject({ SSH_AUTH_SOCK: '/tmp/agent.sock', SSH_ASKPASS_REQUIRE: 'force' })
+    expect(envs[1]?.SSH_AUTH_SOCK).toBe('/tmp/agent.sock')
+    expect(envs[1]?.SSH_ASKPASS_REQUIRE).toBe(process.env.SSH_ASKPASS_REQUIRE)
+  })
+
   it('wraps an auth failure as GitAuthError, with guidance on what to do next', async () => {
     execFileMock.mockRejectedValue({ stderr: 'git@github.com: Permission denied (publickey).\n' })
 

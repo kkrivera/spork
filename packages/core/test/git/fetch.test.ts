@@ -184,6 +184,14 @@ describe('fastForwardBranch', () => {
     expect(fetchCall()).toEqual(['fetch', '--no-tags', 'origin', 'refs/heads/me/feature:refs/heads/me/feature'])
   })
 
+  it('forwards the ssh-agent socket to the fetch', async () => {
+    fakeGit()
+
+    await fastForwardBranch(CACHE, 'me/feature', { sshAuthSock: '/tmp/agent.sock' })
+
+    expect(execGitMock).toHaveBeenCalledWith(expect.arrayContaining(['fetch']), { cwd: CACHE, sshAuthSock: '/tmp/agent.sock' })
+  })
+
   it("reports 'diverged' and keeps the local branch when git rejects a non-fast-forward", async () => {
     fakeGit()
     const rejected = new GitCommandError(['fetch'], ' ! [rejected]        me/feature -> me/feature  (non-fast-forward)')

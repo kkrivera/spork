@@ -1,3 +1,4 @@
+import type { RemoteOptions } from '../git/exec.js'
 import { fastForwardBranch, type FastForwardOutcome } from '../git/fetch.js'
 import { remoteHasBranch } from '../git/remote.js'
 import { addWorktree, isBranchExistsError, isWorktreeCollisionError } from '../git/worktree.js'
@@ -56,10 +57,11 @@ export async function checkOutWorkspaceBranch(
   requestedRef: string,
   source: string,
   fetchRemoteBranch: boolean,
+  remote: RemoteOptions = {},
 ): Promise<CheckOutResult> {
   try {
     return await withRepoLock(cache.lockPath, async () => {
-      const remoteBranch = fetchRemoteBranch ? await fastForwardBranch(cache.path, localBranch) : undefined
+      const remoteBranch = fetchRemoteBranch ? await fastForwardBranch(cache.path, localBranch, remote) : undefined
       const { reusedExistingBranch } = await addWorktree(cache.path, worktreePath, localBranch, requestedRef)
       return { reusedExistingBranch, remoteBranch }
     })
