@@ -17,8 +17,12 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     key fails fast instead of hanging on a prompt nobody can see (the MCP
     server, CI, or a live dashboard redrawing over it). `allowPrompts: true`
     opts back in, for a caller with a person at a real terminal and nothing
-    drawing over it. An auth failure throws `GitAuthError` (a
-    `GitCommandError` subclass) whose message ends with what to do next.
+    drawing over it. `sshAuthSock` points ssh at a different ssh-agent socket
+    (a temporary agent holding a key unlocked for one command); `RemoteOptions`
+    is the pair of these that clone/fetch/submodule calls forward unchanged,
+    all the way down from `addRepo`'s own `sshAuthSock`. An auth failure throws
+    `GitAuthError` (a `GitCommandError` subclass) whose message ends with what
+    to do next.
   - `auth.ts` — `NO_PROMPT_ENV`, `isAuthFailure(stderr)`, and
     `authFailureGuidance(allowPrompts)`: the env that disables prompts
     (`GIT_TERMINAL_PROMPT=0`, plus ssh forced onto an always-failing
@@ -77,12 +81,29 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     back to that upstream afterward. `getRemoteDefaultBranch(source)` asks a
     URL or local path directly what its default branch is (`git ls-remote
     --symref <source> HEAD`), without needing it cloned first — same
-    fail-open-to-`null` convention as `getRemoteUrl`. `remoteHasBranch(source,
-    branch)` likewise asks `source` directly whether it has exactly
-    `refs/heads/<branch>` (fails open to `false`).
+    fail-open-to-`null` convention as `getRemoteUrl`. `probeRemote(source,
+    branch, options)` likewise asks `source` directly whether it has exactly
+    `refs/heads/<branch>`, and never throws: it reports `'ok'`,
+    `'auth-failed'` (a `GitAuthError`), or `'unreachable'`, so a caller can
+    tell a missing SSH key apart from any other failure.
   - `submodule.ts` — `hasSubmodules` (checks for a `.gitmodules` file) and
     `initSubmodules` (`git submodule update --init --recursive`), since
     `worktree add` never initializes submodules on its own.
+- `src/ssh/` — OpenSSH's own tools, for unlocking an SSH key for one
+  command (see [docs/plans/0005-ssh-key-unlock.md](../../docs/plans/0005-ssh-key-unlock.md)).
+  - `exec.ts` — the single spawn point for `ssh`/`ssh-add`/`ssh-keygen`/
+    `ssh-agent`, mocked by unit tests the way `git/exec.ts` is.
+    `runSshAddOnTerminal` attaches `ssh-add` to the user's terminal so it
+    asks for the passphrase itself: spork never sees it.
+  - `target.ts` — `parseSshTarget(source)`: the host/user/port of an
+    `ssh://` or scp-like (`user@host:path`) source, null for anything else.
+  - `keys.ts` — `findLockedKeys(target)`: the key files `ssh -G` says ssh
+    would try for that host that have a passphrase and aren't already in
+    the user's own agent, in ssh's order. Nothing for a host whose
+    `IdentityAgent` is some other agent (1Password, Secretive).
+  - `agent.ts` — `startTemporaryAgent()`: a private `ssh-agent -D` child
+    with its socket in a 0700 temp directory and a one-hour key lifetime,
+    plus `unlock(keyPath)` and `stop()`. Never the user's own agent.
 - `src/repo/` — the shared repo cache each workspace's worktrees are created from.
   - `cache.ts` — derives a stable cache id/path from a repo source
     (`repoCacheId`: an owner-prefixed slug when the source is URL-shaped
@@ -219,10 +240,17 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
     (`AddRepoOptions.fetchRemoteBranch`, reported back as
     `AddRepoResult.remoteBranch`), and turns `addWorktree`'s
     `isBranchExistsError`/`isWorktreeCollisionError` into a clear
-    `SporkError`. `remoteHasWorkspaceBranch(ctx, workspaceDir,
-    aliasOrSource, branch)` resolves an alias the same way `addRepo` does
-    and asks the remote whether the branch already exists, so a frontend can
-    offer `fetchRemoteBranch` before adding anything.
+    `SporkError`.
+  - `remoteAccess.ts` — `prepareRemoteAccess(ctx, workspaceDir, sources,
+    branch, { onUnlock })`, run by a frontend before it adds anything:
+    resolves each alias the same way `addRepo` does, `probeRemote`s every
+    repo with the user's own ssh-agent, and, given `onUnlock`, unlocks any
+    missing SSH key into a temporary agent (`ssh/agent.ts`), one key at a
+    time, re-checking after each. Each repo comes back with its `status`,
+    whether the workspace branch is already pushed (`hasBranch`, for
+    offering `fetchRemoteBranch`), and the `sshAuthSock` to pass to
+    `addRepo` if only the temporary agent gets in. `close()` stops that
+    agent. See [docs/plans/0005-ssh-key-unlock.md](../../docs/plans/0005-ssh-key-unlock.md).
   - `workspace.ts` — orchestration: `createWorkspace`, `addRepo`, `removeRepo`,
     `removeWorkspace`, `getWorkspaceStatus`, and `reconcileWorkspace` (pruning
     stale git worktree metadata and dropping manifest entries for folders

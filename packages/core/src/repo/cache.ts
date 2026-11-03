@@ -76,6 +76,8 @@ export interface EnsureRepoCacheOptions {
   ref?: string
   /** Let the clone/fetch prompt on the terminal — see `git/exec.ts`'s `ExecOptions.allowPrompts`. */
   allowPrompts?: boolean
+  /** The ssh-agent socket the clone/fetch should use — see `git/exec.ts`'s `ExecOptions.sshAuthSock`. */
+  sshAuthSock?: string
 }
 
 /**
@@ -93,10 +95,11 @@ export async function ensureRepoCache(
   const cache = resolveRepoCache(reposRoot, source)
   await mkdir(reposRoot, { recursive: true })
 
+  const remote = { allowPrompts: options.allowPrompts, sshAuthSock: options.sshAuthSock }
   if (isCloned(cache.path)) {
-    await fetchRef(cache.path, options.ref, { allowPrompts: options.allowPrompts })
+    await fetchRef(cache.path, options.ref, remote)
   } else {
-    await cloneBare(options.cloneFrom ?? source, cache.path, { allowPrompts: options.allowPrompts })
+    await cloneBare(options.cloneFrom ?? source, cache.path, remote)
   }
 
   return cache

@@ -1,33 +1,8 @@
+import type { RemoteOptions } from '../git/exec.js'
 import { fastForwardBranch, type FastForwardOutcome } from '../git/fetch.js'
-import { remoteHasBranch } from '../git/remote.js'
 import { addWorktree, isBranchExistsError, isWorktreeCollisionError } from '../git/worktree.js'
 import { withRepoLock } from '../repo/lock.js'
-import { localRepoRegistryPath, resolveScopedRepoAlias } from '../registry/repoRegistry.js'
 import { SporkError } from '../errors.js'
-
-/**
- * Whether `aliasOrSource`'s remote already has a branch named `branch` —
- * normally the workspace's own name, i.e. a workspace branch that was
- * pushed. Resolves the alias the same way `addRepo` does (local to
- * `workspaceDir`, then global), so a frontend can ask this *before* adding
- * anything and offer `AddRepoOptions.fetchRemoteBranch`. Talks to the
- * remote directly, so it works before the repo is ever cloned; an
- * unreachable remote answers `false`.
- */
-export async function remoteHasWorkspaceBranch(
-  ctx: { reposRoot: string; repoRegistryPath: string },
-  workspaceDir: string,
-  aliasOrSource: string,
-  branch: string,
-): Promise<boolean> {
-  const source = await resolveScopedRepoAlias(
-    ctx.reposRoot,
-    localRepoRegistryPath(workspaceDir),
-    ctx.repoRegistryPath,
-    aliasOrSource,
-  )
-  return remoteHasBranch(source, branch)
-}
 
 export interface CheckOutResult {
   reusedExistingBranch: boolean
@@ -56,10 +31,11 @@ export async function checkOutWorkspaceBranch(
   requestedRef: string,
   source: string,
   fetchRemoteBranch: boolean,
+  remote: RemoteOptions = {},
 ): Promise<CheckOutResult> {
   try {
     return await withRepoLock(cache.lockPath, async () => {
-      const remoteBranch = fetchRemoteBranch ? await fastForwardBranch(cache.path, localBranch) : undefined
+      const remoteBranch = fetchRemoteBranch ? await fastForwardBranch(cache.path, localBranch, remote) : undefined
       const { reusedExistingBranch } = await addWorktree(cache.path, worktreePath, localBranch, requestedRef)
       return { reusedExistingBranch, remoteBranch }
     })

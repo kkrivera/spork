@@ -6,7 +6,7 @@ import type { LaunchDeps } from '../../src/launchTarget.js'
 vi.mock('@spork/core', () => ({
   createAndRegisterWorkspace: vi.fn(),
   addRepo: vi.fn(),
-  remoteHasWorkspaceBranch: vi.fn(async () => false),
+  prepareRemoteAccess: vi.fn(),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
   findEnclosingWorkspaceDir: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock('@spork/prompts', () => ({
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 
-const { createAndRegisterWorkspace, addRepo, resolveWorkspaceDir, findEnclosingWorkspaceDir, listRepoAliases, codeWorkspaceFilePath } =
+const { createAndRegisterWorkspace, addRepo, prepareRemoteAccess, resolveWorkspaceDir, findEnclosingWorkspaceDir, listRepoAliases, codeWorkspaceFilePath } =
   await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
 const { select, NotInteractiveError } = await import('@spork/prompts')
@@ -63,7 +63,10 @@ async function fakeRunTasks(tasks: readonly FunctionTask[]): Promise<TaskResult[
   return results
 }
 
+const { fakeRemoteAccess } = await import('./fakeRemoteAccess.js')
+
 beforeEach(() => {
+  vi.mocked(prepareRemoteAccess).mockReset().mockImplementation(fakeRemoteAccess())
   vi.mocked(createAndRegisterWorkspace)
     .mockReset()
     .mockResolvedValue({ name: 'demo', dir: '/ws/demo', manifest: { name: 'demo', createdAt: '', worktrees: [] } })

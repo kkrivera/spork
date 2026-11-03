@@ -19,10 +19,16 @@ export interface ExecOptions {
    * drawing over it.
    */
   allowPrompts?: boolean
+  /**
+   * The ssh-agent socket git's ssh should use instead of the inherited
+   * `SSH_AUTH_SOCK` — a temporary agent holding a key spork unlocked for
+   * this one command (see `ssh/agent.ts`). Unset keeps the user's own agent.
+   */
+  sshAuthSock?: string
 }
 
-/** The subset of `ExecOptions` a higher-level git call forwards to `execGit` unchanged. */
-export type PromptOptions = Pick<ExecOptions, 'allowPrompts'>
+/** The subset of `ExecOptions` a higher-level, network-facing git call forwards to `execGit` unchanged. */
+export type RemoteOptions = Pick<ExecOptions, 'allowPrompts' | 'sshAuthSock'>
 
 export class GitCommandError extends Error {
   constructor(
@@ -52,10 +58,14 @@ export class GitAuthError extends GitCommandError {
  */
 export async function execGit(args: readonly string[], options: ExecOptions = {}): Promise<ExecResult> {
   const allowPrompts = options.allowPrompts ?? false
+  const overrides = {
+    ...(allowPrompts ? {} : NO_PROMPT_ENV),
+    ...(options.sshAuthSock ? { SSH_AUTH_SOCK: options.sshAuthSock } : {}),
+  }
   try {
     const { stdout, stderr } = await execFileAsync('git', args, {
       cwd: options.cwd,
-      ...(allowPrompts ? {} : { env: { ...process.env, ...NO_PROMPT_ENV } }),
+      ...(Object.keys(overrides).length > 0 ? { env: { ...process.env, ...overrides } } : {}),
     })
     return { stdout, stderr }
   } catch (error) {

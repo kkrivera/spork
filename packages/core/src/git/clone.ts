@@ -1,4 +1,4 @@
-import { execGit, type PromptOptions } from './exec.js'
+import { execGit, type RemoteOptions } from './exec.js'
 import { configureFetchRefspec } from './fetch.js'
 
 /**
@@ -6,7 +6,7 @@ import { configureFetchRefspec } from './fetch.js'
  * repo source — then gives it the standard fetch refspec, which `--bare`
  * leaves unset (see `fetch.ts`'s `configureFetchRefspec`).
  */
-export async function cloneBare(remote: string, destination: string, options: PromptOptions = {}): Promise<void> {
+export async function cloneBare(remote: string, destination: string, options: RemoteOptions = {}): Promise<void> {
   await execGit(['clone', '--bare', remote, destination], options)
   await configureFetchRefspec(destination)
 }

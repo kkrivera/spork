@@ -4,7 +4,7 @@ import type { FunctionTask, TaskResult } from '@spork/task-runner'
 vi.mock('@spork/core', () => ({
   createAndRegisterWorkspace: vi.fn(),
   addRepo: vi.fn(),
-  remoteHasWorkspaceBranch: vi.fn(async () => false),
+  prepareRemoteAccess: vi.fn(),
   defaultAlias: (source: string) => source,
   resolveWorkspaceDir: vi.fn(),
   findEnclosingWorkspaceDir: vi.fn(),
@@ -22,12 +22,13 @@ vi.mock('@spork/prompts', () => ({
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 
-const { createAndRegisterWorkspace, addRepo, remoteHasWorkspaceBranch, resolveWorkspaceDir, findEnclosingWorkspaceDir, listRepoAliases, codeWorkspaceFilePath, SporkError } =
+const { createAndRegisterWorkspace, addRepo, prepareRemoteAccess, resolveWorkspaceDir, findEnclosingWorkspaceDir, listRepoAliases, codeWorkspaceFilePath, SporkError } =
   await import('@spork/core')
 const { runTasks } = await import('@spork/task-runner')
 const { confirm, select, NotInteractiveError } = await import('@spork/prompts')
 const { runCreate, runCreateWithRepos } = await import('../../src/commands/workspace/create.js')
 const { createUi } = await import('../../src/output/color.js')
+const { fakeRemoteAccess } = await import('./fakeRemoteAccess.js')
 
 const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 
@@ -55,6 +56,7 @@ async function fakeRunTasks(tasks: readonly FunctionTask[]): Promise<TaskResult[
 }
 
 beforeEach(() => {
+  vi.mocked(prepareRemoteAccess).mockReset().mockImplementation(fakeRemoteAccess())
   vi.mocked(createAndRegisterWorkspace)
     .mockReset()
     .mockResolvedValue({ name: 'demo', dir: '/ws/demo', manifest: { name: 'demo', createdAt: '', worktrees: [] } })
@@ -250,7 +252,6 @@ describe('runCreate — --no-agent-files', () => {
 describe('runCreateWithRepos — remote workspace branch', () => {
   beforeEach(() => {
     vi.mocked(addRepo).mockImplementation(async (_ctx, _dir, options) => fakeEntryResult(options.source))
-    vi.mocked(remoteHasWorkspaceBranch).mockReset().mockResolvedValue(false)
     vi.mocked(confirm).mockReset()
     vi.spyOn(process, 'cwd').mockReturnValue('/home/user')
   })
@@ -260,7 +261,7 @@ describe('runCreateWithRepos — remote workspace branch', () => {
   })
 
   it('asks about the new workspace\'s branch before creating anything, then forwards the answer to every add', async () => {
-    vi.mocked(remoteHasWorkspaceBranch).mockImplementation(async (_ctx, _dir, source) => source === 'app')
+    vi.mocked(prepareRemoteAccess).mockImplementation(fakeRemoteAccess({ pushed: ['app'] }))
     vi.mocked(confirm).mockImplementation(async () => {
       expect(createAndRegisterWorkspace).not.toHaveBeenCalled()
       return true
@@ -268,12 +269,37 @@ describe('runCreateWithRepos — remote workspace branch', () => {
 
     await runCreateWithRepos(ctx, 'demo', { repo: ['app', 'connector'] })
 
-    expect(remoteHasWorkspaceBranch).toHaveBeenCalledWith(expect.anything(), '/home/user/demo', 'app', 'demo')
+    expect(prepareRemoteAccess).toHaveBeenCalledWith(expect.anything(), '/home/user/demo', ['app', 'connector'], 'demo', { onUnlock: undefined })
     expect(vi.mocked(addRepo).mock.calls.map((call) => call[2].fetchRemoteBranch)).toEqual([true, true])
   })
 
+  it("sends each repo through the agent its key was unlocked into, then forgets the key once every add is done", async () => {
+    const remotes = fakeRemoteAccess({ sockets: { app: '/tmp/agent.sock' } })
+    vi.mocked(prepareRemoteAccess).mockImplementation(remotes)
+    vi.mocked(addRepo).mockImplementation(async (_ctx, _dir, options) => {
+      expect(remotes.close).not.toHaveBeenCalled()
+      return fakeEntryResult(options.source)
+    })
+    const onUnlockKey = vi.fn()
+
+    await runCreateWithRepos(ctx, 'demo', { repo: ['app', 'connector'], onUnlockKey })
+
+    expect(prepareRemoteAccess).toHaveBeenCalledWith(expect.anything(), '/home/user/demo', ['app', 'connector'], 'demo', { onUnlock: onUnlockKey })
+    expect(vi.mocked(addRepo).mock.calls.map((call) => call[2].sshAuthSock)).toEqual(['/tmp/agent.sock', undefined])
+    expect(remotes.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('still forgets the key when creating the workspace fails', async () => {
+    const remotes = fakeRemoteAccess()
+    vi.mocked(prepareRemoteAccess).mockImplementation(remotes)
+    vi.mocked(createAndRegisterWorkspace).mockRejectedValueOnce(new Error('name taken'))
+
+    await expect(runCreateWithRepos(ctx, 'demo', { repo: ['app'] })).rejects.toThrow('name taken')
+    expect(remotes.close).toHaveBeenCalledTimes(1)
+  })
+
   it('returns the no-TTY notice for the command to print', async () => {
-    vi.mocked(remoteHasWorkspaceBranch).mockResolvedValue(true)
+    vi.mocked(prepareRemoteAccess).mockImplementation(fakeRemoteAccess({ pushed: ['app'] }))
     vi.mocked(confirm).mockRejectedValue(new NotInteractiveError())
 
     const { remoteBranchNotice } = await runCreateWithRepos(ctx, 'demo', { repo: ['app'] })

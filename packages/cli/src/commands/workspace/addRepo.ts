@@ -7,23 +7,21 @@ import { workspaceContext, type AppContext } from '../../context.js'
 import { runList } from '../repo/list.js'
 import { addReposToWorkspace, type AddRepoBatchFailure, type AddRepoBatchOutcome } from './addReposBatch.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
-import { resolveFetchRemoteBranch } from './remoteBranchPrompt.js'
+import { keyUnlockNotifier, prepareWorkspaceRemotes, type RemoteSetupOptions } from './workspaceRemotes.js'
 
-export interface AddRepoOptions {
+export interface AddRepoOptions extends RemoteSetupOptions {
   /** Which workspace to add to — defaults to the cwd's enclosing workspace, or a picker (see `pickWorkspace.ts`). */
   workspace?: string
   branch?: string
   as?: string
   /** Register the repo's alias globally instead of locally to this workspace (the default). */
   global?: boolean
-  /** `--from-remote-branch`/`--no-from-remote-branch`; unset means ask (see `remoteBranchPrompt.ts`). */
-  fromRemoteBranch?: boolean
 }
 
 export interface RunAddRepoResult {
   workspace: string
   result: AddRepoResult
-  /** See `remoteBranchPrompt.ts`'s `RemoteBranchDecision.notice`. */
+  /** See `workspaceRemotes.ts`'s `WorkspaceRemotes.remoteBranchNotice`. */
   remoteBranchNotice?: string
 }
 
@@ -53,27 +51,32 @@ export async function runAddRepo(
       'Multiple workspaces are registered — pass one explicitly: spork workspace add-repo --workspace <name> <source>',
     ))
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspaceName)
-  const remoteBranch = await resolveFetchRemoteBranch(ctx, dir, workspaceName, [source], options.fromRemoteBranch)
-  const [outcome] = await runConcurrently([
-    {
-      name: defaultAlias(source),
-      call: (report: TaskReporter) => {
-        report.log(`cloning/fetching ${source}...`)
-        return addRepo(workspaceContext(ctx), dir, {
-          source,
-          ref: options.branch,
-          folder: options.as,
-          global: options.global,
-          fetchRemoteBranch: remoteBranch.fetchRemoteBranch,
-        })
+  const remotes = await prepareWorkspaceRemotes(ctx, dir, workspaceName, [source], options)
+  try {
+    const [outcome] = await runConcurrently([
+      {
+        name: defaultAlias(source),
+        call: (report: TaskReporter) => {
+          report.log(`cloning/fetching ${source}...`)
+          return addRepo(workspaceContext(ctx), dir, {
+            source,
+            ref: options.branch,
+            folder: options.as,
+            global: options.global,
+            fetchRemoteBranch: remotes.fetchRemoteBranch,
+            sshAuthSock: remotes.sshAuthSocks.get(source),
+          })
+        },
       },
-    },
-  ])
+    ])
 
-  if (outcome?.value === undefined) {
-    throw outcome?.cancelled ? new SporkError('Cancelled.') : outcome?.error
+    if (outcome?.value === undefined) {
+      throw outcome?.cancelled ? new SporkError('Cancelled.') : outcome?.error
+    }
+    return { workspace: workspaceName, result: outcome.value, remoteBranchNotice: remotes.remoteBranchNotice }
+  } finally {
+    await remotes.close()
   }
-  return { workspace: workspaceName, result: outcome.value, remoteBranchNotice: remoteBranch.notice }
 }
 
 /** Prints an AddRepoResult the same way regardless of whether it came from `add-repo` or `create --repo`. */
@@ -138,7 +141,7 @@ async function pickRegisteredSources(ctx: AppContext): Promise<string[]> {
 export interface RunAddRepoFromRegistryResult {
   workspace: string
   outcomes: AddRepoBatchOutcome[]
-  /** See `remoteBranchPrompt.ts`'s `RemoteBranchDecision.notice`. */
+  /** See `workspaceRemotes.ts`'s `WorkspaceRemotes.remoteBranchNotice`. */
   remoteBranchNotice?: string
 }
 
@@ -154,7 +157,7 @@ export interface RunAddRepoFromRegistryResult {
 export async function runAddRepoFromRegistry(
   ctx: AppContext,
   workspace: string | undefined,
-  options: Pick<AddRepoOptions, 'global' | 'fromRemoteBranch'>,
+  options: Pick<AddRepoOptions, 'global' | 'fromRemoteBranch' | 'onUnlockKey'>,
 ): Promise<RunAddRepoFromRegistryResult> {
   const workspaceName =
     workspace ??
@@ -165,13 +168,17 @@ export async function runAddRepoFromRegistry(
     ))
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspaceName)
   const sources = await pickRegisteredSources(ctx)
-  const remoteBranch = await resolveFetchRemoteBranch(ctx, dir, workspaceName, sources, options.fromRemoteBranch)
-  const outcomes = await addReposToWorkspace(ctx, dir, sources, {
-    global: options.global,
-    fetchRemoteBranch: remoteBranch.fetchRemoteBranch,
-  })
-
-  return { workspace: workspaceName, outcomes, remoteBranchNotice: remoteBranch.notice }
+  const remotes = await prepareWorkspaceRemotes(ctx, dir, workspaceName, sources, options)
+  try {
+    const outcomes = await addReposToWorkspace(ctx, dir, sources, {
+      global: options.global,
+      fetchRemoteBranch: remotes.fetchRemoteBranch,
+      sshAuthSocks: remotes.sshAuthSocks,
+    })
+    return { workspace: workspaceName, outcomes, remoteBranchNotice: remotes.remoteBranchNotice }
+  } finally {
+    await remotes.close()
+  }
 }
 
 /** Prints every outcome from `runAddRepoFromRegistry`, then throws (after printing all of them) if any failed. */
@@ -201,7 +208,8 @@ export function registerAddRepoCommand(program: Command, ctx: AppContext): void 
     .option('--global', "register the repo's alias globally instead of locally to this workspace")
     .option('--from-remote-branch', "start from this workspace's branch on the remote if it's already been pushed (default: ask)")
     .option('--no-from-remote-branch', "start fresh even if this workspace's branch is already on the remote, without asking")
-    .action(async (source: string | undefined, options: AddRepoOptions) => {
+    .action(async (source: string | undefined, flags: AddRepoOptions) => {
+      const options: AddRepoOptions = { ...flags, onUnlockKey: keyUnlockNotifier(ctx) }
       if (source === undefined) {
         if (options.branch !== undefined || options.as !== undefined) {
           throw new SporkError('--branch/--as require an explicit <source> — they cannot apply to a multi-repo pick.')

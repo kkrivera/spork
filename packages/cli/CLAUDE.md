@@ -133,7 +133,10 @@ new business logic belongs in `@spork/core`, imported only from its
   applied to a single long-running action: `run<Verb>` still can't print,
   yet something needs to tell the user which workspace got auto-picked
   *before* the (possibly interactive, possibly slow) command takes over
-  the terminal, not after it returns.
+  the terminal, not after it returns. `create`/`add-repo`'s `onUnlockKey`
+  (`workspaceRemotes.ts`'s `keyUnlockNotifier`) is the same pattern again:
+  it prints why an SSH passphrase is about to be asked for, from inside
+  `run<Verb>`, without `run<Verb>` printing anything itself.
 - When a command has one positional argument that must stay required
   (can't be prompted away) alongside a second one becoming optional, don't
   reach for a second positional and disambiguate by argument count — it's

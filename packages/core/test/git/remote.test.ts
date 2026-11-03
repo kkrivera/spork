@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../src/git/exec.js', () => ({
-  execGit: vi.fn(),
-}))
+vi.mock('../../src/git/exec.js', async () => {
+  const actual = await vi.importActual<typeof import('../../src/git/exec.js')>('../../src/git/exec.js')
+  return { execGit: vi.fn(), GitAuthError: actual.GitAuthError }
+})
 
 const { execGit } = await import('../../src/git/exec.js')
-const { getRemoteUrl, setRemoteUrl, getRemoteDefaultBranch, remoteHasBranch } = await import('../../src/git/remote.js')
+const { GitAuthError } = await import('../../src/git/exec.js')
+const { getRemoteUrl, setRemoteUrl, getRemoteDefaultBranch, probeRemote } = await import('../../src/git/remote.js')
 
 const execGitMock = vi.mocked(execGit)
 
@@ -94,29 +96,37 @@ describe('getRemoteDefaultBranch', () => {
   })
 })
 
-describe('remoteHasBranch', () => {
-  it('is true when ls-remote lists exactly that branch', async () => {
+describe('probeRemote', () => {
+  const SOURCE = 'git@github.com:acme/widgets.git'
+
+  it('reaches the remote and finds exactly that branch', async () => {
     execGitMock.mockReset().mockResolvedValue({ stdout: 'abc123\trefs/heads/me/feature\n', stderr: '' })
 
-    expect(await remoteHasBranch('git@github.com:acme/widgets.git', 'me/feature')).toBe(true)
-    expect(execGitMock).toHaveBeenCalledWith(['ls-remote', 'git@github.com:acme/widgets.git', 'refs/heads/me/feature'])
+    expect(await probeRemote(SOURCE, 'me/feature')).toEqual({ status: 'ok', hasBranch: true })
+    expect(execGitMock).toHaveBeenCalledWith(['ls-remote', SOURCE, 'refs/heads/me/feature'], {})
   })
 
-  it('ignores a branch that only ends with the same path', async () => {
-    execGitMock.mockReset().mockResolvedValue({ stdout: 'abc123\trefs/heads/other/me/feature\n', stderr: '' })
+  it('ignores a branch that only ends with the same path, and a remote without the branch', async () => {
+    execGitMock.mockReset().mockResolvedValueOnce({ stdout: 'abc123\trefs/heads/other/me/feature\n', stderr: '' })
+    execGitMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
 
-    expect(await remoteHasBranch('git@github.com:acme/widgets.git', 'me/feature')).toBe(false)
+    expect(await probeRemote(SOURCE, 'me/feature')).toEqual({ status: 'ok', hasBranch: false })
+    expect(await probeRemote(SOURCE, 'me/feature')).toEqual({ status: 'ok', hasBranch: false })
   })
 
-  it('is false when the remote has no such branch', async () => {
+  it('goes through the given ssh-agent', async () => {
     execGitMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
 
-    expect(await remoteHasBranch('git@github.com:acme/widgets.git', 'me/feature')).toBe(false)
+    await probeRemote(SOURCE, 'main', { sshAuthSock: '/tmp/agent.sock' })
+
+    expect(execGitMock).toHaveBeenCalledWith(['ls-remote', SOURCE, 'refs/heads/main'], { sshAuthSock: '/tmp/agent.sock' })
   })
 
-  it('fails open to false when the remote is unreachable', async () => {
-    execGitMock.mockReset().mockRejectedValue(new Error('could not read from remote'))
+  it('reports an authentication failure separately from any other failure', async () => {
+    execGitMock.mockReset().mockRejectedValueOnce(new GitAuthError(['ls-remote'], 'Permission denied (publickey).', false))
+    execGitMock.mockRejectedValueOnce(new Error('Could not resolve hostname'))
 
-    expect(await remoteHasBranch('git@github.com:acme/widgets.git', 'me/feature')).toBe(false)
+    expect(await probeRemote(SOURCE, 'main')).toEqual({ status: 'auth-failed', hasBranch: false })
+    expect(await probeRemote(SOURCE, 'main')).toEqual({ status: 'unreachable', hasBranch: false })
   })
 })

@@ -6,10 +6,13 @@ surface; nothing in this repo should import from `src/*` paths directly.
 
 ## `src/git`
 
-- `exec.ts`'s `execGit` is the *only* place a subprocess gets spawned. Every
-  other function in `src/git` (and everything built on top of it later) must
-  call through it rather than importing `node:child_process` itself — that's
-  what keeps the rest of the codebase mockable in unit tests.
+- `exec.ts`'s `execGit` is the *only* place a `git` subprocess gets spawned.
+  Every other function in `src/git` (and everything built on top of it later)
+  must call through it rather than importing `node:child_process` itself —
+  that's what keeps the rest of the codebase mockable in unit tests.
+  `src/ssh/exec.ts` is the one other spawn point, for OpenSSH's own tools
+  (`ssh`, `ssh-add`, `ssh-keygen`, `ssh-agent`); the same rule applies to
+  everything in `src/ssh`.
 - `execGit` runs git with prompts **off** unless a caller passes
   `allowPrompts: true` (see `git/auth.ts`). Only thread `allowPrompts`
   through for a caller with a person at a real terminal *and* nothing else
@@ -19,6 +22,18 @@ surface; nothing in this repo should import from `src/*` paths directly.
   can't work, and a hidden prompt hangs forever. Auth failures surface as
   `GitAuthError` with next steps; add a new stderr pattern to
   `isAuthFailure` rather than catching auth errors ad hoc elsewhere.
+- A batch command's one way to get an SSH passphrase is
+  `workspace/remoteAccess.ts`'s `prepareRemoteAccess`, *before* the batch
+  starts: `ssh-add` asks for it, one key at a time, into a temporary agent
+  that each affected repo then reaches through `sshAuthSock`, with prompts
+  still off. Two rules hold it together (see
+  [docs/plans/0005-ssh-key-unlock.md](../../docs/plans/0005-ssh-key-unlock.md)):
+  never point `SSH_ASKPASS` at spork or read a passphrase any other way,
+  so no secret ever passes through spork's process; and never add a key to
+  the user's own agent or Keychain, so nothing outlives the command. A new
+  git call that talks to a remote during an add must take `RemoteOptions`
+  and pass `sshAuthSock` through, or that repo will fail on a key the user
+  just unlocked.
 - Worktrees are created on **one local branch per workspace** — the
   workspace's own name, verbatim, shared by every repo added to it — never
   by checking out the requested ref directly, and never slugified (it may

@@ -10,20 +10,18 @@ import {
   type LaunchDeps,
   type LaunchTarget,
 } from '../../launchTarget.js'
-import { resolveFetchRemoteBranch } from './remoteBranchPrompt.js'
+import { keyUnlockNotifier, prepareWorkspaceRemotes, type RemoteSetupOptions } from './workspaceRemotes.js'
 import { addReposToWorkspace, type AddRepoBatchFailure, type AddRepoBatchOutcome } from './addReposBatch.js'
 import { printAddRepoResult } from './addRepo.js'
 import { runList } from '../repo/list.js'
 
-export interface CreateOptions {
+export interface CreateOptions extends RemoteSetupOptions {
   dir?: string
   repo?: string[]
   /** Register each --repo's alias globally instead of locally to the new workspace (the default). */
   global?: boolean
   /** `false` from `--no-agent-files`: skip the generated root AGENTS.md/CLAUDE.md for this workspace. */
   agentFiles?: boolean
-  /** `--from-remote-branch`/`--no-from-remote-branch`; unset means ask (see `remoteBranchPrompt.ts`). */
-  fromRemoteBranch?: boolean
 }
 
 function collectRepo(value: string, previous: string[]): string[] {
@@ -52,7 +50,7 @@ function workspaceDirFor(ctx: AppContext, name: string, options: CreateOptions):
 export interface CreateWithReposResult {
   handle: WorkspaceHandle
   repoOutcomes: AddRepoBatchOutcome[]
-  /** See `RemoteBranchDecision.notice`. */
+  /** See `WorkspaceRemotes.remoteBranchNotice`. */
   remoteBranchNotice?: string
 }
 
@@ -93,8 +91,9 @@ async function resolveRepoSources(ctx: AppContext, name: string, options: Create
 }
 
 /**
- * Resolves repo sources — and whether to start from an already-pushed
- * workspace branch (`remoteBranchPrompt.ts`) — *before* creating anything,
+ * Resolves repo sources — and everything `workspaceRemotes.ts` settles
+ * with the remotes: unlocking an SSH key, and whether to start from an
+ * already-pushed workspace branch — *before* creating anything,
  * so backing out of the picker leaves no half-made workspace behind — the picker only reads the
  * cwd's local and the global alias registries, never the new workspace's
  * own (which can't have any aliases yet). Then creates the workspace and
@@ -115,20 +114,18 @@ export async function runCreateWithRepos(
   options: CreateOptions,
 ): Promise<CreateWithReposResult> {
   const sources = await resolveRepoSources(ctx, name, options)
-  const remoteBranch = await resolveFetchRemoteBranch(
-    ctx,
-    workspaceDirFor(ctx, name, options),
-    name,
-    sources,
-    options.fromRemoteBranch,
-  )
-  const handle = await runCreate(ctx, name, options)
-  const repoOutcomes = await addReposToWorkspace(ctx, handle.dir, sources, {
-    global: options.global,
-    fetchRemoteBranch: remoteBranch.fetchRemoteBranch,
-  })
-
-  return { handle, repoOutcomes, remoteBranchNotice: remoteBranch.notice }
+  const remotes = await prepareWorkspaceRemotes(ctx, workspaceDirFor(ctx, name, options), name, sources, options)
+  try {
+    const handle = await runCreate(ctx, name, options)
+    const repoOutcomes = await addReposToWorkspace(ctx, handle.dir, sources, {
+      global: options.global,
+      fetchRemoteBranch: remotes.fetchRemoteBranch,
+      sshAuthSocks: remotes.sshAuthSocks,
+    })
+    return { handle, repoOutcomes, remoteBranchNotice: remotes.remoteBranchNotice }
+  } finally {
+    await remotes.close()
+  }
 }
 
 type OfferChoice = LaunchTarget | 'skip'
@@ -184,7 +181,10 @@ export function registerCreateCommand(program: Command, ctx: AppContext, deps: L
     .option('--from-remote-branch', "start from this workspace's branch on the remote if it's already been pushed (default: ask)")
     .option('--no-from-remote-branch', "start fresh even if this workspace's branch is already on the remote, without asking")
     .action(async (name: string, options: CreateOptions) => {
-      const { handle, repoOutcomes, remoteBranchNotice } = await runCreateWithRepos(ctx, name, options)
+      const { handle, repoOutcomes, remoteBranchNotice } = await runCreateWithRepos(ctx, name, {
+        ...options,
+        onUnlockKey: keyUnlockNotifier(ctx),
+      })
       console.log(ctx.ui.color.green(`Created workspace "${handle.name}" at ${handle.dir}`))
       if (remoteBranchNotice) console.log(ctx.ui.color.dim(remoteBranchNotice))
 

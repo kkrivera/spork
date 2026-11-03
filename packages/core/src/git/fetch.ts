@@ -1,4 +1,4 @@
-import { execGit, GitCommandError, type PromptOptions } from './exec.js'
+import { execGit, GitCommandError, type RemoteOptions } from './exec.js'
 import { listWorktrees } from './worktree.js'
 
 /**
@@ -38,7 +38,7 @@ export async function configureFetchRefspec(bareRepoPath: string): Promise<void>
  * nothing and is left for `resolveRef` to find locally. A full sha is
  * fetched directly only when the cache doesn't already have it.
  */
-export async function fetchRef(bareRepoPath: string, ref = 'HEAD', options: PromptOptions = {}): Promise<void> {
+export async function fetchRef(bareRepoPath: string, ref = 'HEAD', options: RemoteOptions = {}): Promise<void> {
   await configureFetchRefspec(bareRepoPath)
   const refspecs = await refspecsFor(bareRepoPath, ref, options)
   if (refspecs.length === 0) return
@@ -56,12 +56,16 @@ export type FastForwardOutcome = 'updated' | 'diverged' | 'checked-out'
  * (`'diverged'`). For resuming a workspace branch that's already been
  * pushed, which `fetchRef` deliberately never touches.
  */
-export async function fastForwardBranch(bareRepoPath: string, branch: string): Promise<FastForwardOutcome> {
+export async function fastForwardBranch(
+  bareRepoPath: string,
+  branch: string,
+  options: RemoteOptions = {},
+): Promise<FastForwardOutcome> {
   const ref = `refs/heads/${branch}`
   if ((await checkedOutRefs(bareRepoPath)).has(ref)) return 'checked-out'
 
   try {
-    await execGit(['fetch', '--no-tags', 'origin', `${ref}:${ref}`], { cwd: bareRepoPath })
+    await execGit(['fetch', '--no-tags', 'origin', `${ref}:${ref}`], { cwd: bareRepoPath, ...options })
     return 'updated'
   } catch (error) {
     if (error instanceof GitCommandError && /non-fast-forward|\[rejected\]/.test(error.stderr)) return 'diverged'
@@ -69,7 +73,7 @@ export async function fastForwardBranch(bareRepoPath: string, branch: string): P
   }
 }
 
-async function refspecsFor(bareRepoPath: string, ref: string, options: PromptOptions): Promise<string[]> {
+async function refspecsFor(bareRepoPath: string, ref: string, options: RemoteOptions): Promise<string[]> {
   if (FULL_SHA.test(ref)) return (await hasCommit(bareRepoPath, ref)) ? [] : [ref]
 
   const remoteRefs = ref === 'HEAD' ? [await headRef(bareRepoPath)] : await matchingRemoteRefs(bareRepoPath, ref, options)
@@ -84,7 +88,7 @@ async function headRef(bareRepoPath: string): Promise<string> {
 }
 
 /** Which of `refs/heads/<ref>`/`refs/tags/<ref>` (or `ref` itself, if already a full ref) the remote actually has. */
-async function matchingRemoteRefs(bareRepoPath: string, ref: string, options: PromptOptions): Promise<string[]> {
+async function matchingRemoteRefs(bareRepoPath: string, ref: string, options: RemoteOptions): Promise<string[]> {
   const candidates = ref.startsWith('refs/') ? [ref] : [`refs/heads/${ref}`, `refs/tags/${ref}`]
   const { stdout } = await execGit(['ls-remote', 'origin', ...candidates], { cwd: bareRepoPath, ...options })
   // ls-remote patterns match on a trailing path component, not the whole

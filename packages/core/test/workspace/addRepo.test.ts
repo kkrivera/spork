@@ -179,15 +179,18 @@ describe('addRepo — branch collisions', () => {
 })
 
 describe('addRepo — submodules', () => {
-  it('initializes submodules when the worktree has a .gitmodules file', async () => {
+  it('initializes submodules, through the repo\'s ssh-agent, when the worktree has a .gitmodules file', async () => {
     hasSubmodulesMock.mockReturnValue(true)
 
-    const { entry, submodulesInitialized, submoduleWarning } = await addRepo(ctx, dir, { source: WIDGETS_SOURCE })
+    const { entry, submodulesInitialized, submoduleWarning } = await addRepo(ctx, dir, {
+      source: WIDGETS_SOURCE,
+      sshAuthSock: '/tmp/agent.sock',
+    })
 
     expect(submodulesInitialized).toBe(true)
     expect(submoduleWarning).toBeUndefined()
     expect(hasSubmodulesMock).toHaveBeenCalledWith(path.join(dir, 'widgets'))
-    expect(initSubmodulesMock).toHaveBeenCalledWith(path.join(dir, 'widgets'))
+    expect(initSubmodulesMock).toHaveBeenCalledWith(path.join(dir, 'widgets'), { sshAuthSock: '/tmp/agent.sock' })
     // The worktree is still registered even though this test doesn't exercise a failure.
     expect((await readManifest(dir)).worktrees).toEqual([entry])
   })
@@ -205,7 +208,7 @@ describe('addRepo — submodules', () => {
 })
 
 describe('addRepo — fetchRemoteBranch', () => {
-  it("fast-forwards the workspace's branch from the remote before creating the worktree", async () => {
+  it("fast-forwards the workspace's branch from the remote, through the repo's ssh-agent, before creating the worktree", async () => {
     const order: string[] = []
     fastForwardBranchMock.mockImplementation(async () => {
       order.push('fastForward')
@@ -216,9 +219,10 @@ describe('addRepo — fetchRemoteBranch', () => {
       return fakeAddWorktree(...args)
     })
 
-    const result = await addRepo(ctx, dir, { source: WIDGETS_SOURCE, fetchRemoteBranch: true })
+    const result = await addRepo(ctx, dir, { source: WIDGETS_SOURCE, fetchRemoteBranch: true, sshAuthSock: '/tmp/agent.sock' })
 
-    expect(fastForwardBranchMock).toHaveBeenCalledWith(widgetsCachePath(), 'demo')
+    expect(ensureRepoCacheMock).toHaveBeenCalledWith(ctx.reposRoot, WIDGETS_SOURCE, expect.objectContaining({ sshAuthSock: '/tmp/agent.sock' }))
+    expect(fastForwardBranchMock).toHaveBeenCalledWith(widgetsCachePath(), 'demo', { sshAuthSock: '/tmp/agent.sock' })
     expect(order).toEqual(['fastForward', 'addWorktree'])
     expect(result.remoteBranch).toBe('updated')
   })
