@@ -87,6 +87,21 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
   - `submodule.ts` — `hasSubmodules` (checks for a `.gitmodules` file) and
     `initSubmodules` (`git submodule update --init --recursive`), since
     `worktree add` never initializes submodules on its own.
+- `src/ssh/` — OpenSSH's own tools, for unlocking an SSH key for one
+  command (see [docs/plans/0005-ssh-key-unlock.md](../../docs/plans/0005-ssh-key-unlock.md)).
+  - `exec.ts` — the single spawn point for `ssh`/`ssh-add`/`ssh-keygen`/
+    `ssh-agent`, mocked by unit tests the way `git/exec.ts` is.
+    `runSshAddOnTerminal` attaches `ssh-add` to the user's terminal so it
+    asks for the passphrase itself: spork never sees it.
+  - `target.ts` — `parseSshTarget(source)`: the host/user/port of an
+    `ssh://` or scp-like (`user@host:path`) source, null for anything else.
+  - `keys.ts` — `findLockedKeys(target)`: the key files `ssh -G` says ssh
+    would try for that host that have a passphrase and aren't already in
+    the user's own agent, in ssh's order. Nothing for a host whose
+    `IdentityAgent` is some other agent (1Password, Secretive).
+  - `agent.ts` — `startTemporaryAgent()`: a private `ssh-agent -D` child
+    with its socket in a 0700 temp directory and a one-hour key lifetime,
+    plus `unlock(keyPath)` and `stop()`. Never the user's own agent.
 - `src/repo/` — the shared repo cache each workspace's worktrees are created from.
   - `cache.ts` — derives a stable cache id/path from a repo source
     (`repoCacheId`: an owner-prefixed slug when the source is URL-shaped

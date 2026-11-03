@@ -6,10 +6,13 @@ surface; nothing in this repo should import from `src/*` paths directly.
 
 ## `src/git`
 
-- `exec.ts`'s `execGit` is the *only* place a subprocess gets spawned. Every
-  other function in `src/git` (and everything built on top of it later) must
-  call through it rather than importing `node:child_process` itself — that's
-  what keeps the rest of the codebase mockable in unit tests.
+- `exec.ts`'s `execGit` is the *only* place a `git` subprocess gets spawned.
+  Every other function in `src/git` (and everything built on top of it later)
+  must call through it rather than importing `node:child_process` itself —
+  that's what keeps the rest of the codebase mockable in unit tests.
+  `src/ssh/exec.ts` is the one other spawn point, for OpenSSH's own tools
+  (`ssh`, `ssh-add`, `ssh-keygen`, `ssh-agent`); the same rule applies to
+  everything in `src/ssh`.
 - `execGit` runs git with prompts **off** unless a caller passes
   `allowPrompts: true` (see `git/auth.ts`). Only thread `allowPrompts`
   through for a caller with a person at a real terminal *and* nothing else
