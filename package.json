@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "readme-sync:check": "tsx tools/readme-sync/check.ts",
     "release:bump": "tsx tools/release/bump-version.ts",
+    "release:changelog": "tsx tools/release/changelog.ts",
     "package:binary": "tsx tools/package-binary/build.ts",
     "package:all": "tsx tools/package-binary/build-all.ts",
     "package:mac": "tsx tools/package-binary/build-all.ts --platform darwin",

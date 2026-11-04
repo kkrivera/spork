@@ -8,8 +8,10 @@ for the design behind this. This doc is the operational runbook.
 
 1. Go to the repo's **Actions** tab → **Release — bump version** →
    **Run workflow** → pick `patch`/`minor`/`major`.
-2. That workflow bumps every package's version, commits it to `main`, and
-   pushes a `vX.Y.Z` tag.
+2. That workflow bumps every package's version, adds the release's
+   section to `CHANGELOG.md` (the titles of the commits since the last
+   tag, sorted into groups), commits both to `main`, and pushes a
+   `vX.Y.Z` tag.
 3. The tag push automatically triggers **Release — build binaries**, which
    builds `spork` and `spork-mcp` for macOS (arm64 + x64), Windows (x64),
    and Linux (x64), publishes them as a GitHub Release with the tag's name,
@@ -17,13 +19,6 @@ for the design behind this. This doc is the operational runbook.
    (committed straight to `main`).
 
 Steps 2–3 are fully automatic once step 1 is run.
-
-4. Write the release's `CHANGELOG.md` entry. The next time you work in
-   this repo with Claude Code, its `changelog-check` hook notices the new
-   tag has no entry. Claude writes it from the release's commits (the
-   [changelog skill](../.claude/skills/changelog/SKILL.md)), shows it to
-   you, and commits and pushes it once you approve. To do it straight
-   away instead, ask Claude to write the changelog.
 
 ## One-time setup: release GitHub App
 

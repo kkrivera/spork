@@ -158,8 +158,11 @@ in the README/release notes, not silently papered over.
 `packages/*/package.json` in lockstep, and additionally patches two
 hardcoded version-string literals that can't be read from `package.json` at
 runtime inside a packaged SEA binary: `@spork/cli`'s `.version(...)` call
-and `@spork/mcp`'s `McpServer({ version })`. No changelog file — GitHub's
-`gh release create --generate-notes` covers that from commit history.
+and `@spork/mcp`'s `McpServer({ version })`. The same workflow then
+runs `tools/release/changelog.ts`, which adds the release's section to
+`CHANGELOG.md` from the titles of the commits since the previous tag;
+GitHub's `gh release create --generate-notes` still writes the release
+page's notes.
 
 ### Two workflows, chained by a tag push
 
