@@ -367,8 +367,9 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
 
 `src/index.ts` is the only import path the rest of the repo (`packages/cli`)
 may use — it re-exports the workspace lifecycle API, both registries'
-APIs, `SporkError`, and the `~/.spork` path constants. Everything else here
-is an implementation detail.
+APIs, `SporkError`, and the `~/.spork` path constants, plus `readManifest`
+and `repoOwner` for display (a workspace's repo count, a repo's owner).
+Everything else here is an implementation detail.
 
 ## Testing
 

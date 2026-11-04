@@ -1,7 +1,8 @@
 export { SporkError } from './errors.js'
 
 export type { WorkspaceManifest, WorktreeEntry, AdoptedEntry, ManifestEntry } from './workspace/manifest.js'
-export { MANIFEST_FILENAME, manifestPath, findEnclosingWorkspaceDir } from './workspace/manifest.js'
+export { MANIFEST_FILENAME, manifestPath, readManifest, findEnclosingWorkspaceDir } from './workspace/manifest.js'
+export { repoOwner } from './util/repoName.js'
 
 export type { CodeWorkspaceFile, CodeWorkspaceFolder } from './workspace/codeWorkspace.js'
 export { codeWorkspaceFilePath } from './workspace/codeWorkspace.js'
