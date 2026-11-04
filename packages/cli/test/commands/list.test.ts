@@ -17,7 +17,7 @@ const ctx = {
   registryPath: '/registry.json',
   repoRegistryPath: '/repos.json',
   ui: createUi({ argv: ['--no-color'] }),
-  env: { workspaceDir: `${home}/ws` },
+  env: {},
 }
 
 function manifestWith(repoCount: number) {
@@ -51,20 +51,16 @@ describe('formatWorkspaceList', () => {
   const atDefault = { name: 'kris/demo', dir: `${home}/ws/kris/demo`, repos: 3 }
   const elsewhere = { name: 'root', dir: `${home}/code`, repos: null }
 
-  it('leaves out the location column when every workspace is in the default place', () => {
-    expect(formatWorkspaceList([atDefault], `${home}/ws`, {})).toBe('NAME       REPOS\nkris/demo  3')
-  })
-
-  it('shows a shortened location only for workspaces elsewhere', () => {
-    expect(formatWorkspaceList([atDefault, elsewhere], `${home}/ws`, {}).split('\n')).toEqual([
+  it('shows the folder each workspace sits in', () => {
+    expect(formatWorkspaceList([atDefault, elsewhere], {}).split('\n')).toEqual([
       'NAME       REPOS  LOCATION',
-      'kris/demo  3',
+      'kris/demo  3      ~/ws',
       'root       ?      ~/code',
     ])
   })
 
   it('shows every full path with --paths', () => {
-    expect(formatWorkspaceList([atDefault], `${home}/ws`, { paths: true }).split('\n')).toEqual([
+    expect(formatWorkspaceList([atDefault], { paths: true }).split('\n')).toEqual([
       'NAME       REPOS  PATH',
       `kris/demo  3      ${home}/ws/kris/demo`,
     ])
@@ -81,7 +77,7 @@ describe('registerListCommand', () => {
 
     await program.parseAsync(['node', 'test', 'list'])
 
-    expect(logSpy.mock.calls.flat().join('\n')).toBe('NAME  REPOS\ndemo  1')
+    expect(logSpy.mock.calls.flat().join('\n')).toBe('NAME  REPOS  LOCATION\ndemo  1      ~/ws')
     logSpy.mockRestore()
   })
 

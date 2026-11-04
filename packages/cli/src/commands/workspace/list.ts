@@ -10,7 +10,7 @@ export interface WorkspaceListEntry extends RegistryEntry {
 }
 
 export interface ListOptions {
-  /** Show every workspace's full absolute path instead of only the unusual ones, shortened. */
+  /** Show every workspace's full absolute path instead of the folder it sits in. */
   paths?: boolean
 }
 
@@ -28,28 +28,18 @@ export async function runList(ctx: AppContext): Promise<WorkspaceListEntry[]> {
 }
 
 /**
- * NAME and REPOS, plus a LOCATION column only for workspaces that aren't
- * at `SPORK_WORKSPACE_DIR/<name>` (see `workspaceLocation`) — left out
- * entirely when there are none. `--paths` swaps that for a PATH column of
+ * NAME, REPOS and LOCATION (the folder each one sits in — see
+ * `workspaceLocation`). `--paths` swaps LOCATION for a PATH column of
  * every workspace's full, unshortened directory.
  */
-export function formatWorkspaceList(
-  workspaces: readonly WorkspaceListEntry[],
-  defaultParent: string | undefined,
-  options: ListOptions,
-): string {
+export function formatWorkspaceList(workspaces: readonly WorkspaceListEntry[], options: ListOptions): string {
   const repos = (workspace: WorkspaceListEntry): string => (workspace.repos === null ? '?' : String(workspace.repos))
   if (options.paths) {
     return formatTable(['NAME', 'REPOS', 'PATH'], workspaces.map((workspace) => [workspace.name, repos(workspace), workspace.dir]))
   }
-
-  const locations = workspaces.map((workspace) => workspaceLocation(workspace, defaultParent))
-  if (locations.every((location) => location === null)) {
-    return formatTable(['NAME', 'REPOS'], workspaces.map((workspace) => [workspace.name, repos(workspace)]))
-  }
   return formatTable(
     ['NAME', 'REPOS', 'LOCATION'],
-    workspaces.map((workspace, i) => [workspace.name, repos(workspace), locations[i] ?? '']),
+    workspaces.map((workspace) => [workspace.name, repos(workspace), workspaceLocation(workspace)]),
   )
 }
 
@@ -66,6 +56,6 @@ export function registerListCommand(program: Command, ctx: AppContext): void {
         return
       }
 
-      console.log(formatWorkspaceList(workspaces, ctx.env.workspaceDir, options))
+      console.log(formatWorkspaceList(workspaces, options))
     })
 }

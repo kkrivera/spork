@@ -20,16 +20,14 @@ describe('tildify', () => {
 describe('workspaceLocation', () => {
   const home = '/home/kris'
 
-  it('is null for a workspace at SPORK_WORKSPACE_DIR/<name>, including nested names', () => {
-    expect(workspaceLocation({ name: 'demo', dir: '/home/kris/ws/demo' }, '/home/kris/ws', home)).toBeNull()
-    expect(workspaceLocation({ name: 'kris/demo', dir: '/home/kris/ws/kris/demo' }, '/home/kris/ws/', home)).toBeNull()
+  it('is the folder a workspace sits in, since its name says the rest', () => {
+    expect(workspaceLocation({ name: 'demo', dir: '/home/kris/ws/demo' }, home)).toBe('~/ws')
+    expect(workspaceLocation({ name: 'kris/demo', dir: '/home/kris/ws/kris/demo' }, home)).toBe('~/ws')
+    expect(workspaceLocation({ name: 'demo', dir: '/demo' }, home)).toBe('/')
   })
 
-  it('is the shortened directory for a workspace anywhere else', () => {
-    expect(workspaceLocation({ name: 'root', dir: '/home/kris/code' }, '/home/kris/ws', home)).toBe('~/code')
-  })
-
-  it('is always shown without SPORK_WORKSPACE_DIR', () => {
-    expect(workspaceLocation({ name: 'demo', dir: '/home/kris/ws/demo' }, undefined, home)).toBe('~/ws/demo')
+  it("is the whole directory when it doesn't end in the name", () => {
+    expect(workspaceLocation({ name: 'root', dir: '/home/kris/code' }, home)).toBe('~/code')
+    expect(workspaceLocation({ name: 'demo', dir: '/home/kris/my-demo' }, home)).toBe('~/my-demo')
   })
 })

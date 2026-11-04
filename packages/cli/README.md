@@ -25,10 +25,11 @@ logic lives here.
   renderer (no box drawing) so output stays clean piped or in CI.
 - `src/output/paths.ts` — how paths are shown. `tildify` shortens a path
   under the home directory to `~/…` (for every path a message prints).
-  `workspaceLocation` is a workspace's shortened directory, or `null` when
-  it's at `SPORK_WORKSPACE_DIR/<name>`, where `create` puts it by default —
-  the name already says that much, so `workspace list` and the workspace
-  pickers only show where a workspace lives when it's somewhere else.
+  `workspaceLocation` is the folder a workspace sits in, shortened: its
+  directory minus the trailing `/<name>`, since the name is already on
+  screen (or the whole directory, when it doesn't end in the name, as
+  after `workspace init`). `workspace list` and the workspace pickers show
+  it instead of the full path.
 - `src/env.ts` — `readSporkEnv(env = process.env)`: the single, extensible
   place every `SPORK_*` environment variable gets read (currently just
   `SPORK_WORKSPACE_DIR`, `workspace create`'s `--dir` fallback below) — add
@@ -131,8 +132,7 @@ logic lives here.
   `spork repo`'s local/global default) and, if so, resolves to it directly
   with no prompt at all; otherwise it lists every registered workspace
   (`@spork/core`'s `listWorkspaces`) via `@spork/prompts`' `select()`,
-  each hinted with its `workspaceLocation` (so only the unusual ones get a
-  path). `pickWorkspaceName` also takes an `output` stream, for a command
+  each hinted with its `workspaceLocation`. `pickWorkspaceName` also takes an `output` stream, for a command
   whose stdout is meant to be captured (`workspace path`).
   `pickWorkspaceNames` (multi) has no such auto-detect — picking several is
   the point, so it always offers the full list. `NotInteractiveError` (no
@@ -184,9 +184,9 @@ logic lives here.
   picker rather than requiring the name up front; `create`'s `name` is the
   *new* workspace being created (nothing to pick from) and `list` takes no
   workspace at all, so neither needed this. `list` shows NAME and REPOS
-  (each manifest's entry count, via `@spork/core`'s `readManifest`), plus
-  a LOCATION column only when some workspace isn't in the default place;
-  `--paths` shows every workspace's full path instead. `path [workspace]`
+  (each manifest's entry count, via `@spork/core`'s `readManifest`) and
+  LOCATION (`workspaceLocation`); `--paths` shows every workspace's full
+  path instead. `path [workspace]`
   prints one workspace's full directory and nothing else, for
   `cd "$(spork workspace path <name>)"` — its picker draws on stderr so
   stdout stays just the path. `create` does run its own

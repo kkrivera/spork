@@ -92,17 +92,17 @@ describe('runExec — resolving the workspace when --workspace is omitted', () =
     expect(result.workspace).toBe('demo')
   })
 
-  it("hints a workspace's location only when it isn't under SPORK_WORKSPACE_DIR", async () => {
+  it('hints each workspace with the folder it sits in', async () => {
     vi.mocked(listWorkspaces).mockResolvedValue([
       { name: 'demo', dir: '/ws/demo' },
       { name: 'root', dir: '/code' },
     ])
     vi.mocked(select).mockResolvedValue(['demo'])
 
-    await runExec({ ...ctx, env: { workspaceDir: '/ws' } }, 'npm run dev', {}, fakeExecutor({ exitCode: 0, signal: null }))
+    await runExec(ctx, 'npm run dev', {}, fakeExecutor({ exitCode: 0, signal: null }))
 
     expect(vi.mocked(select).mock.calls[0]?.[0].options).toEqual([
-      { label: 'demo', value: 'demo', hint: undefined },
+      { label: 'demo', value: 'demo', hint: '/ws' },
       { label: 'root', value: 'root', hint: '/code' },
     ])
   })

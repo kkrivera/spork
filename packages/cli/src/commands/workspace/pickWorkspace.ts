@@ -12,7 +12,7 @@ async function pickableWorkspaces(ctx: AppContext): Promise<PromptOption<string>
   return workspaces.map((workspace) => ({
     label: workspace.name,
     value: workspace.name,
-    hint: workspaceLocation(workspace, ctx.env.workspaceDir) ?? undefined,
+    hint: workspaceLocation(workspace),
   }))
 }
 
