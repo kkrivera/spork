@@ -73,6 +73,11 @@ What changed in each spork release, newest first. Install or upgrade with
 
 ## Writing rules
 
+- **It must be human readable.** Someone should be able to skim a release
+  and know what changed without opening git. Write each bullet as a plain
+  sentence of your own. Don't paste in commit subjects, and leave out
+  commit hashes, PR numbers, conventional-commit prefixes (`feat:`,
+  `cli:`), file paths and internal names.
 - **The reader installed spork with `brew` and uses its commands.** Write
   about what they can now do, or what behaves differently for them, not
   how it's built. "`workspace create` asks for a missing SSH key's
