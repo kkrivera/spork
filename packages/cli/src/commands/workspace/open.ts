@@ -3,6 +3,7 @@ import { NotInteractiveError, select } from '@spork/prompts'
 import type { Command } from 'commander'
 import { workspaceContext, type AppContext } from '../../context.js'
 import { defaultLaunchDeps, LAUNCH_TARGET_OPTIONS, launchWorkspace, type LaunchDeps, type LaunchTarget } from '../../launchTarget.js'
+import { tildify } from '../../output/paths.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
 
 export interface OpenOptions {
@@ -83,12 +84,12 @@ export function registerOpenCommand(program: Command, ctx: AppContext, deps: Lau
 
       if (result.target === 'code') {
         if (result.opened) {
-          console.log(ctx.ui.color.green(`Opened ${result.filePath}`))
+          console.log(ctx.ui.color.green(`Opened ${tildify(result.filePath)}`))
         } else {
-          console.log(`Couldn't launch the "code" CLI (${result.reason}). Open manually: ${result.filePath}`)
+          console.log(`Couldn't launch the "code" CLI (${result.reason}). Open manually: ${tildify(result.filePath)}`)
         }
       } else if (!result.opened) {
-        console.log(`Couldn't launch Claude (${result.reason}). Run it yourself: cd ${result.dir} && claude`)
+        console.log(`Couldn't launch Claude (${result.reason}). Run it yourself: cd ${tildify(result.dir)} && claude`)
       }
     })
 }

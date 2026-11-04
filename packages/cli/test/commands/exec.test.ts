@@ -92,6 +92,21 @@ describe('runExec — resolving the workspace when --workspace is omitted', () =
     expect(result.workspace).toBe('demo')
   })
 
+  it("hints a workspace's location only when it isn't under SPORK_WORKSPACE_DIR", async () => {
+    vi.mocked(listWorkspaces).mockResolvedValue([
+      { name: 'demo', dir: '/ws/demo' },
+      { name: 'root', dir: '/code' },
+    ])
+    vi.mocked(select).mockResolvedValue(['demo'])
+
+    await runExec({ ...ctx, env: { workspaceDir: '/ws' } }, 'npm run dev', {}, fakeExecutor({ exitCode: 0, signal: null }))
+
+    expect(vi.mocked(select).mock.calls[0]?.[0].options).toEqual([
+      { label: 'demo', value: 'demo', hint: undefined },
+      { label: 'root', value: 'root', hint: '/code' },
+    ])
+  })
+
   it('refuses with a clear error when nothing is registered yet', async () => {
     const executor = fakeExecutor({ exitCode: 0, signal: null })
 
@@ -108,7 +123,7 @@ describe('registerExecCommand', () => {
 
     await program.parseAsync(['node', 'test', 'exec', 'npm test', '--workspace', 'demo'])
 
-    expect(logSpy.mock.calls.flat().join('\n')).toContain('Running "npm test" in "demo"')
+    expect(logSpy.mock.calls.flat().join('\n')).toBe('Running "npm test" in "demo"')
     expect(process.exitCode).toBe(3)
     logSpy.mockRestore()
   })

@@ -14,6 +14,7 @@ import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
 import { workspaceContext, type AppContext } from '../../context.js'
+import { tildify } from '../../output/paths.js'
 
 export interface AdoptBatchFailure {
   folder: string
@@ -126,7 +127,7 @@ export function registerInitCommand(program: Command, ctx: AppContext): void {
     .option('--no-agent-files', "don't generate AGENTS.md/CLAUDE.md at the workspace root")
     .action(async (name: string, options: InitOptions) => {
       const { handle, outcomes } = await runInit(ctx, name, options)
-      console.log(ctx.ui.color.green(`Initialized workspace "${handle.name}" at ${handle.dir}`))
+      console.log(ctx.ui.color.green(`Initialized workspace "${handle.name}" at ${tildify(handle.dir)}`))
 
       const failures: AdoptBatchFailure[] = []
       for (const outcome of outcomes) {

@@ -3,6 +3,7 @@ import { codeWorkspaceFilePath, createAndRegisterWorkspace, SporkError, type Wor
 import { NotInteractiveError, select, type PromptOption } from '@spork/prompts'
 import type { Command } from 'commander'
 import { workspaceContext, type AppContext } from '../../context.js'
+import { tildify } from '../../output/paths.js'
 import {
   defaultLaunchDeps,
   launchWorkspace,
@@ -161,12 +162,12 @@ async function offerToLaunchWorkspace(ctx: AppContext, handle: WorkspaceHandle, 
   const outcome = await launchWorkspace(target, handle.dir, filePath, deps)
   if (target === 'code') {
     if (outcome.ok) {
-      console.log(ctx.ui.color.green(`Opened ${filePath}`))
+      console.log(ctx.ui.color.green(`Opened ${tildify(filePath)}`))
     } else {
-      console.log(`Couldn't launch the "code" CLI (${outcome.reason}). Open manually: ${filePath}`)
+      console.log(`Couldn't launch the "code" CLI (${outcome.reason}). Open manually: ${tildify(filePath)}`)
     }
   } else if (!outcome.ok) {
-    console.log(`Couldn't launch Claude (${outcome.reason}). Run it yourself: cd ${handle.dir} && claude`)
+    console.log(`Couldn't launch Claude (${outcome.reason}). Run it yourself: cd ${tildify(handle.dir)} && claude`)
   }
 }
 
@@ -185,7 +186,7 @@ export function registerCreateCommand(program: Command, ctx: AppContext, deps: L
         ...options,
         onUnlockKey: keyUnlockNotifier(ctx),
       })
-      console.log(ctx.ui.color.green(`Created workspace "${handle.name}" at ${handle.dir}`))
+      console.log(ctx.ui.color.green(`Created workspace "${handle.name}" at ${tildify(handle.dir)}`))
       if (remoteBranchNotice) console.log(ctx.ui.color.dim(remoteBranchNotice))
 
       const failures: AddRepoBatchFailure[] = []

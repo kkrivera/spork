@@ -1,6 +1,6 @@
-import os from 'node:os'
 import { branchConflictError, defaultAlias, prepareRemoteAccess, type KeyUnlockRequest } from '@spork/core'
 import { workspaceContext, type AppContext } from '../../context.js'
+import { tildify } from '../../output/paths.js'
 import { resolveFetchRemoteBranch } from './remoteBranchPrompt.js'
 
 /** Prints why a key's passphrase is about to be asked for — see `keyUnlockNotifier`. */
@@ -69,9 +69,4 @@ export function keyUnlockNotifier(ctx: AppContext): KeyUnlockNotifier | undefine
     console.log(`${repos} ${sources.length === 1 ? 'needs' : 'need'} the SSH key ${tildify(keyPath)}, which isn't loaded in your ssh-agent.`)
     console.log(ctx.ui.color.dim('spork keeps it only until this command finishes. Press Enter with no passphrase to skip it.'))
   }
-}
-
-function tildify(file: string): string {
-  const home = os.homedir()
-  return file.startsWith(`${home}/`) ? `~${file.slice(home.length)}` : file
 }

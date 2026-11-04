@@ -53,8 +53,8 @@ export function registerExecCommand(program: Command, ctx: AppContext, executor:
     .description('Run an arbitrary command at the root of a workspace (omit --workspace to auto-detect/pick it)')
     .option('-w, --workspace <name>', 'workspace to run in (default: auto-detected from cwd, or pick from a list)')
     .action(async (command: string, options: ExecOptions) => {
-      const result = await runExec(ctx, command, options, executor, ({ workspace, dir }) => {
-        console.log(ctx.ui.color.dim(`Running "${command}" in "${workspace}" (${dir})`))
+      const result = await runExec(ctx, command, options, executor, ({ workspace }) => {
+        console.log(ctx.ui.color.dim(`Running "${command}" in "${workspace}"`))
       })
 
       process.exitCode = result.signal ? 1 : (result.exitCode ?? 0)

@@ -1,14 +1,19 @@
 import { realpath } from 'node:fs/promises'
 import { findEnclosingWorkspaceDir, listWorkspaces, SporkError, type RegistryEntry } from '@spork/core'
-import { NotInteractiveError, select, type PromptOption } from '@spork/prompts'
+import { NotInteractiveError, select, type PromptOption, type PromptOutputStream } from '@spork/prompts'
 import type { AppContext } from '../../context.js'
+import { workspaceLocation } from '../../output/paths.js'
 
 async function pickableWorkspaces(ctx: AppContext): Promise<PromptOption<string>[]> {
   const workspaces = await listWorkspaces(ctx.registryPath)
   if (workspaces.length === 0) {
     throw new SporkError('No workspaces yet. Create one with: spork workspace create <name>')
   }
-  return workspaces.map((workspace) => ({ label: workspace.name, value: workspace.name, hint: workspace.dir }))
+  return workspaces.map((workspace) => ({
+    label: workspace.name,
+    value: workspace.name,
+    hint: workspaceLocation(workspace, ctx.env.workspaceDir) ?? undefined,
+  }))
 }
 
 /**
@@ -44,13 +49,14 @@ async function matchesEnclosingDir(workspace: RegistryEntry, enclosingDir: strin
  * default to fall back to, so that becomes a clear `SporkError` naming the
  * explicit-argument form instead. A real cancel (Esc/Ctrl+C) becomes
  * `SporkError`'s usual `'Cancelled.'`, same as every other cancelled-prompt
- * path in this CLI.
+ * path in this CLI. `output` moves the picker off stdout, for a command
+ * whose stdout is meant to be captured (`workspace path`).
  */
 export async function pickWorkspaceName(
   ctx: AppContext,
   message: string,
   usageHint: string,
-  cwd: string = process.cwd(),
+  { cwd = process.cwd(), output }: { cwd?: string; output?: PromptOutputStream } = {},
 ): Promise<string> {
   const enclosingDir = findEnclosingWorkspaceDir(cwd)
   if (enclosingDir) {
@@ -64,7 +70,7 @@ export async function pickWorkspaceName(
 
   let chosen: string[] | null
   try {
-    chosen = await select({ message, options, mode: 'single' })
+    chosen = await select({ message, options, mode: 'single', ...(output ? { output } : {}) })
   } catch (error) {
     if (error instanceof NotInteractiveError) throw new SporkError(usageHint)
     throw error

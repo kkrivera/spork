@@ -23,6 +23,12 @@ logic lives here.
   output directly.
 - `src/output/format.ts` — `formatTable`, a plain space-padded table
   renderer (no box drawing) so output stays clean piped or in CI.
+- `src/output/paths.ts` — how paths are shown. `tildify` shortens a path
+  under the home directory to `~/…` (for every path a message prints).
+  `workspaceLocation` is a workspace's shortened directory, or `null` when
+  it's at `SPORK_WORKSPACE_DIR/<name>`, where `create` puts it by default —
+  the name already says that much, so `workspace list` and the workspace
+  pickers only show where a workspace lives when it's somewhere else.
 - `src/env.ts` — `readSporkEnv(env = process.env)`: the single, extensible
   place every `SPORK_*` environment variable gets read (currently just
   `SPORK_WORKSPACE_DIR`, `workspace create`'s `--dir` fallback below) — add
@@ -124,7 +130,10 @@ logic lives here.
   `findEnclosingWorkspaceDir`, the same convention `repoScope.ts` uses for
   `spork repo`'s local/global default) and, if so, resolves to it directly
   with no prompt at all; otherwise it lists every registered workspace
-  (`@spork/core`'s `listWorkspaces`) via `@spork/prompts`' `select()`.
+  (`@spork/core`'s `listWorkspaces`) via `@spork/prompts`' `select()`,
+  each hinted with its `workspaceLocation` (so only the unusual ones get a
+  path). `pickWorkspaceName` also takes an `output` stream, for a command
+  whose stdout is meant to be captured (`workspace path`).
   `pickWorkspaceNames` (multi) has no such auto-detect — picking several is
   the point, so it always offers the full list. `NotInteractiveError` (no
   TTY) becomes a `SporkError` naming the explicit-argument form instead
@@ -174,7 +183,10 @@ logic lives here.
   `pickWorkspace.ts`'s
   picker rather than requiring the name up front; `create`'s `name` is the
   *new* workspace being created (nothing to pick from) and `list` takes no
-  workspace at all, so neither needed this. `create` does run its own
+  workspace at all, so neither needed this. `list` shows NAME and REPOS
+  (each manifest's entry count, via `@spork/core`'s `readManifest`), plus
+  a LOCATION column only when some workspace isn't in the default place;
+  `--paths` shows every workspace's full path instead. `create` does run its own
   repo picker when no `--repo` is given, but *before* creating anything,
   so backing out of it leaves no workspace behind. `remove` takes its workspaces
   as a variadic `[workspaces...]` and, when none are given, offers a
@@ -285,7 +297,7 @@ logic lives here.
   auto-detect, then a single-select); `runExec` takes an `onResolved`
   callback fired once the workspace is known but *before* the command
   starts, which `registerExecCommand` uses to print which workspace got
-  picked — otherwise there'd be no feedback at all until the command's own
+  picked (by name only — its path is noise here) — otherwise there'd be no feedback at all until the command's own
   output appeared. The child's exit code (or `1` if it was killed by a
   signal instead of exiting normally) becomes spork's own exit code, so
   `spork workspace exec "npm test" --workspace x` composes correctly in
