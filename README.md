@@ -144,13 +144,14 @@ spork workspace add-repo git@github.com:acme/gadgets.git --workspace demo
 spork workspace status demo
 spork workspace open demo
 spork workspace list
+cd "$(spork workspace path demo)"
 spork workspace exec "npm run dev" --workspace demo
 spork workspace remove-repo gadgets --workspace demo
 spork workspace remove demo
 ```
 
 You can leave off `--workspace`/`-w`, or the workspace name on `status`,
-`open`, and `remove`. spork then uses the workspace you're in, or shows a
+`open`, `path`, and `remove`. spork then uses the workspace you're in, or shows a
 picker if you aren't in one. `add-repo` and `remove-repo` also let you leave
 off the repo and pick it from a list.
 

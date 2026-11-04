@@ -172,21 +172,24 @@ logic lives here.
   only lives in one place.
 - `src/commands/workspace/` — one file per `spork workspace <verb>`
   subcommand (`create`, `add-repo`, `remove-repo`, `remove`, `list`,
-  `status`, `open`, `exec`), each exporting a plain `run<Verb>` function
+  `status`, `open`, `path`, `exec`), each exporting a plain `run<Verb>` function
   (the testable logic) and a `register<Verb>Command` that wires it to
   commander and prints the result. `create` and `init` take
   `--no-agent-files`, passed to `@spork/core` as `agentInstructions:
   false`, to skip the generated root `AGENTS.md`/`CLAUDE.md` for that
   workspace (see `@spork/core`'s `workspaceFiles.ts`). Every subcommand except `create` and
   `list` takes its workspace by name but can omit it — `add-repo`,
-  `remove-repo`, `remove`, `status`, `open`, and `exec` all fall back to
+  `remove-repo`, `remove`, `status`, `open`, `path`, and `exec` all fall back to
   `pickWorkspace.ts`'s
   picker rather than requiring the name up front; `create`'s `name` is the
   *new* workspace being created (nothing to pick from) and `list` takes no
   workspace at all, so neither needed this. `list` shows NAME and REPOS
   (each manifest's entry count, via `@spork/core`'s `readManifest`), plus
   a LOCATION column only when some workspace isn't in the default place;
-  `--paths` shows every workspace's full path instead. `create` does run its own
+  `--paths` shows every workspace's full path instead. `path [workspace]`
+  prints one workspace's full directory and nothing else, for
+  `cd "$(spork workspace path <name>)"` — its picker draws on stderr so
+  stdout stays just the path. `create` does run its own
   repo picker when no `--repo` is given, but *before* creating anything,
   so backing out of it leaves no workspace behind. `remove` takes its workspaces
   as a variadic `[workspaces...]` and, when none are given, offers a
