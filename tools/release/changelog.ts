@@ -37,6 +37,14 @@ export function isReleaseBotCommit(title: string): boolean {
   return /^chore\((release|homebrew)\):/.test(title)
 }
 
+const ALL_VERBS = new Set([...ADDED_VERBS, ...FIXED_VERBS, ...REMOVED_VERBS])
+
+/** "Add core git wrapper: …" is a sentence with a colon in it, not a `scope:` prefix. */
+function startsWithVerb(candidate: string): boolean {
+  const [first, ...more] = candidate.split(/\s+/)
+  return more.length > 0 && ALL_VERBS.has(first?.toLowerCase() ?? '')
+}
+
 /**
  * Splits a commit title into its `scope:` prefix (lowercased, parentheses
  * and a trailing `!` dropped, so `chore(x)`, `(chore)` and `feat!` all
@@ -44,7 +52,7 @@ export function isReleaseBotCommit(title: string): boolean {
  */
 export function splitTitle(title: string): { scope: string | null; rest: string } {
   const match = /^([^:\s][^:]{0,39}):\s+(.*)$/.exec(title)
-  if (!match) return { scope: null, rest: title }
+  if (!match || startsWithVerb(match[1] as string)) return { scope: null, rest: title }
   const raw = (match[1] as string).toLowerCase().replace(/!$/, '')
   const scope = /^\((.*)\)$/.exec(raw)?.[1] ?? raw.replace(/\(.*\)$/, '')
   return { scope: scope || null, rest: match[2] as string }

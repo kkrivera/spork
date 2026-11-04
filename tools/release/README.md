@@ -35,7 +35,9 @@ commits, sorted into groups (`groupOf`):
 | Changed | everything else |
 
 The verb is read after any `scope:` prefix, so `cli: add a flag` is
-Added. Earlier sections are never touched, and a version that already
+Added. A "prefix" that starts with one of those verbs and has a space in
+it (`Add core git wrapper: bare clone`) is part of the sentence, not a
+scope. Earlier sections are never touched, and a version that already
 has a section is refused. Its output is the new section, for the
 workflow log.
 

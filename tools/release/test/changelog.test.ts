@@ -49,6 +49,8 @@ describe('splitTitle', () => {
 
   it('leaves a title without a scope whole', () => {
     expect(splitTitle('Add Homebrew distribution')).toEqual({ scope: null, rest: 'Add Homebrew distribution' })
+    expect(splitTitle('Add core git wrapper: bare clone')).toEqual({ scope: null, rest: 'Add core git wrapper: bare clone' })
+    expect(splitTitle('remove: remove workspaces')).toEqual({ scope: 'remove', rest: 'remove workspaces' })
   })
 })
 
@@ -64,6 +66,7 @@ describe('groupOf', () => {
     ['core: fix lost manifest entries', 'Fixed'],
     ['cli: drop the old flag', 'Removed'],
     ['cli: stop before creating a workspace', 'Changed'],
+    ['Add core git wrapper: bare clone', 'Added'],
   ])('%s → %s', (title, group) => {
     expect(groupOf(title)).toBe(group)
   })
