@@ -6,6 +6,7 @@ import { registerListReposTool } from './listRepos.js'
 import { registerListWorkspacesTool } from './listWorkspaces.js'
 import { registerRemoveRepoTool } from './removeRepo.js'
 import { registerRemoveWorkspaceTool } from './removeWorkspace.js'
+import { registerWorkspacePathTool } from './workspacePath.js'
 import { registerWorkspaceStatusTool } from './workspaceStatus.js'
 
 export function registerTools(server: McpServer, ctx: McpContext): void {
@@ -15,5 +16,6 @@ export function registerTools(server: McpServer, ctx: McpContext): void {
   registerRemoveRepoTool(server, ctx)
   registerRemoveWorkspaceTool(server, ctx)
   registerWorkspaceStatusTool(server, ctx)
+  registerWorkspacePathTool(server, ctx)
   registerListReposTool(server, ctx)
 }

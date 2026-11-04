@@ -25,7 +25,7 @@ describe('registerTools', () => {
     registerTools(server as unknown as McpServer, ctx)
 
     expect(tools.map((tool) => tool.name).sort()).toEqual(
-      ['add_repo', 'create_workspace', 'list_repos', 'list_workspaces', 'remove_repo', 'remove_workspace', 'workspace_status'].sort(),
+      ['add_repo', 'create_workspace', 'list_repos', 'list_workspaces', 'remove_repo', 'remove_workspace', 'workspace_path', 'workspace_status'].sort(),
     )
   })
 })

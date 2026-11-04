@@ -46,6 +46,8 @@ instead of shelling out to the `spork` CLI.
     `@spork/core`'s `removeAndUnregisterWorkspace`.
   - `workspace_status` — `{ workspace }`, the same per-worktree status
     `spork workspace status` prints, as JSON.
+  - `workspace_path` — `{ workspace }`, the workspace's full directory as
+    plain text, like `spork workspace path`.
   - `list_repos` — `{ workspace? }`: every global repo alias, plus a
     given workspace's own local aliases. `workspace` is explicit rather
     than cwd-detected, unlike `spork repo list`'s local-if-cwd-is-inside-
