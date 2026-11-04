@@ -378,7 +378,8 @@ logic lives here.
   alias *and* creates a worktree together, not "just register an alias"
   on its own. `repo list` is the one place that
   doesn't pick a single scope by default — it merges local (if inside a
-  workspace) and global entries into one table with a SCOPE column, so a
+  workspace) and global entries into one table with OWNER (`@spork/core`'s
+  `repoOwner`, `-` for a local path) and SCOPE columns, so a
   shadowed alias is visible rather than a silent surprise; `--global`/
   `--local` narrow it to just one. `repo scan [directory]` bulk-adopts every
   git repo found directly under `directory` (e.g. an existing `~/code`),

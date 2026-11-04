@@ -1,4 +1,11 @@
-import { findEnclosingWorkspaceDir, listRepoAliases, localRepoRegistryPath, SporkError, type RepoRegistryEntry } from '@spork/core'
+import {
+  findEnclosingWorkspaceDir,
+  listRepoAliases,
+  localRepoRegistryPath,
+  repoOwner,
+  SporkError,
+  type RepoRegistryEntry,
+} from '@spork/core'
 import type { Command } from 'commander'
 import type { AppContext } from '../../context.js'
 import { formatTable } from '../../output/format.js'
@@ -57,6 +64,12 @@ export function registerListCommand(program: Command, ctx: AppContext): void {
         return
       }
 
-      console.log(formatTable(['ALIAS', 'SOURCE', 'SCOPE'], repos.map((repo) => [repo.alias, repo.source, repo.scope])))
+      // OWNER is the org/user out of a remote URL; a local path has none.
+      console.log(
+        formatTable(
+          ['ALIAS', 'OWNER', 'SOURCE', 'SCOPE'],
+          repos.map((repo) => [repo.alias, repoOwner(repo.source) ?? '-', repo.source, repo.scope]),
+        ),
+      )
     })
 }

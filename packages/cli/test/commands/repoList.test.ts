@@ -5,6 +5,7 @@ vi.mock('@spork/core', () => ({
   listRepoAliases: vi.fn(),
   findEnclosingWorkspaceDir: vi.fn(),
   localRepoRegistryPath: (workspaceDir: string) => `${workspaceDir}/spork.repos.json`,
+  repoOwner: (source: string) => /:(\w+)\//.exec(source)?.[1] ?? null,
   SporkError: class SporkError extends Error {},
 }))
 
@@ -75,18 +76,22 @@ describe('runList', () => {
 })
 
 describe('registerListCommand', () => {
-  it('prints a table of aliases including a SCOPE column', async () => {
-    vi.mocked(listRepoAliases).mockResolvedValue([{ alias: 'widgets', source: 'git@x:widgets.git', addedAt: '' }])
+  it('prints a table of aliases with OWNER and SCOPE columns', async () => {
+    vi.mocked(listRepoAliases).mockResolvedValue([
+      { alias: 'widgets', source: 'git@x:acme/widgets.git', addedAt: '' },
+      { alias: 'local', source: '/code/local', addedAt: '' },
+    ])
     const program = new Command()
     registerListCommand(program, ctx)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await program.parseAsync(['node', 'test', 'list'])
 
-    const output = logSpy.mock.calls.flat().join('\n')
-    expect(output).toContain('widgets')
-    expect(output).toContain('SCOPE')
-    expect(output).toContain('global')
+    expect(logSpy.mock.calls.flat().join('\n').split('\n')).toEqual([
+      'ALIAS    OWNER  SOURCE                  SCOPE',
+      'widgets  acme   git@x:acme/widgets.git  global',
+      'local    -      /code/local             global',
+    ])
     logSpy.mockRestore()
   })
 
