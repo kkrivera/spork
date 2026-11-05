@@ -132,7 +132,8 @@ logic lives here.
   `spork repo`'s local/global default) and, if so, resolves to it directly
   with no prompt at all; otherwise it lists every registered workspace
   (`@spork/core`'s `listWorkspaces`) via `@spork/prompts`' `select()`,
-  each hinted with its `workspaceLocation`. `pickWorkspaceName` also takes an `output` stream, for a command
+  each hinted with its `workspaceLocation` (except for `exec`, which passes
+  `showLocations: false`: there the name is all you need). `pickWorkspaceName` also takes an `output` stream, for a command
   whose stdout is meant to be captured (`workspace path`).
   `pickWorkspaceNames` (multi) has no such auto-detect — picking several is
   the point, so it always offers the full list. `NotInteractiveError` (no

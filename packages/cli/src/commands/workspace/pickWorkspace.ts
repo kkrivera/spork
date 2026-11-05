@@ -4,7 +4,7 @@ import { NotInteractiveError, select, type PromptOption, type PromptOutputStream
 import type { AppContext } from '../../context.js'
 import { workspaceLocation } from '../../output/paths.js'
 
-async function pickableWorkspaces(ctx: AppContext): Promise<PromptOption<string>[]> {
+async function pickableWorkspaces(ctx: AppContext, showLocations = true): Promise<PromptOption<string>[]> {
   const workspaces = await listWorkspaces(ctx.registryPath)
   if (workspaces.length === 0) {
     throw new SporkError('No workspaces yet. Create one with: spork workspace create <name>')
@@ -12,7 +12,7 @@ async function pickableWorkspaces(ctx: AppContext): Promise<PromptOption<string>
   return workspaces.map((workspace) => ({
     label: workspace.name,
     value: workspace.name,
-    hint: workspaceLocation(workspace),
+    hint: showLocations ? workspaceLocation(workspace) : undefined,
   }))
 }
 
@@ -51,12 +51,18 @@ async function matchesEnclosingDir(workspace: RegistryEntry, enclosingDir: strin
  * `SporkError`'s usual `'Cancelled.'`, same as every other cancelled-prompt
  * path in this CLI. `output` moves the picker off stdout, for a command
  * whose stdout is meant to be captured (`workspace path`).
+ * `showLocations: false` leaves out each workspace's location hint, for a
+ * command where it's only noise (`workspace exec`).
  */
 export async function pickWorkspaceName(
   ctx: AppContext,
   message: string,
   usageHint: string,
-  { cwd = process.cwd(), output }: { cwd?: string; output?: PromptOutputStream } = {},
+  {
+    cwd = process.cwd(),
+    output,
+    showLocations,
+  }: { cwd?: string; output?: PromptOutputStream; showLocations?: boolean } = {},
 ): Promise<string> {
   const enclosingDir = findEnclosingWorkspaceDir(cwd)
   if (enclosingDir) {
@@ -66,7 +72,7 @@ export async function pickWorkspaceName(
     }
   }
 
-  const options = await pickableWorkspaces(ctx)
+  const options = await pickableWorkspaces(ctx, showLocations)
 
   let chosen: string[] | null
   try {

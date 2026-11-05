@@ -39,6 +39,7 @@ export async function runExec(
       ctx,
       'Select a workspace to run in',
       'Multiple workspaces are registered — pass one explicitly: spork workspace exec <command> --workspace <name>',
+      { showLocations: false },
     ))
   const dir = await resolveWorkspaceDir(ctx.registryPath, workspace)
   onResolved?.({ workspace, dir })

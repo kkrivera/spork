@@ -38,6 +38,7 @@ describe('runPath', () => {
 
     expect(await runPath(ctx, undefined)).toBe('/ws/demo')
     expect(select).toHaveBeenCalledWith(expect.objectContaining({ mode: 'single', output: process.stderr }))
+    expect(vi.mocked(select).mock.calls[0]?.[0].options).toEqual([{ label: 'demo', value: 'demo', hint: '/ws' }])
   })
 })
 
