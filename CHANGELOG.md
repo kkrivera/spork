@@ -4,6 +4,39 @@ What changed in each spork release, newest first. Install or upgrade with
 `brew upgrade spork`, or download from the
 [releases page](https://github.com/kkrivera/spork/releases).
 
+## [1.3.0] - 2026-11-05
+
+### Added
+
+- core: let each repo's git processes use a given ssh-agent socket
+- core: add an ssh module for unlocking a key for one command
+- cli: add workspace path, for cd "$(spork workspace path <name>)"
+- mcp: add a workspace_path tool
+
+### Changed
+
+- cli: ask for a missing SSH key's passphrase before adding repos
+- cli: stop before creating a workspace whose name can't be a branch
+- core: export readManifest and repoOwner for display
+- cli: show workspace paths only where they help
+- cli: show each repo's owner in repo list
+- cli: show every workspace's folder in workspace list
+- cli: leave workspace locations out of exec's picker
+
+### Documentation
+
+- docs: plan asking for an SSH key's passphrase per command
+- docs(changelog): regenerate every release from commit titles
+
+### Maintenance
+
+- chore: write changelog entries in Claude Code after each release
+- chore: require human-readable changelog entries
+- (chore): backfill CHANGELOG.md
+- chore: drop the Claude Code changelog skill and hook
+- release: add CHANGELOG.md sections from commit titles on each version bump
+- release: don't mistake a sentence with a colon for a commit scope
+
 ## [1.2.0] - 2026-11-02
 
 ### Changed
@@ -153,6 +186,7 @@ What changed in each spork release, newest first. Install or upgrade with
 - release: build every binary target from 2 jobs instead of 4
 - release: push bump tag with a GitHub App token
 
+[1.3.0]: https://github.com/kkrivera/spork/releases/tag/v1.3.0
 [1.2.0]: https://github.com/kkrivera/spork/releases/tag/v1.2.0
 [1.1.0]: https://github.com/kkrivera/spork/releases/tag/v1.1.0
 [1.0.0]: https://github.com/kkrivera/spork/releases/tag/v1.0.0
