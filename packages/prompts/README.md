@@ -41,10 +41,13 @@ required" convention every usage here follows).
   centered when there's room — a pure function of `(cursor, total,
   height)` alone, no memory of previous scroll position needed).
 - `src/render.ts` — `renderFrame(state, message, columns, rows, colors)`:
-  a header/search line, the viewport-windowed option list (cursor pointer,
+  a header/search line, the viewport-windowed option list (at most
+  `MAX_VISIBLE_OPTIONS` = 10 rows, and always shorter than the terminal —
+  see `viewportHeight` for why a full-height frame breaks redrawing; cursor pointer,
   `[x]`/`[ ]` checkbox for multi-select, bolded fuzzy-matched characters,
-  a dimmed `hint` per option), and a footer (selection count + key hints,
-  or the validation message in their place). Takes an explicit `Colors`
+  a dimmed `hint` per option), and a footer (`11–20 of 30` when the list
+  is cut off, selection count + key hints, or the validation message in
+  their place). Takes an explicit `Colors`
   param rather than importing `picocolors` directly — same convention
   `@spork/task-runner`'s `render.ts` uses, since the real `process.stdout`
   can disagree with whatever stream was actually injected.

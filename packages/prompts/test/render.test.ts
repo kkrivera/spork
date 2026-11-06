@@ -1,6 +1,6 @@
 import pc from 'picocolors'
 import { describe, expect, it } from 'vitest'
-import { renderFrame } from '../src/render.js'
+import { MAX_VISIBLE_OPTIONS, renderFrame, viewportHeight } from '../src/render.js'
 import type { FilteredOption, SelectState } from '../src/state.js'
 
 const colors = pc.createColors(false)
@@ -106,6 +106,30 @@ describe('renderFrame — viewport and width', () => {
 
     expect(lines.join('\n')).toContain('option-19')
     expect(lines.join('\n')).not.toContain('option-0\n')
+  })
+
+  it('never draws a frame as tall as the terminal, so redraws stay in place', () => {
+    const filtered = Array.from({ length: 50 }, (_, i) => filteredOption(`option-${i}`, i))
+    for (const rows of [4, 8, 12, 13]) {
+      expect(renderFrame(state({ filtered }), 'msg', 80, rows, colors).length).toBeLessThan(rows)
+    }
+  })
+
+  it(`shows at most ${MAX_VISIBLE_OPTIONS} options in a tall terminal`, () => {
+    expect(viewportHeight(100)).toBe(MAX_VISIBLE_OPTIONS)
+    expect(viewportHeight(2)).toBe(1)
+  })
+
+  it('says which part of a cut-off list is showing', () => {
+    const filtered = Array.from({ length: 30 }, (_, i) => filteredOption(`option-${i}`, i))
+    const lines = renderFrame(state({ filtered, cursor: 15 }), 'msg', 120, 40, colors)
+
+    expect(lines.at(-1)).toMatch(/^11–20 of 30 · /)
+    expect(lines.join('\n')).toContain('option-15')
+  })
+
+  it('leaves the position out when the whole list fits', () => {
+    expect(renderFrame(state(), 'msg', 80, 24, colors).at(-1)).not.toContain(' of ')
   })
 
   it('truncates an overlong line to the terminal width', () => {
