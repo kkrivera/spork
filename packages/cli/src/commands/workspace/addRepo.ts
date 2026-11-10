@@ -63,7 +63,7 @@ export async function runAddRepo(
             ref: options.branch,
             folder: options.as,
             global: options.global,
-            fetchRemoteBranch: remotes.fetchRemoteBranch,
+            fetchRemoteBranch: remotes.fetchRemoteBranchFrom.has(source),
             sshAuthSock: remotes.sshAuthSocks.get(source),
           })
         },
@@ -172,7 +172,7 @@ export async function runAddRepoFromRegistry(
   try {
     const outcomes = await addReposToWorkspace(ctx, dir, sources, {
       global: options.global,
-      fetchRemoteBranch: remotes.fetchRemoteBranch,
+      fetchRemoteBranchFrom: remotes.fetchRemoteBranchFrom,
       sshAuthSocks: remotes.sshAuthSocks,
     })
     return { workspace: workspaceName, outcomes, remoteBranchNotice: remotes.remoteBranchNotice }

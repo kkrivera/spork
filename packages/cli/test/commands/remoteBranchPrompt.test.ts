@@ -22,24 +22,24 @@ beforeEach(() => {
 })
 
 describe('resolveFetchRemoteBranch', () => {
-  it('uses an explicit flag as-is, without asking', async () => {
-    expect(await resolveFetchRemoteBranch(repos(true), 'demo', true)).toEqual({ fetchRemoteBranch: true })
-    expect(await resolveFetchRemoteBranch(repos(true), 'demo', false)).toEqual({ fetchRemoteBranch: false })
+  it('uses an explicit flag without asking, still only for repos that have the branch', async () => {
+    expect(await resolveFetchRemoteBranch(repos(true, false), 'demo', true)).toEqual({ fetchFrom: ['app'] })
+    expect(await resolveFetchRemoteBranch(repos(true, false), 'demo', false)).toEqual({ fetchFrom: [] })
     expect(confirm).not.toHaveBeenCalled()
   })
 
   it("doesn't prompt when no remote has the branch, or there are no repos", async () => {
-    expect(await resolveFetchRemoteBranch(repos(false, false), 'demo', undefined)).toEqual({ fetchRemoteBranch: false })
-    expect(await resolveFetchRemoteBranch([], 'demo', undefined)).toEqual({ fetchRemoteBranch: false })
+    expect(await resolveFetchRemoteBranch(repos(false, false), 'demo', undefined)).toEqual({ fetchFrom: [] })
+    expect(await resolveFetchRemoteBranch([], 'demo', undefined)).toEqual({ fetchFrom: [] })
     expect(confirm).not.toHaveBeenCalled()
   })
 
-  it('asks once, naming only the repos whose remote has the branch', async () => {
+  it('asks once, naming and starting from only the repos whose remote has the branch', async () => {
     vi.mocked(confirm).mockResolvedValue(true)
 
     const decision = await resolveFetchRemoteBranch(repos(true, false, true), 'me/demo', undefined)
 
-    expect(decision).toEqual({ fetchRemoteBranch: true })
+    expect(decision).toEqual({ fetchFrom: ['app', 'infra'] })
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(confirm).toHaveBeenCalledWith({
       message: 'Branch "me/demo" already exists on the remote for app, infra. Start from the remote branch?',
@@ -49,14 +49,14 @@ describe('resolveFetchRemoteBranch', () => {
   it('starts fresh when the user declines (or presses Esc)', async () => {
     vi.mocked(confirm).mockResolvedValue(false)
 
-    expect(await resolveFetchRemoteBranch(repos(true), 'demo', undefined)).toEqual({ fetchRemoteBranch: false })
+    expect(await resolveFetchRemoteBranch(repos(true), 'demo', undefined)).toEqual({ fetchFrom: [] })
   })
 
   it('starts fresh and returns a notice when there is no TTY to ask', async () => {
     vi.mocked(confirm).mockRejectedValue(new NotInteractiveError())
 
     expect(await resolveFetchRemoteBranch(repos(true), 'demo', undefined)).toEqual({
-      fetchRemoteBranch: false,
+      fetchFrom: [],
       notice: 'Branch "demo" already exists on the remote for app; pass --from-remote-branch to start from it.',
     })
   })

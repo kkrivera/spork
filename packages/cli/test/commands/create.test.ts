@@ -261,7 +261,7 @@ describe('runCreateWithRepos — remote workspace branch', () => {
     vi.restoreAllMocks()
   })
 
-  it('asks about the new workspace\'s branch before creating anything, then forwards the answer to every add', async () => {
+  it('asks about the new workspace\'s branch before creating anything, then starts only the repo that has it from the remote', async () => {
     vi.mocked(prepareRemoteAccess).mockImplementation(fakeRemoteAccess({ pushed: ['app'] }))
     vi.mocked(confirm).mockImplementation(async () => {
       expect(createAndRegisterWorkspace).not.toHaveBeenCalled()
@@ -271,7 +271,7 @@ describe('runCreateWithRepos — remote workspace branch', () => {
     await runCreateWithRepos(ctx, 'demo', { repo: ['app', 'connector'] })
 
     expect(prepareRemoteAccess).toHaveBeenCalledWith(expect.anything(), '/home/user/demo', ['app', 'connector'], 'demo', { onUnlock: undefined })
-    expect(vi.mocked(addRepo).mock.calls.map((call) => call[2].fetchRemoteBranch)).toEqual([true, true])
+    expect(vi.mocked(addRepo).mock.calls.map((call) => call[2].fetchRemoteBranch)).toEqual([true, false])
   })
 
   it("sends each repo through the agent its key was unlocked into, then forgets the key once every add is done", async () => {

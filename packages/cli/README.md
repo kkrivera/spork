@@ -152,15 +152,17 @@ logic lives here.
   repos need which key, then `ssh-add` asks for the passphrase. Next, if
   the workspace's name can't be a branch in some repo (`@spork/core`'s
   `branchConflictError`: say `test` when the repo has `test/a`), it throws
-  that error before anything is created. Then `remoteBranchPrompt.ts` decides whether to start from an already-pushed
-  workspace branch. Returns each repo's agent socket (`sshAuthSocks`) and
+  that error before anything is created. Then `remoteBranchPrompt.ts` decides which repos start from an already-pushed
+  workspace branch (`fetchRemoteBranchFrom`). Returns each repo's agent socket (`sshAuthSocks`) and
   a `close()` the caller runs in a `finally`, which forgets the key.
 - `src/commands/workspace/remoteBranchPrompt.ts` —
   `resolveFetchRemoteBranch`: decides `@spork/core`'s
-  `AddRepoOptions.fetchRemoteBranch` from what `prepareRemoteAccess` found.
+  `AddRepoOptions.fetchRemoteBranch` for each repo from what
+  `prepareRemoteAccess` found for it. Only repos whose remote has the
+  workspace's branch ever start from it; the rest start fresh.
   `--from-remote-branch`/`--no-from-remote-branch` win outright. Otherwise,
-  if any repo's remote already has the workspace's branch, it confirms once
-  for the whole batch (default yes). Without a TTY it starts fresh and
+  if any repo's remote already has the branch, it confirms once for the
+  whole batch (default yes), naming those repos. Without a TTY it starts fresh and
   returns a `notice` naming the flag, which the `register*` side prints.
 - `src/commands/workspace/addReposBatch.ts` — `addReposToWorkspace`: adds
   several sources to one workspace directory concurrently

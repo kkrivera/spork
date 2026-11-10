@@ -35,7 +35,8 @@ export async function addReposToWorkspace(
   sources: readonly string[],
   options: {
     global?: boolean
-    fetchRemoteBranch?: boolean
+    /** Sources to start from the workspace's already-pushed branch, from `workspaceRemotes.ts`. */
+    fetchRemoteBranchFrom?: ReadonlySet<string>
     /** Source → agent socket from `workspaceRemotes.ts`, for repos only spork's temporary agent can reach. */
     sshAuthSocks?: ReadonlyMap<string, string>
   },
@@ -48,7 +49,7 @@ export async function addReposToWorkspace(
         return addRepo(workspaceContext(ctx), dir, {
           source,
           global: options.global,
-          fetchRemoteBranch: options.fetchRemoteBranch,
+          fetchRemoteBranch: options.fetchRemoteBranchFrom?.has(source) ?? false,
           sshAuthSock: options.sshAuthSocks?.get(source),
         })
       },

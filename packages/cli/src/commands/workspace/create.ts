@@ -120,7 +120,7 @@ export async function runCreateWithRepos(
     const handle = await runCreate(ctx, name, options)
     const repoOutcomes = await addReposToWorkspace(ctx, handle.dir, sources, {
       global: options.global,
-      fetchRemoteBranch: remotes.fetchRemoteBranch,
+      fetchRemoteBranchFrom: remotes.fetchRemoteBranchFrom,
       sshAuthSocks: remotes.sshAuthSocks,
     })
     return { handle, repoOutcomes, remoteBranchNotice: remotes.remoteBranchNotice }

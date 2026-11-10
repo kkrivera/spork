@@ -43,7 +43,7 @@ describe('prepareWorkspaceRemotes', () => {
       { onUnlock: onUnlockKey },
     )
     expect([...remotes.sshAuthSocks]).toEqual([[WIDGETS, '/tmp/agent.sock']])
-    expect(remotes.fetchRemoteBranch).toBe(false)
+    expect([...remotes.fetchRemoteBranchFrom]).toEqual([])
   })
 
   it('asks about an already-pushed branch only after the keys are settled', async () => {
@@ -52,7 +52,7 @@ describe('prepareWorkspaceRemotes', () => {
 
     const remotes = await prepareWorkspaceRemotes(ctx, '/ws/demo', 'demo', [WIDGETS, GADGETS], {})
 
-    expect(remotes.fetchRemoteBranch).toBe(true)
+    expect([...remotes.fetchRemoteBranchFrom]).toEqual([GADGETS])
     expect(vi.mocked(confirm).mock.calls[0]?.[0].message).toContain('for gadgets')
   })
 

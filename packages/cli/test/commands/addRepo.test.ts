@@ -160,6 +160,21 @@ describe('runAddRepoFromRegistry', () => {
     expect(addRepo).toHaveBeenCalledTimes(2)
   })
 
+  it('starts only the repos whose remote has the branch from it', async () => {
+    const [widgets, gadgets] = ['git@github.com:acme/widgets.git', 'git@github.com:acme/gadgets.git']
+    vi.mocked(select).mockResolvedValue([widgets, gadgets])
+    vi.mocked(runList).mockResolvedValue([
+      { alias: 'widgets', source: widgets, scope: 'global' },
+      { alias: 'gadgets', source: gadgets, scope: 'global' },
+    ])
+    vi.mocked(prepareRemoteAccess).mockImplementation(fakeRemoteAccess({ pushed: [gadgets] }))
+
+    await runAddRepoFromRegistry(ctx, 'demo', { fromRemoteBranch: true })
+
+    const fetched = Object.fromEntries(vi.mocked(addRepo).mock.calls.map((call) => [call[2].source, call[2].fetchRemoteBranch]))
+    expect(fetched).toEqual({ [widgets]: false, [gadgets]: true })
+  })
+
   it('uses the given workspace directly without prompting for it', async () => {
     vi.mocked(select).mockResolvedValue(['git@github.com:acme/widgets.git'])
     vi.mocked(runList).mockResolvedValue([{ alias: 'widgets', source: 'git@github.com:acme/widgets.git', scope: 'global' }])

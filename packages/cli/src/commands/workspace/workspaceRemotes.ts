@@ -14,7 +14,8 @@ export interface RemoteSetupOptions {
 }
 
 export interface WorkspaceRemotes {
-  fetchRemoteBranch: boolean
+  /** Sources (as given) to start from the workspace's already-pushed branch — see `RemoteBranchDecision.fetchFrom`. */
+  fetchRemoteBranchFrom: ReadonlySet<string>
   /** See `RemoteBranchDecision.notice`. */
   remoteBranchNotice?: string
   /** Source (as given) → agent socket, for each repo reachable only through spork's temporary agent. */
@@ -30,7 +31,7 @@ export interface WorkspaceRemotes {
  * for on the terminal by `ssh-add`, only when `onUnlockKey` is set), then
  * stopping with a clear error if the workspace's name can't be a branch in
  * some repo (`branchConflictError`: `test` when it has `test/a`), then
- * whether to start from an already-pushed workspace branch. The caller
+ * which repos start from their already-pushed workspace branch. The caller
  * must `close()` the result once its adds are done, so the key is
  * forgotten — see docs/plans/0005-ssh-key-unlock.md.
  */
@@ -49,7 +50,7 @@ export async function prepareWorkspaceRemotes(
     if (conflict) throw conflict
     const decision = await resolveFetchRemoteBranch(session.repos, branch, options.fromRemoteBranch)
     const sshAuthSocks = new Map(session.repos.flatMap((repo) => (repo.sshAuthSock ? [[repo.source, repo.sshAuthSock] as const] : [])))
-    return { fetchRemoteBranch: decision.fetchRemoteBranch, remoteBranchNotice: decision.notice, sshAuthSocks, close: session.close }
+    return { fetchRemoteBranchFrom: new Set(decision.fetchFrom), remoteBranchNotice: decision.notice, sshAuthSocks, close: session.close }
   } catch (error) {
     await session.close()
     throw error
