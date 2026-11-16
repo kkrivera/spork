@@ -14,6 +14,9 @@ vi.mock('@spork/core', () => ({
   codeWorkspaceFilePath: vi.fn(),
   SporkError: class SporkError extends Error {},
 }))
+vi.mock('../../src/commands/repo/add.js', () => ({
+  isInteractiveTerminal: vi.fn(() => false),
+}))
 vi.mock('@spork/task-runner', () => ({
   runTasks: vi.fn(),
 }))
@@ -30,6 +33,7 @@ const { confirm, select, NotInteractiveError } = await import('@spork/prompts')
 const { runCreate, runCreateWithRepos } = await import('../../src/commands/workspace/create.js')
 const { createUi } = await import('../../src/output/color.js')
 const { fakeRemoteAccess } = await import('./fakeRemoteAccess.js')
+const { isInteractiveTerminal } = await import('../../src/commands/repo/add.js')
 
 const ctx = { reposRoot: '/repos', registryPath: '/registry.json', repoRegistryPath: '/repos.json', ui: createUi({ argv: ['--no-color'] }), env: {} }
 
@@ -67,6 +71,7 @@ beforeEach(() => {
   vi.mocked(listRepoAliases).mockReset().mockResolvedValue([])
   vi.mocked(codeWorkspaceFilePath).mockReset().mockReturnValue('/ws/demo/demo.code-workspace')
   vi.mocked(select).mockReset()
+  vi.mocked(isInteractiveTerminal).mockReset().mockReturnValue(false)
   vi.mocked(runTasks)
     .mockReset()
     .mockImplementation((tasks) => fakeRunTasks(tasks as FunctionTask[]))
@@ -299,12 +304,44 @@ describe('runCreateWithRepos — remote workspace branch', () => {
     expect(remotes.close).toHaveBeenCalledTimes(1)
   })
 
-  it('returns the no-TTY notice for the command to print', async () => {
+  it('reports the no-TTY notice with its batch, for the command to print', async () => {
     vi.mocked(prepareRemoteAccess).mockImplementation(fakeRemoteAccess({ pushed: ['app'] }))
     vi.mocked(confirm).mockRejectedValue(new NotInteractiveError())
+    const reposAdded = vi.fn()
 
-    const { remoteBranchNotice } = await runCreateWithRepos(ctx, 'demo', { repo: ['app'] })
+    await runCreateWithRepos(ctx, 'demo', { repo: ['app'] }, { reposAdded })
 
-    expect(remoteBranchNotice).toContain('pass --from-remote-branch')
+    expect(reposAdded).toHaveBeenCalledWith(expect.any(Array), expect.stringContaining('pass --from-remote-branch'))
+  })
+})
+
+describe('runCreateWithRepos — checking the registry for the branch first', () => {
+  beforeEach(() => {
+    vi.mocked(isInteractiveTerminal).mockReturnValue(true)
+    vi.mocked(confirm).mockReset()
+    vi.mocked(listRepoAliases).mockResolvedValue([{ alias: 'app', source: 'app', addedAt: '' }])
+    vi.mocked(prepareRemoteAccess).mockImplementation(fakeRemoteAccess({ pushed: ['app'] }))
+    vi.mocked(addRepo).mockResolvedValue(fakeEntryResult('app'))
+  })
+
+  it('offers the registered repos that have the branch, at a terminal with no --repo', async () => {
+    vi.mocked(confirm).mockResolvedValue(true)
+    const reporter = { checkingRemotes: vi.fn(), created: vi.fn() }
+
+    const result = await runCreateWithRepos(ctx, 'demo', {}, reporter)
+
+    expect(vi.mocked(confirm).mock.calls[0]?.[0].message).toContain('Create the workspace with that repo?')
+    expect(reporter.checkingRemotes).toHaveBeenCalledWith(1)
+    expect(reporter.created).toHaveBeenCalled()
+    expect(result.repoOutcomes).toHaveLength(1)
+  })
+
+  it('skips the check when --[no-]from-remote-branch already answers it, going straight to the pick', async () => {
+    vi.mocked(select).mockResolvedValue(['app'])
+
+    await runCreateWithRepos(ctx, 'demo', { fromRemoteBranch: false })
+
+    expect(confirm).not.toHaveBeenCalled()
+    expect(addRepo).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ fetchRemoteBranch: false }))
   })
 })

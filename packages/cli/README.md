@@ -146,6 +146,9 @@ logic lives here.
   `prepareWorkspaceRemotes`: everything `create` and both `add-repo` flows
   settle with the remotes before their live dashboard starts (nothing can
   prompt while it's drawing), from `@spork/core`'s `prepareRemoteAccess`.
+  It's `checkRemotes` (the check, for every repo given) then `planRemotes`
+  (the decisions, for any subset of them), which
+  `createFromPushedBranch.ts` also calls separately.
   First, in a terminal, any SSH key that isn't loaded in the user's
   ssh-agent is unlocked for this one command: `keyUnlockNotifier` (passed
   in by `register*` as `onUnlockKey`, undefined without a TTY) prints which
@@ -155,6 +158,16 @@ logic lives here.
   that error before anything is created. Then `remoteBranchPrompt.ts` decides which repos start from an already-pushed
   workspace branch (`fetchRemoteBranchFrom`). Returns each repo's agent socket (`sshAuthSocks`) and
   a `close()` the caller runs in a `finally`, which forgets the key.
+- `src/commands/workspace/createFromPushedBranch.ts` —
+  `createFromPushedBranch`: `create`'s interactive flow when no `--repo`
+  is given. It checks every registered repo's remote for a branch named
+  after the workspace (`checkRemotes`, once), then, if any have it, asks
+  whether to create the workspace with exactly those repos, each starting
+  from its remote branch. After those are added, it asks whether to add
+  more, and picks from the rest of the registry, starting fresh. Declining
+  the offer, or no repo having the branch, falls back to the usual pick.
+  Every batch is planned from that one check (`planRemotes`), so no remote
+  is asked twice. `pickRepos` is the registry multi-select both paths use.
 - `src/commands/workspace/remoteBranchPrompt.ts` —
   `resolveFetchRemoteBranch`: decides `@spork/core`'s
   `AddRepoOptions.fetchRemoteBranch` for each repo from what
@@ -194,7 +207,11 @@ logic lives here.
   `cd "$(spork workspace path <name>)"` — its picker draws on stderr so
   stdout stays just the path. `create` does run its own
   repo picker when no `--repo` is given, but *before* creating anything,
-  so backing out of it leaves no workspace behind. `remove` takes its workspaces
+  so backing out of it leaves no workspace behind. At a terminal, with no
+  `--[no-]from-remote-branch` either, `createFromPushedBranch.ts` runs
+  first instead (below). `create` prints each step through a
+  `CreateReporter` as it happens, since it can ask more after the first
+  repos are added. `remove` takes its workspaces
   as a variadic `[workspaces...]` and, when none are given, offers a
   *multi*-select instead of a single one, since removing several at once is
   a real use case — and, once confirmed (see below), removes them through

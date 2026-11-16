@@ -12,9 +12,16 @@ import {
   type LaunchTarget,
 } from '../../launchTarget.js'
 import { keyUnlockNotifier, prepareWorkspaceRemotes, type RemoteSetupOptions } from './workspaceRemotes.js'
-import { addReposToWorkspace, type AddRepoBatchFailure, type AddRepoBatchOutcome } from './addReposBatch.js'
+import { addReposToWorkspace, type AddRepoBatchOutcome } from './addReposBatch.js'
 import { printAddRepoResult } from './addRepo.js'
-import { runList } from '../repo/list.js'
+import {
+  createFromPushedBranch,
+  pickRepos,
+  type CreateReporter,
+  type CreateWithReposResult,
+} from './createFromPushedBranch.js'
+import { isInteractiveTerminal } from '../repo/add.js'
+import { runList, type ScopedRepoEntry } from '../repo/list.js'
 
 export interface CreateOptions extends RemoteSetupOptions {
   dir?: string
@@ -48,40 +55,22 @@ function workspaceDirFor(ctx: AppContext, name: string, options: CreateOptions):
   return path.resolve(options.dir ?? ctx.env.workspaceDir ?? process.cwd(), name)
 }
 
-export interface CreateWithReposResult {
-  handle: WorkspaceHandle
-  repoOutcomes: AddRepoBatchOutcome[]
-  /** See `WorkspaceRemotes.remoteBranchNotice`. */
-  remoteBranchNotice?: string
-}
-
 /**
- * Decides which repo sources to add when no `--repo` was given: an explicit
- * `--repo` always wins outright (no prompt at all). Otherwise, lists known
- * repos the same way `repo list` does and — only if there's actually
- * something to pick from — offers a multi-select. `select` throws
- * `NotInteractiveError` synchronously when the terminal can't support one
- * (CI, a pipe, a script); that's caught here and treated the same as
- * "nothing to pick from": fall back to creating an empty workspace, exactly
- * today's non-interactive behavior. A real cancel (Esc/Ctrl+C) is
- * different — the user started picking and backed out, so that becomes a
- * `SporkError`, same as every other cancelled-prompt path in this CLI.
+ * The repos to add when `create` won't check the registry's remotes
+ * first (see `runCreateWithRepos`): an explicit `--repo` wins outright;
+ * otherwise a multi-select of known repos, when there are any. A terminal
+ * that can't show one (CI, a pipe, a script) means none, creating an
+ * empty workspace. A real cancel (Esc/Ctrl+C) means the user started
+ * picking and backed out, so that becomes a `SporkError`, same as every
+ * other cancelled-prompt path in this CLI.
  */
-async function resolveRepoSources(ctx: AppContext, name: string, options: CreateOptions): Promise<string[]> {
+async function resolveRepoSources(name: string, options: CreateOptions, candidates: readonly ScopedRepoEntry[]): Promise<string[]> {
   if (options.repo && options.repo.length > 0) return options.repo
-
-  const candidates = await runList(ctx)
   if (candidates.length === 0) return []
-
-  const promptOptions: PromptOption<string>[] = candidates.map((repo) => ({
-    label: repo.alias,
-    value: repo.source,
-    hint: `${repo.source} (${repo.scope})`,
-  }))
 
   let chosen: string[] | null
   try {
-    chosen = await select({ message: `Select repos to add to "${name}"`, options: promptOptions, mode: 'multi' })
+    chosen = await pickRepos(`Select repos to add to "${name}"`, candidates)
   } catch (error) {
     if (error instanceof NotInteractiveError) return []
     throw error
@@ -92,38 +81,47 @@ async function resolveRepoSources(ctx: AppContext, name: string, options: Create
 }
 
 /**
- * Resolves repo sources — and everything `workspaceRemotes.ts` settles
- * with the remotes: unlocking an SSH key, and whether to start from an
- * already-pushed workspace branch — *before* creating anything,
- * so backing out of the picker leaves no half-made workspace behind — the picker only reads the
- * cwd's local and the global alias registries, never the new workspace's
- * own (which can't have any aliases yet). Then creates the workspace and
- * adds every resolved repo source via
- * `addReposBatch.ts`'s `addReposToWorkspace` (see `resolveRepoSources` for
- * where those sources come from, `--repo` or an interactive pick) — shared
- * with `add-repo`'s own zero-argument, pick-from-the-registry flow, so the
- * live-dashboard/best-effort batch-add logic only lives in one place.
- * Not atomic, and not fail-fast: every `--repo` runs regardless of a
- * sibling's failure, so the already-created workspace ends up with whatever
- * repos succeeded. A failed or cancelled `--repo` is still something the
- * caller asked for and didn't get, so `registerCreateCommand` throws after
- * printing every outcome, to keep the process exiting non-zero.
+ * Creates the workspace and adds its repos, settling everything with the
+ * remotes (`workspaceRemotes.ts`: unlocking an SSH key, branch-name
+ * clashes, starting from an already-pushed workspace branch) *before*
+ * creating anything, so backing out of a question leaves no half-made
+ * workspace behind. At a terminal with no `--repo` and no
+ * `--[no-]from-remote-branch`, `createFromPushedBranch.ts` checks every
+ * registered repo for the workspace's branch first and offers those that
+ * have it. Otherwise the repos are `--repo`, or a pick (`resolveRepoSources`).
+ *
+ * Adds go through `addReposBatch.ts`, best-effort: every repo runs
+ * regardless of a sibling's failure, so the workspace ends up with
+ * whichever succeeded. `reporter` hears about each step as it happens;
+ * `registerCreateCommand` throws afterwards if any add failed, to keep
+ * the process exiting non-zero.
  */
 export async function runCreateWithRepos(
   ctx: AppContext,
   name: string,
   options: CreateOptions,
+  reporter: CreateReporter = {},
 ): Promise<CreateWithReposResult> {
-  const sources = await resolveRepoSources(ctx, name, options)
-  const remotes = await prepareWorkspaceRemotes(ctx, workspaceDirFor(ctx, name, options), name, sources, options)
+  const dir = workspaceDirFor(ctx, name, options)
+  const explicit = options.repo !== undefined && options.repo.length > 0
+  const candidates = explicit ? [] : await runList(ctx)
+  const create = async (): Promise<WorkspaceHandle> => runCreate(ctx, name, options)
+  if (candidates.length > 0 && options.fromRemoteBranch === undefined && isInteractiveTerminal()) {
+    return createFromPushedBranch({ ctx, name, dir, options, create, reporter }, candidates)
+  }
+
+  const sources = await resolveRepoSources(name, options, candidates)
+  const remotes = await prepareWorkspaceRemotes(ctx, dir, name, sources, options)
   try {
-    const handle = await runCreate(ctx, name, options)
+    const handle = await create()
+    reporter.created?.(handle)
     const repoOutcomes = await addReposToWorkspace(ctx, handle.dir, sources, {
       global: options.global,
       fetchRemoteBranchFrom: remotes.fetchRemoteBranchFrom,
       sshAuthSocks: remotes.sshAuthSocks,
     })
-    return { handle, repoOutcomes, remoteBranchNotice: remotes.remoteBranchNotice }
+    reporter.reposAdded?.(repoOutcomes, remotes.remoteBranchNotice)
+    return { handle, repoOutcomes }
   } finally {
     await remotes.close()
   }
@@ -182,31 +180,35 @@ export function registerCreateCommand(program: Command, ctx: AppContext, deps: L
     .option('--from-remote-branch', "start from this workspace's branch on the remote if it's already been pushed (default: ask)")
     .option('--no-from-remote-branch', "start fresh even if this workspace's branch is already on the remote, without asking")
     .action(async (name: string, options: CreateOptions) => {
-      const { handle, repoOutcomes, remoteBranchNotice } = await runCreateWithRepos(ctx, name, {
-        ...options,
-        onUnlockKey: keyUnlockNotifier(ctx),
-      })
-      console.log(ctx.ui.color.green(`Created workspace "${handle.name}" at ${tildify(handle.dir)}`))
-      if (remoteBranchNotice) console.log(ctx.ui.color.dim(remoteBranchNotice))
-
-      const failures: AddRepoBatchFailure[] = []
-      if (repoOutcomes.length === 0) {
-        console.log(`Add a repo with: spork workspace add-repo ${handle.name} <repo>`)
-      } else {
-        for (const outcome of repoOutcomes) {
-          if (outcome.result) {
-            printAddRepoResult(ctx, handle.name, outcome.result)
-          } else if (outcome.failure) {
-            failures.push(outcome.failure)
-            console.log(ctx.ui.color.red(`Failed to add "${outcome.source}": ${outcome.failure.reason}`))
-          }
-        }
-      }
+      const { handle, repoOutcomes } = await runCreateWithRepos(
+        ctx,
+        name,
+        { ...options, onUnlockKey: keyUnlockNotifier(ctx) },
+        createReporter(ctx, name),
+      )
+      if (repoOutcomes.length === 0) console.log(`Add a repo with: spork workspace add-repo ${handle.name} <repo>`)
 
       await offerToLaunchWorkspace(ctx, handle, deps)
 
+      const failures = repoOutcomes.filter((outcome) => outcome.failure)
       if (failures.length > 0) {
-        throw new SporkError(`${failures.length} of ${repoOutcomes.length} --repo adds did not succeed: ${failures.map((f) => f.source).join(', ')}`)
+        throw new SporkError(`${failures.length} of ${repoOutcomes.length} repo adds did not succeed: ${failures.map((f) => f.source).join(', ')}`)
       }
     })
+}
+
+/** Prints each step of `runCreateWithRepos` as it happens. */
+function createReporter(ctx: AppContext, name: string): CreateReporter {
+  return {
+    checkingRemotes: (count) =>
+      console.log(ctx.ui.color.dim(`Checking ${count} registered ${count === 1 ? 'repo' : 'repos'} for a "${name}" branch...`)),
+    created: (handle) => console.log(ctx.ui.color.green(`Created workspace "${handle.name}" at ${tildify(handle.dir)}`)),
+    reposAdded: (outcomes: AddRepoBatchOutcome[], notice) => {
+      if (notice) console.log(ctx.ui.color.dim(notice))
+      for (const outcome of outcomes) {
+        if (outcome.result) printAddRepoResult(ctx, name, outcome.result)
+        else if (outcome.failure) console.log(ctx.ui.color.red(`Failed to add "${outcome.source}": ${outcome.failure.reason}`))
+      }
+    },
+  }
 }

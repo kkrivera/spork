@@ -127,7 +127,7 @@ describe('registerCreateCommand', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const run = program.parseAsync(['node', 'test', 'create', 'demo', '--repo', 'bad-source', '--repo', 'widgets-source'])
-    await expect(run).rejects.toThrow(/1 of 2 --repo adds did not succeed/)
+    await expect(run).rejects.toThrow(/1 of 2 repo adds did not succeed/)
 
     const output = logSpy.mock.calls.flat().join('\n')
     expect(output).toContain('Failed to add "bad-source": boom')

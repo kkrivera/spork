@@ -155,11 +155,16 @@ You can leave off `--workspace`/`-w`, or the workspace name on `status`,
 picker if you aren't in one. `add-repo` and `remove-repo` also let you leave
 off the repo and pick it from a list.
 
-Run `workspace create` without `--repo` in a terminal and it shows a
-searchable list of the repos you've already added. Type to filter, Space to
-toggle, Ctrl+A to toggle everything shown, Enter to confirm. It then asks
-whether to open the new workspace in VS Code or Claude. In CI or a script,
-it skips both questions and creates an empty workspace.
+Run `workspace create` without `--repo` in a terminal and it first checks
+every repo you've already added for a branch named after the new
+workspace. If some have one (you pushed it from an earlier workspace,
+say), it asks whether to create the workspace with just those repos, each
+starting from its remote branch, and then whether to add more. Otherwise,
+or if you say no, it shows a searchable list of your repos. Type to
+filter, Space to toggle, Ctrl+A to toggle everything shown, Enter to
+confirm. Finally it asks whether to open the new workspace in VS Code or
+Claude. In CI or a script, it skips every question and creates an empty
+workspace.
 
 Every repo in a workspace uses a branch named after the workspace. If that
 branch is already on a repo's remote (you pushed it from an earlier
