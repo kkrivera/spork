@@ -4,6 +4,12 @@ What changed in each spork release, newest first. Install or upgrade with
 `brew upgrade spork`, or download from the
 [releases page](https://github.com/kkrivera/spork/releases).
 
+## [1.3.1] - 2026-11-16
+
+### Changed
+
+- prompts: scroll long lists in place instead of overflowing the screen
+
 ## [1.3.0] - 2026-11-05
 
 ### Added
@@ -186,6 +192,7 @@ What changed in each spork release, newest first. Install or upgrade with
 - release: build every binary target from 2 jobs instead of 4
 - release: push bump tag with a GitHub App token
 
+[1.3.1]: https://github.com/kkrivera/spork/releases/tag/v1.3.1
 [1.3.0]: https://github.com/kkrivera/spork/releases/tag/v1.3.0
 [1.2.0]: https://github.com/kkrivera/spork/releases/tag/v1.2.0
 [1.1.0]: https://github.com/kkrivera/spork/releases/tag/v1.1.0
