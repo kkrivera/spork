@@ -7,6 +7,7 @@ vi.mock('@spork/core', () => ({
   prepareRemoteAccess: vi.fn(),
   branchConflictError: vi.fn(() => null),
   defaultAlias: (source: string) => source,
+  repoOwner: () => null,
   resolveWorkspaceDir: vi.fn(),
   findEnclosingWorkspaceDir: vi.fn(),
   listRepoAliases: vi.fn(),

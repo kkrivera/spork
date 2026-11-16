@@ -1,4 +1,4 @@
-import { defaultAlias, SporkError, type RemoteAccessSession, type WorkspaceHandle } from '@spork/core'
+import { defaultAlias, repoOwner, SporkError, type RemoteAccessSession, type WorkspaceHandle } from '@spork/core'
 import { confirm, NotInteractiveError, select, type PromptOption } from '@spork/prompts'
 import type { AppContext } from '../../context.js'
 import type { ScopedRepoEntry } from '../repo/list.js'
@@ -85,9 +85,15 @@ function pushedSources(session: RemoteAccessSession): string[] {
 
 /** "Create the workspace with those 2 repos?" Esc, or a terminal that can't ask, means no. */
 async function offerPushedRepos(branch: string, pushed: readonly string[]): Promise<boolean> {
-  const where = listInWords(pushed.map((source) => `${defaultAlias(source)}/${branch}`))
+  const where = listInWords(pushed.map(ownerAndRepo))
   const those = pushed.length === 1 ? 'that repo' : `those ${pushed.length} repos`
   return askYesNo(`Branch "${branch}" already exists on ${where}. Create the workspace with ${those}?`)
+}
+
+/** `acme/app` for a hosted repo, or just `app` when its source has no owner (a local path). */
+function ownerAndRepo(source: string): string {
+  const owner = repoOwner(source)
+  return owner ? `${owner}/${defaultAlias(source)}` : defaultAlias(source)
 }
 
 async function createWithPushedRepos(

@@ -6,6 +6,7 @@ vi.mock('@spork/core', () => ({
   prepareRemoteAccess: vi.fn(),
   branchConflictError: vi.fn(() => null),
   defaultAlias: (source: string) => source.replace('-src', ''),
+  repoOwner: (source: string) => (source === 'app-src' ? 'acme' : null),
   SporkError: class SporkError extends Error {},
 }))
 vi.mock('@spork/task-runner', () => ({
@@ -69,7 +70,7 @@ describe('createFromPushedBranch — offering the repos that have the branch', (
     expect(prepareRemoteAccess).toHaveBeenCalledTimes(1)
     expect(vi.mocked(prepareRemoteAccess).mock.calls[0]?.[2]).toEqual(['app-src', 'infra-src', 'docs-src'])
     expect(vi.mocked(confirm).mock.calls.map((call) => call[0].message)).toEqual([
-      'Branch "demo" already exists on app/demo and infra/demo. Create the workspace with those 2 repos?',
+      'Branch "demo" already exists on acme/app and infra. Create the workspace with those 2 repos?',
       'Add more repos to "demo"?',
     ])
     expect(adds()).toEqual({ 'app-src': true, 'infra-src': true })
@@ -122,7 +123,7 @@ describe('createFromPushedBranch — after the offer', () => {
     await createFromPushedBranch(flow(), candidates)
 
     expect(vi.mocked(confirm).mock.calls[0]?.[0].message).toBe(
-      'Branch "demo" already exists on app/demo. Create the workspace with that repo?',
+      'Branch "demo" already exists on acme/app. Create the workspace with that repo?',
     )
   })
 })
