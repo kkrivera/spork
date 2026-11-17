@@ -104,7 +104,7 @@ yarn package:linux   # spork + spork-mcp, linux-x64
 yarn package:all     # every target above, from one machine
 ```
 
-`release-build.yml` runs `yarn package:mac` on one `macos-14` runner
+`release-build.yml` runs `yarn package:mac` on one `macos-15` runner
 (signing all four resulting binaries) and `yarn package:linux` + `yarn
 package:win` on one `ubuntu-latest` runner — no Intel Mac/Windows runner
 needed at all.

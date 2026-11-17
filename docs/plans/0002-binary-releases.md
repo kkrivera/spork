@@ -92,7 +92,7 @@ Given the above, every target can be *built* from two runners instead of
 four — only macOS **signing** (`codesign`/`notarytool`) genuinely requires
 a real Mac:
 
-- **`build-mac`** (`macos-14`, Apple Silicon): builds both `darwin-arm64`
+- **`build-mac`** (`macos-15`, Apple Silicon): builds both `darwin-arm64`
   (native) and `darwin-x64` (downloaded) via `yarn package:mac`, then
   signs all four resulting binaries (`spork`/`spork-mcp` × both arches) —
   codesign works cross-arch on the same host OS, so no new tooling is

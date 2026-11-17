@@ -14,7 +14,7 @@ jobs:
   # Apple-Silicon runner, then signs all four. No x64 Mac runner needed at
   # all anymore — see docs/plans/0002-binary-releases.md.
   build-mac:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
