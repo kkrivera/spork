@@ -16,9 +16,9 @@ jobs:
   build-mac:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -51,7 +51,7 @@ jobs:
           tar -C dist-sea/darwin-x64 -czf "spork-${version}-darwin-x64.tar.gz" spork
           tar -C dist-sea/darwin-x64 -czf "spork-mcp-${version}-darwin-x64.tar.gz" spork-mcp
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: binaries-darwin
           path: '*.tar.gz'
@@ -62,9 +62,9 @@ jobs:
   build-other:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -86,7 +86,7 @@ jobs:
           (cd dist-sea/win32-x64 && zip -q "$OLDPWD/spork-${version}-win32-x64.zip" spork.exe)
           (cd dist-sea/win32-x64 && zip -q "$OLDPWD/spork-mcp-${version}-win32-x64.zip" spork-mcp.exe)
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: binaries-other
           path: |
@@ -97,12 +97,12 @@ jobs:
     needs: [build-mac, build-other]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: main
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -110,7 +110,7 @@ jobs:
 
       - run: yarn install --immutable
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
           merge-multiple: true
