@@ -4,6 +4,14 @@ What changed in each spork release, newest first. Install or upgrade with
 `brew upgrade spork`, or download from the
 [releases page](https://github.com/kkrivera/spork/releases).
 
+## [1.3.3] - 2026-11-17
+
+### Maintenance
+
+- ci: build the macOS binaries on macos-15
+- ci: move to the Node 24 releases of the GitHub actions
+- ci: turn off setup-node's automatic Yarn cache
+
 ## [1.3.2] - 2026-11-17
 
 ### Added
@@ -203,6 +211,7 @@ What changed in each spork release, newest first. Install or upgrade with
 - release: build every binary target from 2 jobs instead of 4
 - release: push bump tag with a GitHub App token
 
+[1.3.3]: https://github.com/kkrivera/spork/releases/tag/v1.3.3
 [1.3.2]: https://github.com/kkrivera/spork/releases/tag/v1.3.2
 [1.3.1]: https://github.com/kkrivera/spork/releases/tag/v1.3.1
 [1.3.0]: https://github.com/kkrivera/spork/releases/tag/v1.3.0
