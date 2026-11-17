@@ -4,6 +4,17 @@ What changed in each spork release, newest first. Install or upgrade with
 `brew upgrade spork`, or download from the
 [releases page](https://github.com/kkrivera/spork/releases).
 
+## [1.3.2] - 2026-11-17
+
+### Added
+
+- cli: offer the repos that already have the workspace's branch on create
+
+### Changed
+
+- cli: start from the remote branch only in repos that have it
+- cli: name repos as owner/repo in create's pushed-branch offer
+
 ## [1.3.1] - 2026-11-16
 
 ### Changed
@@ -192,6 +203,7 @@ What changed in each spork release, newest first. Install or upgrade with
 - release: build every binary target from 2 jobs instead of 4
 - release: push bump tag with a GitHub App token
 
+[1.3.2]: https://github.com/kkrivera/spork/releases/tag/v1.3.2
 [1.3.1]: https://github.com/kkrivera/spork/releases/tag/v1.3.1
 [1.3.0]: https://github.com/kkrivera/spork/releases/tag/v1.3.0
 [1.2.0]: https://github.com/kkrivera/spork/releases/tag/v1.2.0
