@@ -8,6 +8,7 @@ import {
   defaultLaunchDeps,
   launchWorkspace,
   LAUNCH_TARGET_OPTIONS,
+  launchFailureMessage,
   type LaunchDeps,
   type LaunchTarget,
 } from '../../launchTarget.js'
@@ -133,9 +134,9 @@ const OFFER_OPTIONS: PromptOption<OfferChoice>[] = [...LAUNCH_TARGET_OPTIONS, { 
 
 /**
  * Offers to launch the freshly-created workspace — the user is likely
- * creating one to start working in it right away. A 3-way pick (VS Code /
- * Claude / not now) rather than a yes/no confirm, since there are now two
- * real ways to open it. Skipped silently (not an error) both when `select`
+ * creating one to start working in it right away. A pick (VS Code /
+ * Claude / Terminal / not now) rather than a yes/no confirm, since there
+ * are several real ways to open it. Skipped silently (not an error) both when `select`
  * can't prompt (`NotInteractiveError`: CI, a pipe, a script) and when the
  * user explicitly backs out (Esc) or picks "Not now" — this offer is
  * optional by construction, unlike `open`'s own mandatory pick, so neither
@@ -165,11 +166,11 @@ async function offerToLaunchWorkspace(ctx: AppContext, handle: WorkspaceHandle, 
       console.log(`Couldn't launch the "code" CLI (${outcome.reason}). Open manually: ${tildify(filePath)}`)
     }
   } else if (!outcome.ok) {
-    console.log(`Couldn't launch Claude (${outcome.reason}). Run it yourself: cd ${tildify(handle.dir)} && claude`)
+    console.log(launchFailureMessage(target, handle.dir, outcome.reason))
   }
 }
 
-export function registerCreateCommand(program: Command, ctx: AppContext, deps: LaunchDeps = defaultLaunchDeps()): void {
+export function registerCreateCommand(program: Command, ctx: AppContext, deps: LaunchDeps = defaultLaunchDeps(ctx)): void {
   program
     .command('create <name>')
     .description('Create a new workspace')

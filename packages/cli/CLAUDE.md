@@ -203,3 +203,10 @@ new business logic belongs in `@spork/core`, imported only from its
   behave like the `Opener` path by, say, detaching it or capturing its
   output; that would break the whole point of handing the user their own
   terminal back.
+- Terminal (`terminalTarget.ts`) can't `cd` the user's shell itself: a child
+  process can't change its parent's folder. It writes the folder to
+  `SPORK_CD_FILE` when the shell integration set one (`spork shell-init`),
+  and otherwise starts a new `$SHELL` there. Never edit a user's shell
+  startup file without asking; the only way in is `shellIntegrationOffer.ts`,
+  which asks once ever and records that it did (see
+  [docs/plans/0006-terminal-target.md](../../docs/plans/0006-terminal-target.md)).

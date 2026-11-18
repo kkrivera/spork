@@ -27,6 +27,7 @@ function fakeDeps(openOutcome: { ok: boolean; reason?: string }, claudeImpl?: ()
   return {
     opener: { open: vi.fn().mockResolvedValue(openOutcome) },
     executor: { run: vi.fn().mockImplementation(claudeImpl ?? (async () => ({ exitCode: 0, signal: null }))) },
+    terminal: { isInteractive: () => true, beforeShell: vi.fn(async () => {}) },
   }
 }
 
@@ -42,9 +43,10 @@ beforeEach(() => {
 })
 
 describe('parseLaunchTarget', () => {
-  it('accepts code/claude', () => {
+  it('accepts code/claude/terminal', () => {
     expect(parseLaunchTarget('code')).toBe('code')
     expect(parseLaunchTarget('claude')).toBe('claude')
+    expect(parseLaunchTarget('terminal')).toBe('terminal')
   })
 
   it('rejects anything else', () => {
@@ -205,6 +207,20 @@ describe('registerOpenCommand', () => {
 })
 
 describe('registerOpenCommand — more failures / flags', () => {
+  it('prints how to get there by hand when a shell cannot be opened', async () => {
+    const deps = fakeDeps({ ok: true })
+    deps.terminal.isInteractive = () => false
+    const program = new Command()
+    registerOpenCommand(program, ctx, deps)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await program.parseAsync(['node', 'test', 'open', 'demo', '--with', 'terminal'])
+
+    expect(logSpy.mock.calls.flat().join('\n')).toBe("Couldn't open a shell (not running in an interactive terminal). Go there with: cd /ws/demo")
+    expect(deps.executor.run).not.toHaveBeenCalled()
+    logSpy.mockRestore()
+  })
+
   it('prints a manual fallback when claude fails to launch', async () => {
     const deps = fakeDeps({ ok: true }, async () => {
       throw new Error('boom')

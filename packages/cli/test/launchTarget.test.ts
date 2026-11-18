@@ -5,6 +5,7 @@ function fakeDeps(openOutcome: { ok: boolean; reason?: string }, claudeImpl?: ()
   return {
     opener: { open: vi.fn().mockResolvedValue(openOutcome) },
     executor: { run: vi.fn().mockImplementation(claudeImpl ?? (async () => ({ exitCode: 0, signal: null }))) },
+    terminal: { isInteractive: () => true, beforeShell: vi.fn(async () => {}) },
   }
 }
 

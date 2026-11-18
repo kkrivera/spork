@@ -2,7 +2,15 @@ import { codeWorkspaceFilePath, reconcileWorkspace, resolveWorkspaceDir, SporkEr
 import { NotInteractiveError, select } from '@spork/prompts'
 import type { Command } from 'commander'
 import { workspaceContext, type AppContext } from '../../context.js'
-import { defaultLaunchDeps, LAUNCH_TARGET_OPTIONS, launchWorkspace, type LaunchDeps, type LaunchTarget } from '../../launchTarget.js'
+import {
+  defaultLaunchDeps,
+  LAUNCH_TARGET_OPTIONS,
+  LAUNCH_TARGETS,
+  launchFailureMessage,
+  launchWorkspace,
+  type LaunchDeps,
+  type LaunchTarget,
+} from '../../launchTarget.js'
 import { tildify } from '../../output/paths.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
 
@@ -19,15 +27,15 @@ export interface OpenResult {
 }
 
 export function parseLaunchTarget(value: string): LaunchTarget {
-  if (value !== 'code' && value !== 'claude') {
-    throw new SporkError(`--with must be "code" or "claude", got "${value}".`)
+  if (!(LAUNCH_TARGETS as readonly string[]).includes(value)) {
+    throw new SporkError(`--with must be "code", "claude" or "terminal", got "${value}".`)
   }
-  return value
+  return value as LaunchTarget
 }
 
 /**
  * Resolves which target to launch: an explicit `--with` always wins, no
- * prompt at all. Otherwise offers a single-select of VS Code/Claude —
+ * prompt at all. Otherwise offers a single-select of VS Code/Claude/Terminal —
  * unlike `create`'s optional offer, `open` was invoked specifically to
  * open something, so there's no sensible "skip" outcome here:
  * `NotInteractiveError` becomes a clear `SporkError` demanding `--with`,
@@ -42,7 +50,7 @@ async function resolveLaunchTarget(explicit: LaunchTarget | undefined): Promise<
     chosen = await select({ message: 'Open with', options: LAUNCH_TARGET_OPTIONS, mode: 'single' })
   } catch (error) {
     if (error instanceof NotInteractiveError) {
-      throw new SporkError('Pass --with <code|claude> — there is no interactive terminal to pick one from.')
+      throw new SporkError('Pass --with <code|claude|terminal> — there is no interactive terminal to pick one from.')
     }
     throw error
   }
@@ -73,11 +81,11 @@ export async function runOpen(
   return { filePath, dir, target, opened: outcome.ok, reason: outcome.reason }
 }
 
-export function registerOpenCommand(program: Command, ctx: AppContext, deps: LaunchDeps = defaultLaunchDeps()): void {
+export function registerOpenCommand(program: Command, ctx: AppContext, deps: LaunchDeps = defaultLaunchDeps(ctx)): void {
   program
     .command('open [workspace]')
-    .description('Open a workspace in VS Code or Claude (omit the name/--with to pick)')
-    .option('--with <target>', 'code or claude (default: pick interactively)')
+    .description('Open a workspace in VS Code, Claude or the terminal (omit the name/--with to pick)')
+    .option('--with <target>', 'code, claude or terminal (default: pick interactively)')
     .action(async (workspace: string | undefined, options: { with?: string }) => {
       const target = options.with ? parseLaunchTarget(options.with) : undefined
       const result = await runOpen(ctx, workspace, { with: target }, deps)
@@ -89,7 +97,7 @@ export function registerOpenCommand(program: Command, ctx: AppContext, deps: Lau
           console.log(`Couldn't launch the "code" CLI (${result.reason}). Open manually: ${tildify(result.filePath)}`)
         }
       } else if (!result.opened) {
-        console.log(`Couldn't launch Claude (${result.reason}). Run it yourself: cd ${tildify(result.dir)} && claude`)
+        console.log(launchFailureMessage(result.target, result.dir, result.reason))
       }
     })
 }

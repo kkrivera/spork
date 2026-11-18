@@ -1,6 +1,12 @@
 export interface SporkEnv {
   /** SPORK_WORKSPACE_DIR — default parent directory for `workspace create` when `--dir` is omitted. */
   workspaceDir?: string
+  /**
+   * SPORK_CD_FILE — set by the shell integration (`spork shell-init`) to a
+   * temp file it `cd`s to after spork exits; the Terminal target writes
+   * the workspace's folder there. Never set by hand.
+   */
+  cdFile?: string
 }
 
 /**
@@ -14,5 +20,6 @@ export interface SporkEnv {
 export function readSporkEnv(env: NodeJS.ProcessEnv = process.env): SporkEnv {
   return {
     workspaceDir: env.SPORK_WORKSPACE_DIR || undefined,
+    cdFile: env.SPORK_CD_FILE || undefined,
   }
 }

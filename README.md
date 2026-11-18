@@ -119,7 +119,7 @@ the key first.
 ```sh
 spork repo add git@github.com:acme/widgets.git   # register a repo once, as "widgets"
 spork workspace create demo --repo widgets       # make a workspace with it
-spork workspace open demo                        # open it in VS Code or Claude
+spork workspace open demo                        # open it in VS Code, Claude or your terminal
 ```
 
 ## What's a workspace?
@@ -162,8 +162,8 @@ say), it asks whether to create the workspace with just those repos, each
 starting from its remote branch, and then whether to add more. Otherwise,
 or if you say no, it shows a searchable list of your repos. Type to
 filter, Space to toggle, Ctrl+A to toggle everything shown, Enter to
-confirm. Finally it asks whether to open the new workspace in VS Code or
-Claude. In CI or a script, it skips every question and creates an empty
+confirm. Finally it asks whether to open the new workspace in VS Code,
+Claude or your terminal. In CI or a script, it skips every question and creates an empty
 workspace.
 
 Every repo in a workspace uses a branch named after the workspace. If that
@@ -185,9 +185,29 @@ which repo and branches are in the way; pick a different name.
 `workspace open` asks the same question unless you pass `--with`:
 
 ```sh
-spork workspace open demo               # pick VS Code or Claude
-spork workspace open demo --with claude # skip the question
+spork workspace open demo                 # pick VS Code, Claude or Terminal
+spork workspace open demo --with terminal # skip the question
 ```
+
+Terminal puts you in the workspace's folder. A program can't change the
+folder of the shell that ran it, so by default spork starts a new shell
+there; type `exit` to come back to where you were. The first time, spork
+offers to add one line to your shell's startup file (zsh, bash or fish).
+With that line, Terminal changes your current shell's folder instead, with
+no shell in between. spork only asks once. To set it up yourself, add
+this to `~/.zshrc` (use `bash` in `~/.bashrc`):
+
+```sh
+command -v spork >/dev/null 2>&1 && eval "$(spork shell-init zsh 2>/dev/null)"
+```
+
+or this to `~/.config/fish/config.fish`:
+
+```fish
+command -q spork; and spork shell-init fish 2>/dev/null | source
+```
+
+Installing with Homebrew sets this up for fish automatically.
 
 New workspaces go in the current directory. Set `SPORK_WORKSPACE_DIR` to
 use a different default parent directory. `--dir` overrides both.

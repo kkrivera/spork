@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import { registerRepoCommands } from './commands/repo/index.js'
+import { registerShellInitCommand } from './commands/shell/shellInit.js'
 import { registerWorkspaceCommands } from './commands/workspace/index.js'
 import { createAppContext, type AppContext } from './context.js'
 import { createUi } from './output/color.js'
@@ -17,6 +18,7 @@ export function createProgram(ctx: AppContext = createAppContext()): Command {
 
   registerWorkspaceCommands(program, ctx)
   registerRepoCommands(program, ctx)
+  registerShellInitCommand(program)
 
   return program
 }

@@ -31,8 +31,10 @@ logic lives here.
   after `workspace init`). `workspace list` and the workspace pickers show
   it instead of the full path.
 - `src/env.ts` — `readSporkEnv(env = process.env)`: the single, extensible
-  place every `SPORK_*` environment variable gets read (currently just
-  `SPORK_WORKSPACE_DIR`, `workspace create`'s `--dir` fallback below) — add
+  place every `SPORK_*` environment variable gets read
+  (`SPORK_WORKSPACE_DIR`, `workspace create`'s `--dir` fallback below, and
+  `SPORK_CD_FILE`, which only the shell integration sets; see
+  `terminalTarget.ts`) — add
   a field here rather than reading `process.env.SPORK_*` directly from a
   command. Takes `env` as a parameter, same injectable convention
   `output/color.ts`'s `resolveColorEnabled` already uses, so it stays
@@ -70,7 +72,7 @@ logic lives here.
   straight to `SIGKILL`.
 - `src/launchTarget.ts` — `launchWorkspace(target, dir, codeWorkspaceFilePath,
   deps)`: the one place `create`/`open` dispatch "open this workspace" to
-  either tool a `LaunchTarget` (`'code' | 'claude'`) names. For `'code'` it
+  whatever a `LaunchTarget` (`'code' | 'claude' | 'terminal'`) names. For `'code'` it
   delegates to the injectable `Opener` above, unchanged. For `'claude'` it
   runs `claude` through the injectable `CommandExecutor` above, cwd'd into
   the workspace directory — Claude is itself an interactive terminal app,
@@ -79,10 +81,31 @@ logic lives here.
   foreground/inherited-stdio shape `workspace exec` already uses. A
   Claude session's own exit code/signal is deliberately not treated as
   launch success/failure (the user was present throughout it) — only a
-  genuine failure to even spawn it is. `LaunchDeps` (`{ opener, executor
-  }`, built by `defaultLaunchDeps()`) is what both commands take as their
-  injectable dependency now, and `LAUNCH_TARGET_OPTIONS` is the shared
-  VS-Code/Claude `PromptOption` pair each command's own picker builds on.
+  genuine failure to even spawn it is. `'terminal'` goes to
+  `terminalTarget.ts` below. `LaunchDeps` (`{ opener, executor, terminal
+  }`, built by `defaultLaunchDeps(ctx)`) is what both commands take as their
+  injectable dependency, `LAUNCH_TARGET_OPTIONS` is the shared
+  VS Code/Claude/Terminal `PromptOption` list each command's own picker
+  builds on, and `launchFailureMessage` is what both print when Claude or
+  Terminal couldn't start, with how to get there by hand.
+- `src/terminalTarget.ts` — `openInTerminal`: the Terminal target (see
+  [docs/plans/0006-terminal-target.md](../../docs/plans/0006-terminal-target.md)).
+  With the shell integration (`SPORK_CD_FILE` set), it writes the
+  workspace folder to that file for the `spork` shell function to `cd` to
+  after spork exits. Without it, it starts a new copy of `$SHELL` in the
+  folder through `CommandExecutor`, after `TerminalDeps.beforeShell` (the
+  one-time offer below, then "Type exit to come back"). A Ctrl+C at that
+  shell's prompt never reaches `createShellExecutor`'s signal forwarding,
+  because the shell takes over the terminal's foreground process group
+  (checked in a real pty for zsh and bash).
+- `src/shellIntegrationOffer.ts` — `offerShellIntegration`: asks once ever
+  whether to add `@spork/core`'s `shellInitLine` to the user's startup file
+  (`shellRcPath`). It skips the question for an unsupported `$SHELL`, a
+  startup file that already has the line, a question already asked
+  (`preferences.json`'s `shellIntegrationOffered`, recorded whatever the
+  answer) and a non-interactive terminal.
+- `src/commands/shell/shellInit.ts` — `spork shell-init <zsh|bash|fish>`:
+  prints `@spork/core`'s `shellInitScript`, for a startup file to load.
 - `src/confirmDestructive.ts` — `confirmDestructive(message, yes)`: the
   shared yes/no gate every destructive `workspace` command (`remove`,
   `remove-repo`) runs through before acting, even when its target was given
@@ -282,15 +305,15 @@ logic lives here.
   every other cancelled-prompt path here. After everything else prints
   (repo outcomes or the "no repos" hint), `create` also offers to launch the
   new workspace — the user is probably about to start working in it — via
-  a 3-way `@spork/prompts`' `select()` (VS Code / Claude / "Not now"), not
-  a yes/no `confirm()`, since `launchTarget.ts` now gives it two real ways
-  to open. `NotInteractiveError` (skipped silently, no behavior change,
+  `@spork/prompts`' `select()` (VS Code / Claude / Terminal / "Not now"),
+  not a yes/no `confirm()`, since `launchTarget.ts` gives it several real
+  ways to open. `NotInteractiveError` (skipped silently, no behavior change,
   when it can't prompt), picking "Not now", and a real cancel (Esc) are
   all treated as declining — this offer is optional by construction, unlike
   `open`'s own mandatory pick below — printing how to open it later
   (`spork workspace open <name>`); picking either tool dispatches through
   `launchTarget.ts`'s `launchWorkspace`, so `registerCreateCommand` takes
-  a `LaunchDeps` now (`deps: LaunchDeps = defaultLaunchDeps()`) instead of
+  a `LaunchDeps` now (`deps: LaunchDeps = defaultLaunchDeps(ctx)`) instead of
   just an `Opener` — mockable in tests, no silent failure if `code`/`claude`
   isn't installed.
   `status` wraps its (already internally concurrent —
@@ -299,8 +322,8 @@ logic lives here.
   instead of a silent wait, rather than exporting a second per-worktree
   core function just for this. `open [workspace]`'s name is optional too,
   same `pickWorkspace.ts` picker as the rest. Which tool it opens with is a
-  separate choice: `--with <code|claude>` skips the prompt outright,
-  otherwise it's a mandatory single-select (VS Code / Claude, no "Not now"
+  separate choice: `--with <code|claude|terminal>` skips the prompt outright,
+  otherwise it's a mandatory single-select (VS Code / Claude / Terminal, no "Not now"
   — the command was invoked specifically to open something) — a
   `NotInteractiveError` here becomes a clear `SporkError` demanding
   `--with` rather than skipping, and a real cancel still becomes
