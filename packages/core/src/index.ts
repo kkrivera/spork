@@ -81,4 +81,15 @@ export {
 export type { ScanSkip, ScanResult } from './repo/scan.js'
 export { findGitRepoDirs, scanAndAddRepos, adoptLocalRepo } from './repo/scan.js'
 
-export { REPOS_ROOT, REGISTRY_PATH, REPO_REGISTRY_PATH, SPORK_HOME } from './config/paths.js'
+export { PREFERENCES_PATH, REPOS_ROOT, REGISTRY_PATH, REPO_REGISTRY_PATH, SPORK_HOME } from './config/paths.js'
+export { readPreferences, updatePreferences, type Preferences } from './config/preferences.js'
+export {
+  hasShellIntegration,
+  installShellIntegration,
+  SHELL_NAMES,
+  shellFromPath,
+  shellInitLine,
+  shellInitScript,
+  shellRcPath,
+  type ShellName,
+} from './shell/integration.js'

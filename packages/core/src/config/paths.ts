@@ -10,3 +10,6 @@ export const REGISTRY_PATH = path.join(SPORK_HOME, 'workspaces.json')
 
 /** The repo alias registry — see registry/repoRegistry.ts. */
 export const REPO_REGISTRY_PATH = path.join(SPORK_HOME, 'repos.json')
+
+/** Choices spork remembers between runs — see config/preferences.ts. */
+export const PREFERENCES_PATH = path.join(SPORK_HOME, 'preferences.json')

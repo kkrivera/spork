@@ -202,7 +202,21 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
   meaningfully absent until their first write), so it locks with
   `realpath: false` rather than requiring the target to already exist.
 - `src/config/paths.ts` — spork's local state locations (`~/.spork/repos`,
-  `~/.spork/workspaces.json`).
+  `~/.spork/workspaces.json`, `~/.spork/preferences.json`).
+- `src/config/preferences.ts` — `readPreferences`/`updatePreferences`:
+  small choices spork remembers between runs (today just whether the
+  one-time shell integration question was asked). A missing or unreadable
+  file reads as `{}`.
+- `src/shell/integration.ts` — the shell integration behind the CLI's
+  Terminal target (see
+  [docs/plans/0006-terminal-target.md](../../docs/plans/0006-terminal-target.md)):
+  `shellInitScript` (the `spork` shell function for zsh/bash or fish, which
+  runs the real `spork` with `SPORK_CD_FILE` and `cd`s to whatever it
+  wrote there), `shellInitLine` (the guarded line a startup file loads it
+  with), `shellFromPath`/`shellRcPath` (which shell `$SHELL` is, and its
+  startup file, following `ZDOTDIR`/`XDG_CONFIG_HOME`), and
+  `hasShellIntegration`/`installShellIntegration` (check for, and append,
+  that line).
 - `src/errors.ts` — `SporkError`, the one error type used for user-facing
   domain failures (a naming collision, a missing entry) as opposed to bugs.
 - `src/workspace/` — the workspace lifecycle built on top of `git`/`repo`.
