@@ -21,6 +21,12 @@ created — see [docs/RELEASING.md](../../docs/RELEASING.md).
    whole file every run so it's idempotent regardless of the previous
    release's values) and writes the result to `Formula/spork.rb`.
 
+Besides the two binaries, the formula's `install` writes `spork
+shell-init fish` to `share/fish/vendor_functions.d/spork.fish`, which
+fish loads on first use, so fish users get the Terminal target's shell
+integration with no setup (see
+[docs/plans/0006-terminal-target.md](../../docs/plans/0006-terminal-target.md)).
+
 `Formula/spork.rb` is never hand-edited — every byte of it comes from this
 template, regenerated on each release. Before the first real tagged
 release, it held placeholder `0.0.0-unreleased` values with the sha256 of

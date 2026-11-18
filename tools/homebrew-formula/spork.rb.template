@@ -43,11 +43,18 @@ class Spork < Formula
   def install
     bin.install "spork"
     resource("spork-mcp").stage { bin.install "spork-mcp" }
+
+    # fish loads functions from vendor_functions.d the first time they're
+    # called, so fish users get the shell integration (Terminal changes the
+    # current shell's folder) with no setup. zsh and bash need a line in
+    # their startup file instead, which spork offers to add.
+    (share/"fish/vendor_functions.d/spork.fish").write Utils.safe_popen_read(bin/"spork", "shell-init", "fish")
   end
 
   test do
     assert_match "Manage git-worktree-based workspaces", shell_output("#{bin}/spork --help")
     # spork-mcp is a stdio server that waits for a client, so just check it was installed.
     assert_predicate bin/"spork-mcp", :executable?
+    assert_match "function spork", (share/"fish/vendor_functions.d/spork.fish").read
   end
 end
