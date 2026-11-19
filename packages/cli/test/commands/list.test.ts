@@ -3,11 +3,11 @@ import { Command } from 'commander'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@spork/core', () => ({
-  listWorkspaces: vi.fn(),
+  listWorkspacesByRecentUse: vi.fn(),
   readManifest: vi.fn(),
 }))
 
-const { listWorkspaces, readManifest } = await import('@spork/core')
+const { listWorkspacesByRecentUse, readManifest } = await import('@spork/core')
 const { runList, formatWorkspaceList, registerListCommand } = await import('../../src/commands/workspace/list.js')
 const { createUi } = await import('../../src/output/color.js')
 
@@ -25,22 +25,22 @@ function manifestWith(repoCount: number) {
 }
 
 beforeEach(() => {
-  vi.mocked(listWorkspaces).mockReset()
+  vi.mocked(listWorkspacesByRecentUse).mockReset()
   vi.mocked(readManifest).mockReset()
 })
 
 describe('runList', () => {
   it("adds each workspace's repo count from its manifest", async () => {
-    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
     vi.mocked(readManifest).mockResolvedValue(manifestWith(3) as never)
 
     expect(await runList(ctx)).toEqual([{ name: 'demo', dir: '/ws/demo', repos: 3 }])
-    expect(listWorkspaces).toHaveBeenCalledWith('/registry.json')
+    expect(listWorkspacesByRecentUse).toHaveBeenCalledWith('/registry.json')
     expect(readManifest).toHaveBeenCalledWith('/ws/demo')
   })
 
   it("leaves the count unknown when a manifest can't be read", async () => {
-    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
     vi.mocked(readManifest).mockRejectedValue(new Error('ENOENT'))
 
     expect(await runList(ctx)).toEqual([{ name: 'demo', dir: '/ws/demo', repos: null }])
@@ -69,7 +69,7 @@ describe('formatWorkspaceList', () => {
 
 describe('registerListCommand', () => {
   it('prints a table of workspaces', async () => {
-    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: `${home}/ws/demo` }])
+    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: `${home}/ws/demo` }])
     vi.mocked(readManifest).mockResolvedValue(manifestWith(1) as never)
     const program = new Command()
     registerListCommand(program, ctx)
@@ -82,7 +82,7 @@ describe('registerListCommand', () => {
   })
 
   it('passes --paths through', async () => {
-    vi.mocked(listWorkspaces).mockResolvedValue([{ name: 'demo', dir: `${home}/ws/demo` }])
+    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: `${home}/ws/demo` }])
     vi.mocked(readManifest).mockResolvedValue(manifestWith(1) as never)
     const program = new Command()
     registerListCommand(program, ctx)
@@ -95,7 +95,7 @@ describe('registerListCommand', () => {
   })
 
   it('prints a helpful message when there are no workspaces', async () => {
-    vi.mocked(listWorkspaces).mockResolvedValue([])
+    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([])
     const program = new Command()
     registerListCommand(program, ctx)
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

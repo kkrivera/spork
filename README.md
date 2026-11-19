@@ -155,6 +155,9 @@ You can leave off `--workspace`/`-w`, or the workspace name on `status`,
 picker if you aren't in one. `add-repo` and `remove-repo` also let you leave
 off the repo and pick it from a list.
 
+The pickers and `workspace list` show the workspace you used most recently
+first. A workspace you haven't used yet sorts by when you created it.
+
 Run `workspace create` without `--repo` in a terminal and it first checks
 every repo you've already added for a branch named after the new
 workspace. If some have one (you pushed it from an earlier workspace,

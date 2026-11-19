@@ -32,7 +32,7 @@ instead of shelling out to the `spork` CLI.
 - `src/tools/` — one module per tool (`registerTools` in `index.ts` wires
   them all onto the server), mirroring `@spork/cli`'s one-file-per-
   subcommand split:
-  - `list_workspaces` — every registered workspace (name + directory).
+  - `list_workspaces` — every registered workspace (name + directory), most recently used first.
   - `create_workspace` — `{ name, dir }`, `dir` an absolute *parent*
     directory (no cwd fallback — the MCP server process's own cwd isn't
     meaningful to the caller, unlike `@spork/cli`'s `--dir`). Uses

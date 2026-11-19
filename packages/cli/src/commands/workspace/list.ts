@@ -1,4 +1,4 @@
-import { listWorkspaces, readManifest, type RegistryEntry } from '@spork/core'
+import { listWorkspacesByRecentUse, readManifest, type RegistryEntry } from '@spork/core'
 import type { Command } from 'commander'
 import type { AppContext } from '../../context.js'
 import { formatTable } from '../../output/format.js'
@@ -23,7 +23,7 @@ async function repoCount(dir: string): Promise<number | null> {
 }
 
 export async function runList(ctx: AppContext): Promise<WorkspaceListEntry[]> {
-  const workspaces = await listWorkspaces(ctx.registryPath)
+  const workspaces = await listWorkspacesByRecentUse(ctx.registryPath)
   return Promise.all(workspaces.map(async (workspace) => ({ ...workspace, repos: await repoCount(workspace.dir) })))
 }
 

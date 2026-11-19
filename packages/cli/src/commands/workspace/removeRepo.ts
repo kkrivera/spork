@@ -1,4 +1,4 @@
-import { reconcileWorkspace, removeRepo, resolveWorkspaceDir, SporkError } from '@spork/core'
+import { reconcileWorkspace, removeRepo, SporkError } from '@spork/core'
 import { NotInteractiveError, select, type PromptOption } from '@spork/prompts'
 import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
@@ -6,6 +6,7 @@ import { runConcurrently } from '../../concurrentTasks.js'
 import { confirmDestructive } from '../../confirmDestructive.js'
 import { workspaceContext, type AppContext } from '../../context.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
+import { resolveUsedWorkspaceDir } from './useWorkspace.js'
 
 export interface RemoveRepoOptions {
   /** Which workspace to remove from — defaults to the cwd's enclosing workspace, or a picker (see `pickWorkspace.ts`). */
@@ -84,7 +85,7 @@ export async function runRemoveRepo(ctx: AppContext, folders: readonly string[],
       'Select a workspace',
       'Multiple workspaces are registered — pass one explicitly: spork workspace remove-repo --workspace <name>',
     ))
-  const dir = await resolveWorkspaceDir(ctx.registryPath, workspaceName)
+  const dir = await resolveUsedWorkspaceDir(ctx, workspaceName)
   const names = folders.length > 0 ? folders : await pickFolders(ctx, dir, workspaceName)
 
   await confirmDestructive(

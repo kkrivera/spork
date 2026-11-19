@@ -2,14 +2,19 @@ import { Command } from 'commander'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FunctionTask, TaskResult } from '@spork/task-runner'
 
-vi.mock('@spork/core', () => ({
-  removeRepo: vi.fn(),
-  resolveWorkspaceDir: vi.fn(),
-  reconcileWorkspace: vi.fn(),
-  listWorkspaces: vi.fn(),
-  findEnclosingWorkspaceDir: vi.fn(),
-  SporkError: class SporkError extends Error {},
-}))
+vi.mock('@spork/core', () => {
+  const listWorkspaces = vi.fn()
+  return {
+    removeRepo: vi.fn(),
+    resolveWorkspaceDir: vi.fn(),
+    reconcileWorkspace: vi.fn(),
+    listWorkspaces,
+    findEnclosingWorkspaceDir: vi.fn(),
+    SporkError: class SporkError extends Error {},
+    listWorkspacesByRecentUse: listWorkspaces,
+    markWorkspaceUsed: vi.fn(),
+  }
+})
 vi.mock('@spork/prompts', () => ({
   select: vi.fn(),
   confirm: vi.fn(),

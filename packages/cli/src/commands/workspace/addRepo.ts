@@ -1,4 +1,4 @@
-import { addRepo, defaultAlias, resolveWorkspaceDir, SporkError, type AddRepoResult } from '@spork/core'
+import { addRepo, defaultAlias, SporkError, type AddRepoResult } from '@spork/core'
 import { NotInteractiveError, select, type PromptOption } from '@spork/prompts'
 import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
@@ -7,6 +7,7 @@ import { workspaceContext, type AppContext } from '../../context.js'
 import { runList } from '../repo/list.js'
 import { addReposToWorkspace, type AddRepoBatchFailure, type AddRepoBatchOutcome } from './addReposBatch.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
+import { resolveUsedWorkspaceDir } from './useWorkspace.js'
 import { keyUnlockNotifier, prepareWorkspaceRemotes, type RemoteSetupOptions } from './workspaceRemotes.js'
 
 export interface AddRepoOptions extends RemoteSetupOptions {
@@ -50,7 +51,7 @@ export async function runAddRepo(
       `Select a workspace to add "${source}" to`,
       'Multiple workspaces are registered — pass one explicitly: spork workspace add-repo --workspace <name> <source>',
     ))
-  const dir = await resolveWorkspaceDir(ctx.registryPath, workspaceName)
+  const dir = await resolveUsedWorkspaceDir(ctx, workspaceName)
   const remotes = await prepareWorkspaceRemotes(ctx, dir, workspaceName, [source], options)
   try {
     const [outcome] = await runConcurrently([
@@ -166,7 +167,7 @@ export async function runAddRepoFromRegistry(
       'Select a workspace',
       'Multiple workspaces are registered — pass one explicitly: spork workspace add-repo --workspace <name>',
     ))
-  const dir = await resolveWorkspaceDir(ctx.registryPath, workspaceName)
+  const dir = await resolveUsedWorkspaceDir(ctx, workspaceName)
   const sources = await pickRegisteredSources(ctx)
   const remotes = await prepareWorkspaceRemotes(ctx, dir, workspaceName, sources, options)
   try {

@@ -1,8 +1,8 @@
-import { resolveWorkspaceDir } from '@spork/core'
 import type { Command } from 'commander'
 import { createShellExecutor, type CommandExecutor, type ExecResult } from '../../commandExecutor.js'
 import type { AppContext } from '../../context.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
+import { resolveUsedWorkspaceDir } from './useWorkspace.js'
 
 export interface ExecOptions {
   /** Which workspace to run in — defaults to the cwd's enclosing workspace, or a picker (see `pickWorkspace.ts`). */
@@ -41,7 +41,7 @@ export async function runExec(
       'Multiple workspaces are registered — pass one explicitly: spork workspace exec <command> --workspace <name>',
       { showLocations: false },
     ))
-  const dir = await resolveWorkspaceDir(ctx.registryPath, workspace)
+  const dir = await resolveUsedWorkspaceDir(ctx, workspace)
   onResolved?.({ workspace, dir })
 
   const result = await executor.run(command, dir)

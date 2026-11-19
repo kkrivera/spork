@@ -1,11 +1,11 @@
 import { realpath } from 'node:fs/promises'
-import { findEnclosingWorkspaceDir, listWorkspaces, SporkError, type RegistryEntry } from '@spork/core'
+import { findEnclosingWorkspaceDir, listWorkspaces, listWorkspacesByRecentUse, SporkError, type RegistryEntry } from '@spork/core'
 import { NotInteractiveError, select, type PromptOption, type PromptOutputStream } from '@spork/prompts'
 import type { AppContext } from '../../context.js'
 import { workspaceLocation } from '../../output/paths.js'
 
 async function pickableWorkspaces(ctx: AppContext, showLocations = true): Promise<PromptOption<string>[]> {
-  const workspaces = await listWorkspaces(ctx.registryPath)
+  const workspaces = await listWorkspacesByRecentUse(ctx.registryPath)
   if (workspaces.length === 0) {
     throw new SporkError('No workspaces yet. Create one with: spork workspace create <name>')
   }

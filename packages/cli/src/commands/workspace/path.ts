@@ -1,8 +1,8 @@
-import { resolveWorkspaceDir } from '@spork/core'
 import type { PromptOutputStream } from '@spork/prompts'
 import type { Command } from 'commander'
 import type { AppContext } from '../../context.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
+import { resolveUsedWorkspaceDir } from './useWorkspace.js'
 
 /**
  * Resolves a workspace's full directory, for scripts:
@@ -20,7 +20,7 @@ export async function runPath(ctx: AppContext, workspace: string | undefined): P
       'Multiple workspaces are registered — pass one explicitly: spork workspace path <name>',
       { output: process.stderr as unknown as PromptOutputStream },
     ))
-  return resolveWorkspaceDir(ctx.registryPath, name)
+  return resolveUsedWorkspaceDir(ctx, name)
 }
 
 export function registerPathCommand(program: Command, ctx: AppContext): void {

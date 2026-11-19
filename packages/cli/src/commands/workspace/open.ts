@@ -1,4 +1,4 @@
-import { codeWorkspaceFilePath, reconcileWorkspace, resolveWorkspaceDir, SporkError } from '@spork/core'
+import { codeWorkspaceFilePath, reconcileWorkspace, SporkError } from '@spork/core'
 import { NotInteractiveError, select } from '@spork/prompts'
 import type { Command } from 'commander'
 import { workspaceContext, type AppContext } from '../../context.js'
@@ -13,6 +13,7 @@ import {
 } from '../../launchTarget.js'
 import { tildify } from '../../output/paths.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
+import { resolveUsedWorkspaceDir } from './useWorkspace.js'
 
 export interface OpenOptions {
   with?: LaunchTarget
@@ -72,7 +73,7 @@ export async function runOpen(
       'Select a workspace to open',
       'Multiple workspaces are registered — pass one explicitly: spork workspace open <name>',
     ))
-  const dir = await resolveWorkspaceDir(ctx.registryPath, name)
+  const dir = await resolveUsedWorkspaceDir(ctx, name)
   const { manifest } = await reconcileWorkspace(workspaceContext(ctx), dir)
   const filePath = codeWorkspaceFilePath(dir, manifest.name)
   const target = await resolveLaunchTarget(options.with)

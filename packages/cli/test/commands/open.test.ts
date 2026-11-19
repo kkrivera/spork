@@ -2,14 +2,19 @@ import { Command } from 'commander'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LaunchDeps } from '../../src/launchTarget.js'
 
-vi.mock('@spork/core', () => ({
-  codeWorkspaceFilePath: vi.fn(),
-  reconcileWorkspace: vi.fn(),
-  resolveWorkspaceDir: vi.fn(),
-  listWorkspaces: vi.fn(),
-  findEnclosingWorkspaceDir: vi.fn(),
-  SporkError: class SporkError extends Error {},
-}))
+vi.mock('@spork/core', () => {
+  const listWorkspaces = vi.fn()
+  return {
+    codeWorkspaceFilePath: vi.fn(),
+    reconcileWorkspace: vi.fn(),
+    resolveWorkspaceDir: vi.fn(),
+    listWorkspaces,
+    findEnclosingWorkspaceDir: vi.fn(),
+    SporkError: class SporkError extends Error {},
+    listWorkspacesByRecentUse: listWorkspaces,
+    markWorkspaceUsed: vi.fn(),
+  }
+})
 vi.mock('@spork/prompts', () => ({
   select: vi.fn(),
   NotInteractiveError: class NotInteractiveError extends Error {},

@@ -1,10 +1,11 @@
-import { getWorkspaceStatus, resolveWorkspaceDir, SporkError, type WorktreeStatusEntry } from '@spork/core'
+import { getWorkspaceStatus, SporkError, type WorktreeStatusEntry } from '@spork/core'
 import type { TaskReporter } from '@spork/task-runner'
 import type { Command } from 'commander'
 import { runConcurrently } from '../../concurrentTasks.js'
 import { workspaceContext, type AppContext } from '../../context.js'
 import { formatTable } from '../../output/format.js'
 import { pickWorkspaceName } from './pickWorkspace.js'
+import { resolveUsedWorkspaceDir } from './useWorkspace.js'
 
 /**
  * Runs the (already internally concurrent — `getWorkspaceStatus` reads every
@@ -24,7 +25,7 @@ export async function runStatus(ctx: AppContext, workspace: string | undefined):
       'Select a workspace',
       'Multiple workspaces are registered — pass one explicitly: spork workspace status <name>',
     ))
-  const dir = await resolveWorkspaceDir(ctx.registryPath, name)
+  const dir = await resolveUsedWorkspaceDir(ctx, name)
   const [outcome] = await runConcurrently([
     {
       name,

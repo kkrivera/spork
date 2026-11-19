@@ -29,7 +29,8 @@ logic lives here.
   directory minus the trailing `/<name>`, since the name is already on
   screen (or the whole directory, when it doesn't end in the name, as
   after `workspace init`). `workspace list` and the workspace pickers show
-  it instead of the full path.
+  it instead of the full path. Both list workspaces most recently used
+  first.
 - `src/env.ts` — `readSporkEnv(env = process.env)`: the single, extensible
   place every `SPORK_*` environment variable gets read
   (`SPORK_WORKSPACE_DIR`, `workspace create`'s `--dir` fallback below, and
@@ -146,6 +147,13 @@ logic lives here.
   so this one coarse line per item is what actually fills each task's
   equal-height pane while it runs. A `call` that never logs anything just
   shows its header with an empty pane beneath.
+- `src/commands/workspace/useWorkspace.ts` — `resolveUsedWorkspaceDir`:
+  `resolveWorkspaceDir` plus `@spork/core`'s `markWorkspaceUsed`, so the
+  workspace moves to the top of the pickers. Every command that works in
+  one workspace resolves it through this (`open`, `exec`, `status`,
+  `path`, `add-repo`, `remove-repo`); `create` doesn't need to, since a new
+  workspace already sorts by its creation time. Failing to record the use
+  never fails the command.
 - `src/commands/workspace/pickWorkspace.ts` — `pickWorkspaceName`/
   `pickWorkspaceNames`: the shared single-/multi-select picker every
   `workspace <verb>` command below uses when its workspace argument was
@@ -154,7 +162,8 @@ logic lives here.
   `findEnclosingWorkspaceDir`, the same convention `repoScope.ts` uses for
   `spork repo`'s local/global default) and, if so, resolves to it directly
   with no prompt at all; otherwise it lists every registered workspace
-  (`@spork/core`'s `listWorkspaces`) via `@spork/prompts`' `select()`,
+  (`@spork/core`'s `listWorkspacesByRecentUse`, most recently used first)
+  via `@spork/prompts`' `select()`,
   each hinted with its `workspaceLocation` (except for `exec`, which passes
   `showLocations: false`: there the name is all you need). `pickWorkspaceName` also takes an `output` stream, for a command
   whose stdout is meant to be captured (`workspace path`).

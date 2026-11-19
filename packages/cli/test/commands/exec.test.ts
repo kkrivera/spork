@@ -2,18 +2,23 @@ import { Command } from 'commander'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CommandExecutor, ExecResult } from '../../src/commandExecutor.js'
 
-vi.mock('@spork/core', () => ({
-  resolveWorkspaceDir: vi.fn(),
-  listWorkspaces: vi.fn(),
-  findEnclosingWorkspaceDir: vi.fn(),
-  SporkError: class SporkError extends Error {},
-}))
+vi.mock('@spork/core', () => {
+  const listWorkspaces = vi.fn()
+  return {
+    resolveWorkspaceDir: vi.fn(),
+    listWorkspaces,
+    findEnclosingWorkspaceDir: vi.fn(),
+    SporkError: class SporkError extends Error {},
+    listWorkspacesByRecentUse: listWorkspaces,
+    markWorkspaceUsed: vi.fn(),
+  }
+})
 vi.mock('@spork/prompts', () => ({
   select: vi.fn(),
   NotInteractiveError: class NotInteractiveError extends Error {},
 }))
 
-const { resolveWorkspaceDir, listWorkspaces, findEnclosingWorkspaceDir, SporkError } = await import('@spork/core')
+const { resolveWorkspaceDir, listWorkspaces, findEnclosingWorkspaceDir, markWorkspaceUsed, SporkError } = await import('@spork/core')
 const { select } = await import('@spork/prompts')
 const { runExec, registerExecCommand } = await import('../../src/commands/workspace/exec.js')
 const { createUi } = await import('../../src/output/color.js')
@@ -42,6 +47,7 @@ describe('runExec', () => {
     const result = await runExec(ctx, 'npm run dev', { workspace: 'demo' }, executor)
 
     expect(resolveWorkspaceDir).toHaveBeenCalledWith('/registry.json', 'demo')
+    expect(markWorkspaceUsed).toHaveBeenCalledWith('/registry.json', '/ws/demo')
     expect(executor.run).toHaveBeenCalledWith('npm run dev', '/ws/demo')
     expect(result).toEqual({ workspace: 'demo', dir: '/ws/demo', exitCode: 0, signal: null })
   })
