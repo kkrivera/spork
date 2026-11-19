@@ -45,7 +45,9 @@ required" convention every usage here follows).
   `MAX_VISIBLE_OPTIONS` = 10 rows, and always shorter than the terminal —
   see `viewportHeight` for why a full-height frame breaks redrawing; cursor pointer,
   `[x]`/`[ ]` checkbox for multi-select, bolded fuzzy-matched characters,
-  a dimmed `hint` per option), and a footer (`11–20 of 30` when the list
+  a dimmed `hint` per option, every hint starting in the same column, just
+  after the longest label in the whole list, so it doesn't shift as you
+  search or scroll), and a footer (`11–20 of 30` when the list
   is cut off, selection count + key hints, or the validation message in
   their place). Takes an explicit `Colors`
   param rather than importing `picocolors` directly — same convention

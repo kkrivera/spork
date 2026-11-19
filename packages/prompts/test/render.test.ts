@@ -33,6 +33,19 @@ describe('renderFrame — header', () => {
   })
 })
 
+describe('renderFrame — hints', () => {
+  it('lines every hint up in one column, after the longest label of the whole list', () => {
+    const filtered = [filteredOption('app', 0, { hint: 'Last used 2 hours ago' }), filteredOption('long-name', 1, { hint: 'Created 1 day ago' })]
+    const narrowed = state({ mode: 'single', filtered: [filtered[0] as FilteredOption<string>], options: filtered.map((f) => f.option) })
+
+    expect(renderFrame(state({ mode: 'single', filtered }), 'msg', 80, 24, colors).slice(1, 3)).toEqual([
+      '❯ app        Last used 2 hours ago',
+      '  long-name  Created 1 day ago',
+    ])
+    expect(renderFrame(narrowed, 'msg', 80, 24, colors)[1]).toBe('❯ app        Last used 2 hours ago')
+  })
+})
+
 describe('renderFrame — option rows', () => {
   it('marks a selected option with a checkbox in multi-select mode', () => {
     const lines = renderFrame(state({ selected: new Set([0]) }), 'msg', 80, 24, colors)

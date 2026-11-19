@@ -31,12 +31,22 @@ function renderHighlightedLabel<T>(filtered: FilteredOption<T>, colors: Colors):
   return [...filtered.option.label].map((char, i) => (matchedIndices.has(i) ? colors.bold(char) : char)).join('')
 }
 
+/**
+ * The widest label among *all* options (not just the filtered ones), so
+ * every hint starts in the same column and that column doesn't move as
+ * the search narrows or the list scrolls.
+ */
+function labelColumnWidth<T>(state: SelectState<T>): number {
+  return Math.max(0, ...state.options.map((option) => [...option.label].length))
+}
+
 function renderOptionLine<T>(state: SelectState<T>, filtered: FilteredOption<T>, isCursor: boolean, colors: Colors): string {
   const pointer = isCursor ? colors.cyan('❯') : ' '
   const checkbox = state.mode === 'multi' ? `${state.selected.has(filtered.index) ? '[x]' : '[ ]'} ` : ''
   const label = renderHighlightedLabel(filtered, colors)
-  const hint = filtered.option.hint ? colors.dim(`  ${filtered.option.hint}`) : ''
-  return `${pointer} ${checkbox}${label}${hint}`
+  if (!filtered.option.hint) return `${pointer} ${checkbox}${label}`
+  const padding = ' '.repeat(labelColumnWidth(state) - [...filtered.option.label].length)
+  return `${pointer} ${checkbox}${label}${padding}${colors.dim(`  ${filtered.option.hint}`)}`
 }
 
 const MULTI_HINTS = '↑↓ move · space toggle · ctrl+a all/none · ctrl+u clear search · enter confirm · esc cancel'
