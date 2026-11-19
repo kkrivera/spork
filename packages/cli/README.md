@@ -23,6 +23,11 @@ logic lives here.
   output directly.
 - `src/output/format.ts` — `formatTable`, a plain space-padded table
   renderer (no box drawing) so output stays clean piped or in CI.
+- `src/output/timeAgo.ts` — `timeAgo` ("3 hours ago", in the largest
+  whole unit from minutes to years; "just now" under a minute) and
+  `describeActivity`, which turns a workspace's `lastActivity` into "Last
+  used 3 hours ago" or "Created 2 days ago" for `workspace list`'s
+  ACTIVITY column and the workspace pickers' hints.
 - `src/output/paths.ts` — how paths are shown. `tildify` shortens a path
   under the home directory to `~/…` (for every path a message prints).
   `workspaceLocation` is the folder a workspace sits in, shortened: its
@@ -164,8 +169,9 @@ logic lives here.
   with no prompt at all; otherwise it lists every registered workspace
   (`@spork/core`'s `listWorkspacesByRecentUse`, most recently used first)
   via `@spork/prompts`' `select()`,
-  each hinted with its `workspaceLocation` (except for `exec`, which passes
-  `showLocations: false`: there the name is all you need). `pickWorkspaceName` also takes an `output` stream, for a command
+  each hinted with its `workspaceLocation` and `describeActivity` (`exec` passes
+  `showLocations: false` to leave the location out: there the name and
+  time are all you need). `pickWorkspaceName` also takes an `output` stream, for a command
   whose stdout is meant to be captured (`workspace path`).
   `pickWorkspaceNames` (multi) has no such auto-detect — picking several is
   the point, so it always offers the full list. `NotInteractiveError` (no

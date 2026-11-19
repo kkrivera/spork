@@ -1,10 +1,11 @@
-import { listWorkspacesByRecentUse, readManifest, type RegistryEntry } from '@spork/core'
+import { listWorkspacesByRecentUse, readManifest, type RecentWorkspace } from '@spork/core'
 import type { Command } from 'commander'
 import type { AppContext } from '../../context.js'
 import { formatTable } from '../../output/format.js'
 import { workspaceLocation } from '../../output/paths.js'
+import { describeActivity } from '../../output/timeAgo.js'
 
-export interface WorkspaceListEntry extends RegistryEntry {
+export interface WorkspaceListEntry extends RecentWorkspace {
   /** How many repos the workspace's manifest lists, or null if it couldn't be read. */
   repos: number | null
 }
@@ -28,18 +29,22 @@ export async function runList(ctx: AppContext): Promise<WorkspaceListEntry[]> {
 }
 
 /**
- * NAME, REPOS and LOCATION (the folder each one sits in — see
- * `workspaceLocation`). `--paths` swaps LOCATION for a PATH column of
- * every workspace's full, unshortened directory.
+ * NAME, REPOS, ACTIVITY ("Last used 3 hours ago" or "Created 2 days
+ * ago", see `describeActivity`) and LOCATION (the folder each one sits
+ * in — see `workspaceLocation`). `--paths` swaps LOCATION for a PATH
+ * column of every workspace's full, unshortened directory.
  */
-export function formatWorkspaceList(workspaces: readonly WorkspaceListEntry[], options: ListOptions): string {
+export function formatWorkspaceList(workspaces: readonly WorkspaceListEntry[], options: ListOptions, now: Date = new Date()): string {
   const repos = (workspace: WorkspaceListEntry): string => (workspace.repos === null ? '?' : String(workspace.repos))
-  if (options.paths) {
-    return formatTable(['NAME', 'REPOS', 'PATH'], workspaces.map((workspace) => [workspace.name, repos(workspace), workspace.dir]))
-  }
+  const where = options.paths ? 'PATH' : 'LOCATION'
   return formatTable(
-    ['NAME', 'REPOS', 'LOCATION'],
-    workspaces.map((workspace) => [workspace.name, repos(workspace), workspaceLocation(workspace)]),
+    ['NAME', 'REPOS', 'ACTIVITY', where],
+    workspaces.map((workspace) => [
+      workspace.name,
+      repos(workspace),
+      describeActivity(workspace.lastActivity, now),
+      options.paths ? workspace.dir : workspaceLocation(workspace),
+    ]),
   )
 }
 

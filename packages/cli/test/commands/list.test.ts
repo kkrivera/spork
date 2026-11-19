@@ -31,45 +31,49 @@ beforeEach(() => {
 
 describe('runList', () => {
   it("adds each workspace's repo count from its manifest", async () => {
-    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: '/ws/demo', lastActivity: null }])
     vi.mocked(readManifest).mockResolvedValue(manifestWith(3) as never)
 
-    expect(await runList(ctx)).toEqual([{ name: 'demo', dir: '/ws/demo', repos: 3 }])
+    expect(await runList(ctx)).toEqual([{ name: 'demo', dir: '/ws/demo', lastActivity: null, repos: 3 }])
     expect(listWorkspacesByRecentUse).toHaveBeenCalledWith('/registry.json')
     expect(readManifest).toHaveBeenCalledWith('/ws/demo')
   })
 
   it("leaves the count unknown when a manifest can't be read", async () => {
-    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: '/ws/demo' }])
+    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: '/ws/demo', lastActivity: null }])
     vi.mocked(readManifest).mockRejectedValue(new Error('ENOENT'))
 
-    expect(await runList(ctx)).toEqual([{ name: 'demo', dir: '/ws/demo', repos: null }])
+    expect(await runList(ctx)).toEqual([{ name: 'demo', dir: '/ws/demo', lastActivity: null, repos: null }])
   })
 })
 
 describe('formatWorkspaceList', () => {
-  const atDefault = { name: 'kris/demo', dir: `${home}/ws/kris/demo`, repos: 3 }
-  const elsewhere = { name: 'root', dir: `${home}/code`, repos: null }
+  const now = new Date('2026-03-10T12:00:00.000Z')
+  const used = { kind: 'used' as const, at: '2026-03-10T09:00:00.000Z' }
+  const atDefault = { name: 'kris/demo', dir: `${home}/ws/kris/demo`, repos: 3, lastActivity: used }
+  const elsewhere = { name: 'root', dir: `${home}/code`, repos: null, lastActivity: null }
+  const fresh = { name: 'new', dir: `${home}/ws/new`, repos: 0, lastActivity: { kind: 'created' as const, at: '2026-02-24T12:00:00.000Z' } }
 
-  it('shows the folder each workspace sits in', () => {
-    expect(formatWorkspaceList([atDefault, elsewhere], {}).split('\n')).toEqual([
-      'NAME       REPOS  LOCATION',
-      'kris/demo  3      ~/ws',
-      'root       ?      ~/code',
+  it('shows when each was last used (or created) and the folder it sits in', () => {
+    expect(formatWorkspaceList([atDefault, fresh, elsewhere], {}, now).split('\n')).toEqual([
+      'NAME       REPOS  ACTIVITY               LOCATION',
+      'kris/demo  3      Last used 3 hours ago  ~/ws',
+      'new        0      Created 2 weeks ago    ~/ws',
+      'root       ?                             ~/code',
     ])
   })
 
   it('shows every full path with --paths', () => {
-    expect(formatWorkspaceList([atDefault], { paths: true }).split('\n')).toEqual([
-      'NAME       REPOS  PATH',
-      `kris/demo  3      ${home}/ws/kris/demo`,
+    expect(formatWorkspaceList([atDefault], { paths: true }, now).split('\n')).toEqual([
+      'NAME       REPOS  ACTIVITY               PATH',
+      `kris/demo  3      Last used 3 hours ago  ${home}/ws/kris/demo`,
     ])
   })
 })
 
 describe('registerListCommand', () => {
   it('prints a table of workspaces', async () => {
-    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: `${home}/ws/demo` }])
+    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: `${home}/ws/demo`, lastActivity: null }])
     vi.mocked(readManifest).mockResolvedValue(manifestWith(1) as never)
     const program = new Command()
     registerListCommand(program, ctx)
@@ -77,12 +81,12 @@ describe('registerListCommand', () => {
 
     await program.parseAsync(['node', 'test', 'list'])
 
-    expect(logSpy.mock.calls.flat().join('\n')).toBe('NAME  REPOS  LOCATION\ndemo  1      ~/ws')
+    expect(logSpy.mock.calls.flat().join('\n')).toBe('NAME  REPOS  ACTIVITY  LOCATION\ndemo  1                ~/ws')
     logSpy.mockRestore()
   })
 
   it('passes --paths through', async () => {
-    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: `${home}/ws/demo` }])
+    vi.mocked(listWorkspacesByRecentUse).mockResolvedValue([{ name: 'demo', dir: `${home}/ws/demo`, lastActivity: null }])
     vi.mocked(readManifest).mockResolvedValue(manifestWith(1) as never)
     const program = new Command()
     registerListCommand(program, ctx)

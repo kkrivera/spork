@@ -98,17 +98,17 @@ describe('runExec — resolving the workspace when --workspace is omitted', () =
     expect(result.workspace).toBe('demo')
   })
 
-  it("lists workspaces by name only, without each one's location", async () => {
+  it("lists workspaces by name and when each was last used, without each one's location", async () => {
     vi.mocked(listWorkspaces).mockResolvedValue([
-      { name: 'demo', dir: '/ws/demo' },
+      { name: 'demo', dir: '/ws/demo', lastActivity: { kind: 'used', at: new Date().toISOString() } },
       { name: 'root', dir: '/code' },
-    ])
+    ] as never)
     vi.mocked(select).mockResolvedValue(['demo'])
 
     await runExec(ctx, 'npm run dev', {}, fakeExecutor({ exitCode: 0, signal: null }))
 
     expect(vi.mocked(select).mock.calls[0]?.[0].options).toEqual([
-      { label: 'demo', value: 'demo', hint: undefined },
+      { label: 'demo', value: 'demo', hint: 'Last used just now' },
       { label: 'root', value: 'root', hint: undefined },
     ])
   })

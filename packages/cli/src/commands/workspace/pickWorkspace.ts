@@ -3,6 +3,7 @@ import { findEnclosingWorkspaceDir, listWorkspaces, listWorkspacesByRecentUse, S
 import { NotInteractiveError, select, type PromptOption, type PromptOutputStream } from '@spork/prompts'
 import type { AppContext } from '../../context.js'
 import { workspaceLocation } from '../../output/paths.js'
+import { describeActivity } from '../../output/timeAgo.js'
 
 async function pickableWorkspaces(ctx: AppContext, showLocations = true): Promise<PromptOption<string>[]> {
   const workspaces = await listWorkspacesByRecentUse(ctx.registryPath)
@@ -12,7 +13,7 @@ async function pickableWorkspaces(ctx: AppContext, showLocations = true): Promis
   return workspaces.map((workspace) => ({
     label: workspace.name,
     value: workspace.name,
-    hint: showLocations ? workspaceLocation(workspace) : undefined,
+    hint: [showLocations ? workspaceLocation(workspace) : '', describeActivity(workspace.lastActivity)].filter(Boolean).join(' · ') || undefined,
   }))
 }
 

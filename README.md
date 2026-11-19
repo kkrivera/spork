@@ -156,7 +156,8 @@ picker if you aren't in one. `add-repo` and `remove-repo` also let you leave
 off the repo and pick it from a list.
 
 The pickers and `workspace list` show the workspace you used most recently
-first. A workspace you haven't used yet sorts by when you created it.
+first, with when you last used it ("Last used 3 hours ago"). A workspace you
+haven't used yet sorts by when you created it ("Created 2 days ago").
 
 Run `workspace create` without `--repo` in a terminal and it first checks
 every repo you've already added for a branch named after the new
