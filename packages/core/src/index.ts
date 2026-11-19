@@ -49,8 +49,10 @@ export {
   registerWorkspace,
   unregisterWorkspace,
   listWorkspaces,
+  markWorkspaceUsed,
   resolveWorkspaceDir,
 } from './registry/registry.js'
+export { listWorkspacesByRecentUse } from './registry/recentUse.js'
 
 export type { RepoRegistryEntry } from './registry/repoRegistry.js'
 export {

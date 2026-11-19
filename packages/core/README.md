@@ -356,7 +356,14 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
   exists on disk rather than trusting stale state. Every write (register,
   unregister, and the self-heal above) goes through `withFileLock` around
   the registry path, re-reading fresh inside the lock — same reasoning as
-  `workspace.ts`'s manifest locking.
+  `workspace.ts`'s manifest locking. `markWorkspaceUsed` stamps an entry's
+  optional `lastUsedAt` (found by name or directory; a no-op when nothing
+  matches), under the same lock.
+- `src/registry/recentUse.ts` — `listWorkspacesByRecentUse`:
+  `listWorkspaces`, most recently used first, by `lastUsedAt` and falling
+  back to the manifest's `createdAt` for a workspace nothing has used yet.
+  Ties keep registry order. It's the order every frontend lists
+  workspaces in (pickers, `workspace list`, MCP's `list_workspaces`).
 - `src/registry/repoRegistry.ts` — `~/.spork/repos.json`: the same
   index-not-source-of-truth pattern (and the same `withFileLock`-around-
   every-write treatment) as above, but for repo *sources* rather than

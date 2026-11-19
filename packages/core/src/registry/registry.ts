@@ -9,6 +9,8 @@ export interface RegistryEntry {
   name: string
   /** Absolute path to the workspace's directory (holds its manifest and .code-workspace file). */
   dir: string
+  /** When a command last picked or named this workspace (ISO 8601); missing until the first use. */
+  lastUsedAt?: string
 }
 
 interface RegistryFile {
@@ -48,6 +50,23 @@ export async function unregisterWorkspace(registryPath: string, name: string): P
   await withFileLock(registryPath, async () => {
     const file = await readRegistryFile(registryPath)
     file.workspaces = file.workspaces.filter((workspace) => workspace.name !== name)
+    await writeRegistryFile(registryPath, file)
+  })
+}
+
+/**
+ * Records that a command just used the workspace registered under
+ * `nameOrDir` (either its name or its directory), so pickers can list it
+ * first (see `recentUse.ts`). Does nothing when no such workspace is
+ * registered, e.g. a raw workspace directory passed by path.
+ */
+export async function markWorkspaceUsed(registryPath: string, nameOrDir: string, now: Date = new Date()): Promise<void> {
+  if (!existsSync(registryPath)) return
+  await withFileLock(registryPath, async () => {
+    const file = await readRegistryFile(registryPath)
+    const entry = file.workspaces.find((workspace) => workspace.name === nameOrDir || workspace.dir === nameOrDir)
+    if (!entry) return
+    entry.lastUsedAt = now.toISOString()
     await writeRegistryFile(registryPath, file)
   })
 }
