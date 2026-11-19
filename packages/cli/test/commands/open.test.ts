@@ -136,6 +136,24 @@ describe('runOpen — picking a target (no --with given)', () => {
 })
 
 describe('runOpen — picking a workspace from a list (no workspace name given)', () => {
+  it('hints each one with when it was last used, then where it sits, each in its own column', async () => {
+    const minutesAgo = (minutes: number): string => new Date(Date.now() - minutes * 60_000).toISOString()
+    vi.mocked(listWorkspaces).mockResolvedValue([
+      { name: 'demo', dir: '/ws/demo', lastActivity: { kind: 'used', at: minutesAgo(5) } },
+      { name: 'other', dir: '/code/other', lastActivity: { kind: 'created', at: minutesAgo(120) } },
+      { name: 'odd', dir: '/elsewhere', lastActivity: null },
+    ] as never)
+    vi.mocked(select).mockResolvedValue(null)
+
+    await expect(runOpen(ctx, undefined, {}, fakeDeps({ ok: true }))).rejects.toThrow(SporkError)
+
+    expect(vi.mocked(select).mock.calls[0]?.[0].options.map((option) => option.hint)).toEqual([
+      'Last used 5 minutes ago  /ws',
+      'Created 2 hours ago      /code',
+      '                         /elsewhere',
+    ])
+  })
+
   it('offers a single-select of registered workspaces and opens the chosen one', async () => {
     vi.mocked(listWorkspaces).mockResolvedValue([
       { name: 'demo', dir: '/ws/demo' },

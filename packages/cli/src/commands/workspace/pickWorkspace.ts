@@ -5,16 +5,24 @@ import type { AppContext } from '../../context.js'
 import { workspaceLocation } from '../../output/paths.js'
 import { describeActivity } from '../../output/timeAgo.js'
 
+/**
+ * Each workspace's hint is two columns, like `workspace list`: when it was
+ * last used (or created), padded to the widest of those, then where it
+ * sits (`showLocations: false` drops that one). `@spork/prompts` lines
+ * every hint up after the longest name, so both columns stay aligned.
+ */
 async function pickableWorkspaces(ctx: AppContext, showLocations = true): Promise<PromptOption<string>[]> {
   const workspaces = await listWorkspacesByRecentUse(ctx.registryPath)
   if (workspaces.length === 0) {
     throw new SporkError('No workspaces yet. Create one with: spork workspace create <name>')
   }
-  return workspaces.map((workspace) => ({
-    label: workspace.name,
-    value: workspace.name,
-    hint: [showLocations ? workspaceLocation(workspace) : '', describeActivity(workspace.lastActivity)].filter(Boolean).join(' · ') || undefined,
-  }))
+  const activities = workspaces.map((workspace) => describeActivity(workspace.lastActivity))
+  const width = Math.max(...activities.map((activity) => activity.length))
+  return workspaces.map((workspace, i) => {
+    const activity = activities[i] ?? ''
+    const hint = showLocations ? `${activity.padEnd(width)}${width > 0 ? '  ' : ''}${workspaceLocation(workspace)}` : activity
+    return { label: workspace.name, value: workspace.name, hint: hint || undefined }
+  })
 }
 
 /**

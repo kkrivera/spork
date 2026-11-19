@@ -169,7 +169,8 @@ logic lives here.
   with no prompt at all; otherwise it lists every registered workspace
   (`@spork/core`'s `listWorkspacesByRecentUse`, most recently used first)
   via `@spork/prompts`' `select()`,
-  each hinted with its `workspaceLocation` and `describeActivity` (`exec` passes
+  each hinted with two columns like `workspace list`'s: `describeActivity`,
+  padded to the widest one, then `workspaceLocation` (`exec` passes
   `showLocations: false` to leave the location out: there the name and
   time are all you need). `pickWorkspaceName` also takes an `output` stream, for a command
   whose stdout is meant to be captured (`workspace path`).
