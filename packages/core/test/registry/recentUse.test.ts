@@ -67,6 +67,21 @@ describe('listWorkspacesByRecentUse', () => {
     expect(await names()).toEqual(['old-but-used', 'newest', 'middle'])
   })
 
+  it('says which time each one was sorted by', async () => {
+    await addWorkspace('used', '2026-01-01T00:00:00.000Z')
+    await addWorkspace('fresh', '2026-01-02T00:00:00.000Z')
+    await addWorkspace('broken', null)
+    await markWorkspaceUsed(registryPath, 'used', new Date('2026-03-01T00:00:00.000Z'))
+
+    const activity = (await listWorkspacesByRecentUse(registryPath)).map((workspace) => workspace.lastActivity)
+
+    expect(activity).toEqual([
+      { kind: 'used', at: '2026-03-01T00:00:00.000Z' },
+      { kind: 'created', at: '2026-01-02T00:00:00.000Z' },
+      null,
+    ])
+  })
+
   it('sorts a workspace with an unreadable manifest last, keeping registry order for ties', async () => {
     await addWorkspace('broken', null)
     await addWorkspace('x', '2026-01-01T00:00:00.000Z')

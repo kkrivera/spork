@@ -52,6 +52,7 @@ export {
   markWorkspaceUsed,
   resolveWorkspaceDir,
 } from './registry/registry.js'
+export type { RecentWorkspace, WorkspaceActivity } from './registry/recentUse.js'
 export { listWorkspacesByRecentUse } from './registry/recentUse.js'
 
 export type { RepoRegistryEntry } from './registry/repoRegistry.js'

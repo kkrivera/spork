@@ -362,7 +362,9 @@ for `workspace init`'s adopted-folder/`kind`/`origin` extension to it.
 - `src/registry/recentUse.ts` — `listWorkspacesByRecentUse`:
   `listWorkspaces`, most recently used first, by `lastUsedAt` and falling
   back to the manifest's `createdAt` for a workspace nothing has used yet.
-  Ties keep registry order. It's the order every frontend lists
+  Each entry carries the time it was sorted by as `lastActivity`
+  (`{ kind: 'used' | 'created', at }`, or null when there's neither), for
+  frontends to show. Ties keep registry order. It's the order every frontend lists
   workspaces in (pickers, `workspace list`, MCP's `list_workspaces`).
 - `src/registry/repoRegistry.ts` — `~/.spork/repos.json`: the same
   index-not-source-of-truth pattern (and the same `withFileLock`-around-
